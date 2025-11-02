@@ -1,0 +1,8 @@
+<svg width="160" height="120" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="160" height="120" rx="18" fill="#E5F7F6" />
+  <path d="M18 90L52 64L84 78L108 56L142 74" stroke="#2DABAC" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="44" cy="32" r="10" fill="#8AD8D6" />
+  <rect x="24" y="26" width="56" height="12" rx="6" fill="#F3FBFB" />
+  <text x="30" y="34" fill="#1C6B6D" font-family="'Manrope', 'Inter', sans-serif" font-size="8" font-weight="600">Cape Town</text>
+  <path d="M0 98H160" stroke="#58C4C1" stroke-width="1.2" stroke-dasharray="6 6" />
+</svg>
