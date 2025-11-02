@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="title" content="Buy eSIMs for Africa Travel | SIMplify Africa" />
+  <meta name="description" content="Activate your travel eSIM instantly for Africa. Fast, reliable, and secure coverage across Namibia, Kenya, Tanzania, and beyond." />
+  <title>Buy eSIMs for Africa Travel | SIMplify Africa</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --gold: #f1b24a;
+      --deep-gold: #c6862f;
+      --teal: #0d7a7a;
+      --dark: #0b1f26;
+      --muted: rgba(255, 255, 255, 0.75);
+      --bg: #0a1418;
+      --light-bg: #102630;
+      --gradient: linear-gradient(135deg, rgba(10, 20, 24, 0.9), rgba(13, 122, 122, 0.65));
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: #f7f7f7;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    header {
+      position: relative;
+      min-height: 85vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      background: var(--gradient), url('https://images.unsplash.com/photo-1542147619-299c510c1b3a?auto=format&fit=crop&w=1600&q=80') center/cover no-repeat;
+      color: #fff;
+      padding: 4rem 1.5rem 6rem;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top right, rgba(241, 178, 74, 0.45), transparent 55%),
+        radial-gradient(circle at bottom left, rgba(13, 122, 122, 0.45), transparent 60%);
+      z-index: 0;
+      mix-blend-mode: screen;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      max-width: 60rem;
+      display: grid;
+      gap: 1.5rem;
+      backdrop-filter: blur(6px);
+      background: rgba(11, 31, 38, 0.45);
+      padding: 2.5rem;
+      border-radius: 1.5rem;
+      border: 1px solid rgba(241, 178, 74, 0.35);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .hero-content .badge {
+      font-family: 'Poppins', sans-serif;
+      color: var(--gold);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+    }
+
+    h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: clamp(2.2rem, 6vw, 3.8rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-content p {
+      color: var(--muted);
+      font-size: clamp(1rem, 2vw, 1.25rem);
+    }
+
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      background: linear-gradient(135deg, var(--gold), var(--deep-gold));
+      color: #1c1c1c;
+      padding: 0.95rem 2.4rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 1.05rem;
+      box-shadow: 0 16px 32px rgba(241, 178, 74, 0.35);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .cta-button svg {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+
+    .cta-button:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 42px rgba(241, 178, 74, 0.45);
+    }
+
+    .signal-overlay {
+      position: absolute;
+      top: -20%;
+      right: -20%;
+      width: 60vw;
+      max-width: 600px;
+      opacity: 0.35;
+      z-index: 0;
+      filter: blur(0.5px);
+    }
+
+    main {
+      position: relative;
+      z-index: 2;
+      background: radial-gradient(circle at top, rgba(13, 122, 122, 0.1), transparent 55%), var(--bg);
+      margin-top: -4rem;
+      border-top-left-radius: 2.5rem;
+      border-top-right-radius: 2.5rem;
+      padding: 4rem 1.5rem 6rem;
+    }
+
+    section {
+      max-width: 1100px;
+      margin: 0 auto 4.5rem;
+    }
+
+    .section-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      margin-bottom: 1.5rem;
+      color: #fef6e8;
+    }
+
+    .section-subtitle {
+      color: rgba(255, 255, 255, 0.75);
+      max-width: 42rem;
+      margin-bottom: 2rem;
+    }
+
+    .grid {
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .card {
+      background: rgba(16, 38, 48, 0.85);
+      border: 1px solid rgba(241, 178, 74, 0.18);
+      border-radius: 1.5rem;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+      min-height: 220px;
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top right, rgba(241, 178, 74, 0.2), transparent 55%);
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+    }
+
+    .card:hover::after {
+      opacity: 1;
+    }
+
+    .icon-circle {
+      width: 56px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(13, 122, 122, 0.25);
+      margin-bottom: 1.25rem;
+      color: var(--gold);
+    }
+
+    .card h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .card p {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .how-it-works {
+      position: relative;
+      padding-top: 2rem;
+    }
+
+    .how-it-works::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(241, 178, 74, 0.6), transparent);
+    }
+
+    .map-container {
+      background: linear-gradient(135deg, rgba(16, 38, 48, 0.95), rgba(10, 20, 24, 0.95));
+      border-radius: 1.75rem;
+      border: 1px solid rgba(13, 122, 122, 0.35);
+      padding: 2rem;
+      display: grid;
+      gap: 2rem;
+    }
+
+    .map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 0.95rem;
+    }
+
+    .map-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(13, 122, 122, 0.2);
+    }
+
+    .map {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background: radial-gradient(circle, rgba(13, 122, 122, 0.18), transparent 70%);
+      border-radius: 1.5rem;
+      overflow: hidden;
+    }
+
+    .map svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .country {
+      fill: rgba(241, 178, 74, 0.65);
+      stroke: rgba(10, 20, 24, 0.85);
+      stroke-width: 1;
+      transition: transform 0.3s ease, fill 0.3s ease;
+      cursor: pointer;
+    }
+
+    .country:hover {
+      fill: rgba(13, 122, 122, 0.75);
+      transform: scale(1.02);
+    }
+
+    .tooltip {
+      position: absolute;
+      padding: 0.5rem 0.75rem;
+      background: rgba(11, 31, 38, 0.9);
+      color: #fff;
+      border-radius: 0.75rem;
+      font-size: 0.9rem;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      border: 1px solid rgba(241, 178, 74, 0.4);
+    }
+
+    .testimonials {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .testimonial {
+      background: rgba(12, 28, 34, 0.85);
+      border-radius: 1.5rem;
+      padding: 2rem;
+      border: 1px solid rgba(13, 122, 122, 0.3);
+      display: grid;
+      gap: 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .testimonial::before {
+      content: "\201C";
+      font-size: 4rem;
+      color: rgba(241, 178, 74, 0.2);
+      position: absolute;
+      top: 1rem;
+      left: 1.5rem;
+    }
+
+    .testimonial cite {
+      font-style: normal;
+      font-weight: 600;
+      color: var(--gold);
+    }
+
+    .testimonial span {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.9rem;
+    }
+
+    .pricing-grid {
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    .pricing-card {
+      background: rgba(16, 38, 48, 0.85);
+      border: 1px solid rgba(241, 178, 74, 0.25);
+      border-radius: 1.75rem;
+      padding: 2.25rem 2rem;
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      gap: 1.2rem;
+    }
+
+    .pricing-card.featured {
+      border: 1px solid rgba(241, 178, 74, 0.55);
+      box-shadow: 0 20px 40px rgba(13, 122, 122, 0.25);
+    }
+
+    .pricing-card h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.4rem;
+    }
+
+    .price {
+      font-size: 2.5rem;
+      font-weight: 600;
+      color: var(--gold);
+    }
+
+    .price span {
+      font-size: 0.95rem;
+      color: rgba(255, 255, 255, 0.65);
+      font-weight: 400;
+      margin-left: 0.35rem;
+    }
+
+    .feature-list {
+      list-style: none;
+      display: grid;
+      gap: 0.65rem;
+      color: rgba(255, 255, 255, 0.75);
+    }
+
+    .feature-list li::before {
+      content: '\2713';
+      color: var(--teal);
+      margin-right: 0.5rem;
+      font-weight: 700;
+    }
+
+    .pricing-card .cta-button {
+      justify-self: start;
+      background: linear-gradient(135deg, var(--teal), #0f9d9d);
+      color: #f1f9f9;
+      box-shadow: 0 14px 24px rgba(13, 122, 122, 0.35);
+    }
+
+    .pricing-card.featured .cta-button {
+      background: linear-gradient(135deg, var(--gold), var(--deep-gold));
+      color: #1c1c1c;
+    }
+
+    footer {
+      background: linear-gradient(135deg, rgba(13, 122, 122, 0.2), rgba(10, 20, 24, 0.95));
+      padding: 3.5rem 1.5rem;
+      border-top: 1px solid rgba(241, 178, 74, 0.2);
+    }
+
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      gap: 1.5rem;
+      text-align: center;
+    }
+
+    .footer-inner p {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .cta-footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .email-signup {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+
+    .email-signup input {
+      padding: 0.85rem 1.1rem;
+      border-radius: 999px;
+      border: 1px solid rgba(241, 178, 74, 0.35);
+      background: rgba(11, 31, 38, 0.8);
+      color: #fff;
+      min-width: 240px;
+    }
+
+    .email-signup button {
+      padding: 0.85rem 1.6rem;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, var(--gold), var(--deep-gold));
+      color: #1c1c1c;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+
+    .email-signup button:hover {
+      transform: translateY(-2px);
+    }
+
+    .whatsapp-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: rgba(255, 255, 255, 0.8);
+      transition: color 0.3s ease;
+    }
+
+    .whatsapp-link:hover {
+      color: var(--gold);
+    }
+
+    @media (max-width: 768px) {
+      header {
+        padding: 3rem 1.25rem 5rem;
+      }
+
+      .hero-content {
+        padding: 2rem;
+      }
+
+      main {
+        margin-top: -3rem;
+        padding: 3rem 1.25rem 5rem;
+      }
+
+      footer {
+        padding: 3rem 1.25rem;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .hero-content {
+        padding: 1.75rem;
+      }
+
+      .cta-button {
+        width: 100%;
+      }
+
+      .email-signup {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .email-signup input,
+      .email-signup button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <svg class="signal-overlay" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="signalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="rgba(241,178,74,0.55)" />
+          <stop offset="100%" stop-color="rgba(13,122,122,0.35)" />
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke="url(#signalGradient)" stroke-width="2">
+        <circle cx="200" cy="200" r="40" opacity="0.9" />
+        <circle cx="200" cy="200" r="80" opacity="0.7" />
+        <circle cx="200" cy="200" r="120" opacity="0.5" />
+        <circle cx="200" cy="200" r="160" opacity="0.35" />
+        <circle cx="200" cy="200" r="200" opacity="0.25" />
+      </g>
+    </svg>
+
+    <div class="hero-content">
+      <span class="badge">SIMPLIFY AFRICA</span>
+      <h1>Stay Connected, Wherever Africa Takes You.</h1>
+      <p>Activate your eSIM in minutes and explore Africa with instant 4G/5G coverage. No more hunting for SIM cards or waiting in line—just seamless travel across Namibia, South Africa, Kenya, Tanzania, and Zanzibar.</p>
+      <a class="cta-button" href="#pricing">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 2a1 1 0 0 1 1 1v14.586l4.293-4.293a1 1 0 0 1 1.414 1.414l-6 6a1 1 0 0 1-1.414 0l-6-6A1 1 0 0 1 6.707 13.293L11 17.586V3a1 1 0 0 1 1-1Z" />
+        </svg>
+        Get Your eSIM
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <section class="how-it-works" id="how-it-works">
+      <h2 class="section-title">How It Works</h2>
+      <p class="section-subtitle">Get online in three effortless steps designed for travelers, adventurers, and remote professionals who value time and reliability.</p>
+      <div class="grid three">
+        <div class="card">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
+              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm.75 17.938V18a.75.75 0 0 0-1.5 0v1.938A8.502 8.502 0 0 1 3.062 12H5a.75.75 0 0 0 0-1.5H3.062A8.502 8.502 0 0 1 11.25 4.062V6a.75.75 0 0 0 1.5 0V4.062A8.502 8.502 0 0 1 20.938 10.5H19a.75.75 0 0 0 0 1.5h1.938A8.502 8.502 0 0 1 12.75 19.938Z" />
+            </svg>
+          </div>
+          <h3>Choose Your Destination</h3>
+          <p>Select a country or regional pass that matches your African itinerary—Namibia, South Africa, Kenya, Tanzania, Zanzibar, and more.</p>
+        </div>
+        <div class="card">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="28" height="28" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v4.5m0 9V21m0-9h9m-9 0H3" />
+            </svg>
+          </div>
+          <h3>Buy and Scan QR Code</h3>
+          <p>Complete a secure checkout and receive your eSIM instantly by email. Scan the QR code or enter setup details manually.</p>
+        </div>
+        <div class="card">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
+              <path d="M3 5a2 2 0 0 1 2-2h4.586a2 2 0 0 1 1.414.586l1.414 1.414A2 2 0 0 0 14.828 6H19a2 2 0 0 1 2 2v2.25h-4.64a3.5 3.5 0 1 0 0 7H21V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm16.5 9.75a2 2 0 1 0 0-4h-4.64a2 2 0 1 0 0 4h4.64Z" />
+            </svg>
+          </div>
+          <h3>Connect Instantly</h3>
+          <p>Enable data roaming and go. Enjoy fast 4G/5G coverage with automatic network switching across the region.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="benefits" id="benefits">
+      <h2 class="section-title">Why Travelers Choose SIMplify Africa</h2>
+      <p class="section-subtitle">Freedom, flexibility, and fintech-level security—all in one powerful eSIM experience tailored for the African continent.</p>
+      <div class="grid two">
+        <div class="card">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="28" height="28" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5.25 8.25h13.5m-13.5 4.5h13.5M3 5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25v13.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V5.25Z" />
+            </svg>
+          </div>
+          <h3>No Physical SIM or Queues</h3>
+          <p>Skip airport kiosks and tourist traps. Install your eSIM before you land and hit the road fully connected.</p>
+        </div>
+        <div class="card">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
+              <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm5 11a1 1 0 0 1-1 1H8a1 1 0 0 1 0-2h8a1 1 0 0 1 1 1Zm-2 3a1 1 0 0 1-1 1H8a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Zm2-6a1 1 0 0 1-1 1H8a1 1 0 0 1 0-2h8a1 1 0 0 1 1 1Z" />
+            </svg>
+          </div>
+          <h3>Works Across Multiple Countries</h3>
+          <p>Roam seamlessly across Namibia, South Africa, Kenya, Tanzania, and Zanzibar without swapping SIMs.</p>
+        </div>
+        <div class="card">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="28" height="28" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v12m-3-3 3 3 3-3" />
+            </svg>
+          </div>
+          <h3>Affordable Regional Plans</h3>
+          <p>Choose data options built for safaris, city escapes, or months-long remote work without breaking the budget.</p>
+        </div>
+        <div class="card">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
+              <path d="M12 1.5a10.5 10.5 0 1 0 10.5 10.5A10.512 10.512 0 0 0 12 1.5Zm0 4.5a3 3 0 1 1-3 3 3 3 0 0 1 3-3Zm0 13.2a7.2 7.2 0 0 1-6-3.22c.03-1.99 4-3.08 6-3.08s5.97 1.09 6 3.08a7.2 7.2 0 0 1-6 3.22Z" />
+            </svg>
+          </div>
+          <h3>Secure Online Payment</h3>
+          <p>Protected transactions with global fintech security standards and instant delivery to your inbox.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="coverage" id="coverage">
+      <h2 class="section-title">Coverage Across Iconic African Destinations</h2>
+      <p class="section-subtitle">Explore a connected Africa—from the dunes of Namibia to the spice markets of Zanzibar. Hover over each country to see availability.</p>
+      <div class="map-container">
+        <div class="map" aria-hidden="true">
+          <svg viewBox="0 0 500 360" xmlns="http://www.w3.org/2000/svg">
+            <path class="country" data-name="Namibia" d="M160 250l-10-40 20-45 35-15 25 35-20 55-30 20z" />
+            <path class="country" data-name="South Africa" d="M200 300l-20-45 35-20 60 5 60 35-45 45-55-5z" />
+            <path class="country" data-name="Kenya" d="M320 150l20-50 50-10 20 40-30 45-45 5z" />
+            <path class="country" data-name="Tanzania" d="M300 200l15-35 45-5 35 45-25 65-60-15z" />
+            <path class="country" data-name="Zanzibar" d="M400 230l8-18 12 6-6 18z" />
+          </svg>
+          <div class="tooltip" role="status" aria-live="polite"></div>
+        </div>
+        <div class="map-legend">
+          <span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="8" cy="8" r="8" fill="rgba(241, 178, 74, 0.65)" />
+            </svg>
+            Included in SIMplify regional passes
+          </span>
+          <span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="8" cy="8" r="8" fill="rgba(13, 122, 122, 0.75)" />
+            </svg>
+            Hover to see local tips &amp; availability
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section class="testimonials-section" id="testimonials">
+      <h2 class="section-title">Loved by Travelers &amp; Remote Creatives</h2>
+      <p class="section-subtitle">Real stories from explorers who refused to go offline in Africa.</p>
+      <div class="testimonials">
+        <div class="testimonial">
+          <p>“I activated SIMplify while flying into Windhoek. By the time we landed, I was sharing safari shots with clients back home—zero downtime.”</p>
+          <div>
+            <cite>Amelia R.</cite>
+            <span>Wildlife Photographer, USA</span>
+          </div>
+        </div>
+        <div class="testimonial">
+          <p>“From Cape Town coworking spaces to Kilimanjaro base camps, the connection stayed strong. It’s the best investment for remote work across Africa.”</p>
+          <div>
+            <cite>Samuel K.</cite>
+            <span>Remote Product Designer, Ghana/UK</span>
+          </div>
+        </div>
+        <div class="testimonial">
+          <p>“Buying a regional pass saved me so much time. No more chasing SIM vendors in every country—SIMplify handled it all.”</p>
+          <div>
+            <cite>Lucia M.</cite>
+            <span>Adventure Vlogger, Spain</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pricing" id="pricing">
+      <h2 class="section-title">Flexible Plans for Every Journey</h2>
+      <p class="section-subtitle">Choose a plan that matches your itinerary and data needs. Upgrade or top up anytime from your SIMplify dashboard.</p>
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <h3>Namibia Only</h3>
+          <p class="price">$19<span>/ 5GB</span></p>
+          <ul class="feature-list">
+            <li>5GB high-speed data for 15 days</li>
+            <li>Windhoek, Etosha, Sossusvlei coverage</li>
+            <li>Instant activation via QR code</li>
+            <li>Top up available in-app</li>
+          </ul>
+          <a class="cta-button" href="#">Select Plan</a>
+        </div>
+        <div class="pricing-card featured">
+          <h3>Southern Africa Pass</h3>
+          <p class="price">$39<span>/ 10GB</span></p>
+          <ul class="feature-list">
+            <li>Coverage in Namibia, South Africa, Botswana</li>
+            <li>Fast 4G/5G in major cities &amp; safari hubs</li>
+            <li>Personalized travel network support</li>
+            <li>Priority customer care</li>
+          </ul>
+          <a class="cta-button" href="#">Most Popular</a>
+        </div>
+        <div class="pricing-card">
+          <h3>Africa Explorer</h3>
+          <p class="price">$69<span>/ 20GB</span></p>
+          <ul class="feature-list">
+            <li>Works in 15+ destinations including Kenya &amp; Tanzania</li>
+            <li>Multi-device hotspot friendly</li>
+            <li>Usage dashboard with alerts</li>
+            <li>Free plan swaps during trip</li>
+          </ul>
+          <a class="cta-button" href="#">Select Plan</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <h2 class="section-title">Ready to travel? Get your SIMplify eSIM today.</h2>
+      <p>Stay online from the moment you arrive. Subscribe for launch offers and message us anytime for tailored travel data advice.</p>
+      <div class="cta-footer">
+        <form class="email-signup">
+          <input type="email" name="email" placeholder="Enter your email" aria-label="Email address" required />
+          <button type="submit">Notify Me</button>
+        </form>
+        <a class="whatsapp-link" href="https://wa.me/1234567890" target="_blank" rel="noopener">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24" fill="currentColor" aria-hidden="true">
+            <path d="M16 3C9.383 3 4 8.383 4 15c0 2.442.701 4.72 1.918 6.642L4 29l7.511-1.888C13.36 28.35 14.645 29 16 29c6.617 0 12-5.383 12-12S22.617 3 16 3Zm0 22c-1.133 0-2.237-.289-3.214-.837l-.23-.129-4.464 1.121 1.192-4.353-.149-.237A8.962 8.962 0 0 1 7 15c0-4.963 4.038-9 9-9s9 4.037 9 9-4.038 9-9 9Zm5.262-6.188c-.288-.144-1.7-.839-1.962-.934-.262-.097-.453-.144-.645.144-.192.288-.739.934-.906 1.126-.166.192-.336.216-.624.072-.288-.144-1.216-.447-2.317-1.425-.857-.764-1.435-1.707-1.603-1.995-.166-.288-.018-.443.126-.587.13-.129.288-.336.432-.504.144-.168.192-.288.288-.48.096-.192.048-.36-.024-.504-.072-.144-.645-1.556-.883-2.126-.232-.556-.469-.48-.645-.489l-.552-.01c-.192 0-.504.072-.768.36-.264.288-1.008.984-1.008 2.4s1.032 2.784 1.176 2.976c.144.192 2.031 3.105 4.918 4.347.687.296 1.223.473 1.64.605.688.219 1.316.188 1.812.114.552-.082 1.7-.694 1.94-1.365.24-.672.24-1.248.168-1.368-.072-.12-.264-.192-.552-.336Z" />
+          </svg>
+          WhatsApp Support
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const tooltip = document.querySelector('.tooltip');
+    const countries = document.querySelectorAll('.country');
+
+    const tips = {
+      Namibia: 'Desert dunes, Etosha safaris, and Windhoek city life with 4G coverage.',
+      'South Africa': 'Cape Town to Kruger—5G in major hubs, dependable 4G in remote areas.',
+      Kenya: 'Safari-ready data in Maasai Mara, Nairobi coworking, and coastal retreats.',
+      Tanzania: 'Stay online while summiting Kilimanjaro or relaxing in Serengeti lodges.',
+      Zanzibar: 'Beach-perfect connection across Stone Town and spice islands.'
+    };
+
+    countries.forEach((country) => {
+      country.addEventListener('mousemove', (event) => {
+        const name = country.dataset.name;
+        tooltip.textContent = `${name}: ${tips[name]}`;
+        tooltip.style.opacity = 1;
+        const rect = event.currentTarget.ownerSVGElement.getBoundingClientRect();
+        tooltip.style.left = `${event.clientX - rect.left + 10}px`;
+        tooltip.style.top = `${event.clientY - rect.top + 10}px`;
+      });
+
+      country.addEventListener('mouseleave', () => {
+        tooltip.style.opacity = 0;
+      });
+    });
+  </script>
+</body>
+</html>
