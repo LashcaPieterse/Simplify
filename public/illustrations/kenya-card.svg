@@ -1,0 +1,8 @@
+<svg width="160" height="120" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="160" height="120" rx="18" fill="#FFF5EB" />
+  <path d="M0 94H160" stroke="#F1B24A" stroke-width="1.2" stroke-dasharray="6 6" />
+  <path d="M20 84L46 70L74 86L106 66L136 76" stroke="#F89F3C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="118" cy="28" r="11" fill="#FFE0BC" />
+  <rect x="28" y="24" width="60" height="12" rx="6" fill="#FFFFFF" fill-opacity="0.8" />
+  <text x="34" y="33" fill="#B55D0D" font-family="'Manrope', 'Inter', sans-serif" font-size="8" font-weight="600">Nairobi</text>
+</svg>

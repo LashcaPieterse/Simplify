@@ -1,0 +1,8 @@
+<svg width="160" height="120" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="160" height="120" rx="18" fill="#FFEEDA" />
+  <path d="M0 92H160" stroke="#F89F3C" stroke-width="1.2" stroke-dasharray="6 6" />
+  <path d="M20 86L40 72L60 82L86 64L110 80L140 60" stroke="#E17E16" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="126" cy="32" r="12" fill="#FFD4A1" />
+  <rect x="22" y="24" width="48" height="10" rx="5" fill="#FFF5EB" />
+  <text x="26" y="31" fill="#8C460C" font-family="'Manrope', 'Inter', sans-serif" font-size="8" font-weight="600">Windhoek</text>
+</svg>
