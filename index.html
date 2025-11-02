@@ -1,772 +1,1275 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="title" content="Buy eSIMs for Africa Travel | SIMplify Africa" />
-  <meta name="description" content="Activate your travel eSIM instantly for Africa. Fast, reliable, and secure coverage across Namibia, Kenya, Tanzania, and beyond." />
-  <title>Buy eSIMs for Africa Travel | SIMplify Africa</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --gold: #f1b24a;
-      --deep-gold: #c6862f;
-      --teal: #0d7a7a;
-      --dark: #0b1f26;
-      --muted: rgba(255, 255, 255, 0.75);
-      --bg: #0a1418;
-      --light-bg: #102630;
-      --gradient: linear-gradient(135deg, rgba(10, 20, 24, 0.9), rgba(13, 122, 122, 0.65));
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="title"
+      content="Buy eSIMs for Africa Travel | SIMplify Africa"
+    />
+    <meta
+      name="description"
+      content="Activate your travel eSIM instantly for Africa. Fast, reliable, and secure coverage across Namibia, Kenya, Tanzania, and beyond."
+    />
+    <title>Buy eSIMs for Africa Travel | SIMplify Africa</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/phosphor-icons@2.1.1/src/css/icons.css"
+    />
+    <style>
+      :root {
+        --gold-100: #fde4ba;
+        --gold-200: #f6ca74;
+        --gold-400: #f1b24a;
+        --gold-500: #dc9433;
+        --teal-300: #3ac7c2;
+        --teal-500: #0f8a8a;
+        --teal-600: #0a6666;
+        --deep-space: #051014;
+        --deep-ocean: #0a1f27;
+        --deep-night: #071b22;
+        --muted: rgba(255, 255, 255, 0.74);
+        --radius-lg: 28px;
+        --radius-sm: 16px;
+        color-scheme: dark;
+        font-synthesis: none;
+      }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
 
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: #f7f7f7;
-      line-height: 1.7;
-      overflow-x: hidden;
-    }
+      html {
+        scroll-behavior: smooth;
+      }
 
-    a {
-      text-decoration: none;
-      color: inherit;
-    }
+      body {
+        margin: 0;
+        font-family: 'Inter', sans-serif;
+        background: radial-gradient(circle at top, rgba(58, 199, 194, 0.08), transparent 55%),
+          var(--deep-space);
+        color: white;
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
 
-    header {
-      position: relative;
-      min-height: 85vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      background: var(--gradient), url('https://images.unsplash.com/photo-1542147619-299c510c1b3a?auto=format&fit=crop&w=1600&q=80') center/cover no-repeat;
-      color: #fff;
-      padding: 4rem 1.5rem 6rem;
-      overflow: hidden;
-    }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
 
-    header::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at top right, rgba(241, 178, 74, 0.45), transparent 55%),
-        radial-gradient(circle at bottom left, rgba(13, 122, 122, 0.45), transparent 60%);
-      z-index: 0;
-      mix-blend-mode: screen;
-    }
+      .wrapper {
+        position: relative;
+        min-height: 100vh;
+        isolation: isolate;
+      }
 
-    .hero-content {
-      position: relative;
-      z-index: 1;
-      max-width: 60rem;
-      display: grid;
-      gap: 1.5rem;
-      backdrop-filter: blur(6px);
-      background: rgba(11, 31, 38, 0.45);
-      padding: 2.5rem;
-      border-radius: 1.5rem;
-      border: 1px solid rgba(241, 178, 74, 0.35);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-    }
+      .grid-container {
+        width: min(1100px, 92vw);
+        margin: 0 auto;
+      }
 
-    .hero-content .badge {
-      font-family: 'Poppins', sans-serif;
-      color: var(--gold);
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      font-size: 0.75rem;
-    }
+      .glass-panel {
+        background: linear-gradient(135deg, rgba(5, 16, 20, 0.8), rgba(15, 138, 138, 0.15));
+        border: 1px solid rgba(241, 178, 74, 0.18);
+        border-radius: var(--radius-lg);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 40px 70px rgba(0, 0, 0, 0.45);
+      }
 
-    h1 {
-      font-family: 'Poppins', sans-serif;
-      font-size: clamp(2.2rem, 6vw, 3.8rem);
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-
-    .hero-content p {
-      color: var(--muted);
-      font-size: clamp(1rem, 2vw, 1.25rem);
-    }
-
-    .cta-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.75rem;
-      background: linear-gradient(135deg, var(--gold), var(--deep-gold));
-      color: #1c1c1c;
-      padding: 0.95rem 2.4rem;
-      border-radius: 999px;
-      font-weight: 600;
-      font-size: 1.05rem;
-      box-shadow: 0 16px 32px rgba(241, 178, 74, 0.35);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .cta-button svg {
-      width: 1.25rem;
-      height: 1.25rem;
-    }
-
-    .cta-button:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 42px rgba(241, 178, 74, 0.45);
-    }
-
-    .signal-overlay {
-      position: absolute;
-      top: -20%;
-      right: -20%;
-      width: 60vw;
-      max-width: 600px;
-      opacity: 0.35;
-      z-index: 0;
-      filter: blur(0.5px);
-    }
-
-    main {
-      position: relative;
-      z-index: 2;
-      background: radial-gradient(circle at top, rgba(13, 122, 122, 0.1), transparent 55%), var(--bg);
-      margin-top: -4rem;
-      border-top-left-radius: 2.5rem;
-      border-top-right-radius: 2.5rem;
-      padding: 4rem 1.5rem 6rem;
-    }
-
-    section {
-      max-width: 1100px;
-      margin: 0 auto 4.5rem;
-    }
-
-    .section-title {
-      font-family: 'Poppins', sans-serif;
-      font-size: clamp(1.8rem, 4vw, 2.6rem);
-      margin-bottom: 1.5rem;
-      color: #fef6e8;
-    }
-
-    .section-subtitle {
-      color: rgba(255, 255, 255, 0.75);
-      max-width: 42rem;
-      margin-bottom: 2rem;
-    }
-
-    .grid {
-      display: grid;
-      gap: 1.5rem;
-    }
-
-    .grid.three {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-
-    .grid.two {
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    }
-
-    .card {
-      background: rgba(16, 38, 48, 0.85);
-      border: 1px solid rgba(241, 178, 74, 0.18);
-      border-radius: 1.5rem;
-      padding: 2rem;
-      position: relative;
-      overflow: hidden;
-      min-height: 220px;
-    }
-
-    .card::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(circle at top right, rgba(241, 178, 74, 0.2), transparent 55%);
-      opacity: 0;
-      transition: opacity 0.35s ease;
-      pointer-events: none;
-    }
-
-    .card:hover::after {
-      opacity: 1;
-    }
-
-    .icon-circle {
-      width: 56px;
-      height: 56px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      background: rgba(13, 122, 122, 0.25);
-      margin-bottom: 1.25rem;
-      color: var(--gold);
-    }
-
-    .card h3 {
-      font-family: 'Poppins', sans-serif;
-      font-size: 1.25rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .card p {
-      color: rgba(255, 255, 255, 0.7);
-    }
-
-    .how-it-works {
-      position: relative;
-      padding-top: 2rem;
-    }
-
-    .how-it-works::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 80%;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(241, 178, 74, 0.6), transparent);
-    }
-
-    .map-container {
-      background: linear-gradient(135deg, rgba(16, 38, 48, 0.95), rgba(10, 20, 24, 0.95));
-      border-radius: 1.75rem;
-      border: 1px solid rgba(13, 122, 122, 0.35);
-      padding: 2rem;
-      display: grid;
-      gap: 2rem;
-    }
-
-    .map-legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 0.95rem;
-    }
-
-    .map-legend span {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 0.75rem;
-      border-radius: 999px;
-      background: rgba(13, 122, 122, 0.2);
-    }
-
-    .map {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 10;
-      background: radial-gradient(circle, rgba(13, 122, 122, 0.18), transparent 70%);
-      border-radius: 1.5rem;
-      overflow: hidden;
-    }
-
-    .map svg {
-      width: 100%;
-      height: 100%;
-    }
-
-    .country {
-      fill: rgba(241, 178, 74, 0.65);
-      stroke: rgba(10, 20, 24, 0.85);
-      stroke-width: 1;
-      transition: transform 0.3s ease, fill 0.3s ease;
-      cursor: pointer;
-    }
-
-    .country:hover {
-      fill: rgba(13, 122, 122, 0.75);
-      transform: scale(1.02);
-    }
-
-    .tooltip {
-      position: absolute;
-      padding: 0.5rem 0.75rem;
-      background: rgba(11, 31, 38, 0.9);
-      color: #fff;
-      border-radius: 0.75rem;
-      font-size: 0.9rem;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-      border: 1px solid rgba(241, 178, 74, 0.4);
-    }
-
-    .testimonials {
-      display: grid;
-      gap: 1.5rem;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    }
-
-    .testimonial {
-      background: rgba(12, 28, 34, 0.85);
-      border-radius: 1.5rem;
-      padding: 2rem;
-      border: 1px solid rgba(13, 122, 122, 0.3);
-      display: grid;
-      gap: 1rem;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .testimonial::before {
-      content: "\201C";
-      font-size: 4rem;
-      color: rgba(241, 178, 74, 0.2);
-      position: absolute;
-      top: 1rem;
-      left: 1.5rem;
-    }
-
-    .testimonial cite {
-      font-style: normal;
-      font-weight: 600;
-      color: var(--gold);
-    }
-
-    .testimonial span {
-      color: rgba(255, 255, 255, 0.6);
-      font-size: 0.9rem;
-    }
-
-    .pricing-grid {
-      display: grid;
-      gap: 1.5rem;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    }
-
-    .pricing-card {
-      background: rgba(16, 38, 48, 0.85);
-      border: 1px solid rgba(241, 178, 74, 0.25);
-      border-radius: 1.75rem;
-      padding: 2.25rem 2rem;
-      position: relative;
-      overflow: hidden;
-      display: grid;
-      gap: 1.2rem;
-    }
-
-    .pricing-card.featured {
-      border: 1px solid rgba(241, 178, 74, 0.55);
-      box-shadow: 0 20px 40px rgba(13, 122, 122, 0.25);
-    }
-
-    .pricing-card h3 {
-      font-family: 'Poppins', sans-serif;
-      font-size: 1.4rem;
-    }
-
-    .price {
-      font-size: 2.5rem;
-      font-weight: 600;
-      color: var(--gold);
-    }
-
-    .price span {
-      font-size: 0.95rem;
-      color: rgba(255, 255, 255, 0.65);
-      font-weight: 400;
-      margin-left: 0.35rem;
-    }
-
-    .feature-list {
-      list-style: none;
-      display: grid;
-      gap: 0.65rem;
-      color: rgba(255, 255, 255, 0.75);
-    }
-
-    .feature-list li::before {
-      content: '\2713';
-      color: var(--teal);
-      margin-right: 0.5rem;
-      font-weight: 700;
-    }
-
-    .pricing-card .cta-button {
-      justify-self: start;
-      background: linear-gradient(135deg, var(--teal), #0f9d9d);
-      color: #f1f9f9;
-      box-shadow: 0 14px 24px rgba(13, 122, 122, 0.35);
-    }
-
-    .pricing-card.featured .cta-button {
-      background: linear-gradient(135deg, var(--gold), var(--deep-gold));
-      color: #1c1c1c;
-    }
-
-    footer {
-      background: linear-gradient(135deg, rgba(13, 122, 122, 0.2), rgba(10, 20, 24, 0.95));
-      padding: 3.5rem 1.5rem;
-      border-top: 1px solid rgba(241, 178, 74, 0.2);
-    }
-
-    .footer-inner {
-      max-width: 1100px;
-      margin: 0 auto;
-      display: grid;
-      gap: 1.5rem;
-      text-align: center;
-    }
-
-    .footer-inner p {
-      color: rgba(255, 255, 255, 0.7);
-    }
-
-    .cta-footer {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 1rem;
-      margin-top: 1.5rem;
-    }
-
-    .email-signup {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      justify-content: center;
-    }
-
-    .email-signup input {
-      padding: 0.85rem 1.1rem;
-      border-radius: 999px;
-      border: 1px solid rgba(241, 178, 74, 0.35);
-      background: rgba(11, 31, 38, 0.8);
-      color: #fff;
-      min-width: 240px;
-    }
-
-    .email-signup button {
-      padding: 0.85rem 1.6rem;
-      border-radius: 999px;
-      border: none;
-      background: linear-gradient(135deg, var(--gold), var(--deep-gold));
-      color: #1c1c1c;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.3s ease;
-    }
-
-    .email-signup button:hover {
-      transform: translateY(-2px);
-    }
-
-    .whatsapp-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      color: rgba(255, 255, 255, 0.8);
-      transition: color 0.3s ease;
-    }
-
-    .whatsapp-link:hover {
-      color: var(--gold);
-    }
-
-    @media (max-width: 768px) {
       header {
-        padding: 3rem 1.25rem 5rem;
+        position: relative;
+        min-height: 92vh;
+        display: grid;
+        place-items: center;
+        padding: 3.5rem 0 6.5rem;
+      }
+
+      .hero-media {
+        position: absolute;
+        inset: 0;
+        z-index: -3;
+        overflow: hidden;
+      }
+
+      .hero-video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: saturate(120%) contrast(95%);
+        opacity: 0.78;
+      }
+
+      .hero-gradient {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(120deg, rgba(5, 16, 20, 0.9) 8%, rgba(15, 138, 138, 0.45) 70%, rgba(5, 16, 20, 0.92) 100%),
+          radial-gradient(circle at 18% 25%, rgba(241, 178, 74, 0.45), transparent 55%);
+        mix-blend-mode: overlay;
+        z-index: -2;
+      }
+
+      nav {
+        position: fixed;
+        inset: 24px auto auto 50%;
+        transform: translateX(-50%);
+        width: min(1100px, 92vw);
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.65rem 1.25rem;
+        border-radius: 999px;
+        background: rgba(7, 27, 34, 0.7);
+        border: 1px solid rgba(241, 178, 74, 0.18);
+        backdrop-filter: blur(12px);
+      }
+
+      nav .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      nav .brand span {
+        font-size: 1.1rem;
+      }
+
+      nav ul {
+        display: flex;
+        gap: 1.25rem;
+        list-style: none;
+        font-size: 0.95rem;
+      }
+
+      nav ul a {
+        color: var(--muted);
+        padding: 0.55rem 1rem;
+        border-radius: 999px;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      nav ul a:hover,
+      nav ul a:focus {
+        background: rgba(241, 178, 74, 0.14);
+        color: white;
+      }
+
+      .nav-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.65rem 1.4rem;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--gold-400), var(--gold-500));
+        color: #161616;
+        font-weight: 600;
+        box-shadow: 0 16px 30px rgba(241, 178, 74, 0.35);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .nav-cta:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 24px 46px rgba(241, 178, 74, 0.4);
       }
 
       .hero-content {
-        padding: 2rem;
+        text-align: center;
+        padding: clamp(2.5rem, 4vw, 3.6rem);
+        display: grid;
+        gap: 1.6rem;
+        max-width: 760px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-content::after {
+        content: '';
+        position: absolute;
+        inset: -30% -40%;
+        background: radial-gradient(circle, rgba(58, 199, 194, 0.06), transparent 65%);
+        z-index: -1;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3em;
+        color: var(--gold-200);
+      }
+
+      .hero-title {
+        font-family: 'Poppins', sans-serif;
+        font-size: clamp(2.5rem, 5vw, 4rem);
+        letter-spacing: -0.02em;
+      }
+
+      .hero-subtitle {
+        font-size: clamp(1.05rem, 2vw, 1.3rem);
+        color: var(--muted);
+        max-width: 42rem;
+        margin: 0 auto;
+      }
+
+      .cta-group {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1rem;
+      }
+
+      .primary-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.95rem 2.6rem;
+        border-radius: 999px;
+        background: linear-gradient(120deg, var(--gold-400), var(--gold-500));
+        color: #151515;
+        font-weight: 600;
+        font-size: 1.05rem;
+        letter-spacing: 0.01em;
+        box-shadow: 0 24px 50px rgba(241, 178, 74, 0.36);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .primary-cta svg,
+      .nav-cta svg {
+        width: 1.2rem;
+        height: 1.2rem;
+      }
+
+      .primary-cta:hover {
+        transform: translateY(-4px) scale(1.01);
+        box-shadow: 0 32px 60px rgba(241, 178, 74, 0.42);
+      }
+
+      .secondary-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.95rem 1.6rem;
+        border-radius: 999px;
+        border: 1px solid rgba(58, 199, 194, 0.4);
+        color: var(--teal-300);
+        font-weight: 500;
+      }
+
+      .floating-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.4rem;
+        margin-top: 2.2rem;
+      }
+
+      .stat {
+        padding: 1.4rem 1.6rem;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(160deg, rgba(10, 31, 39, 0.94), rgba(15, 138, 138, 0.18));
+        border: 1px solid rgba(58, 199, 194, 0.18);
+        text-align: left;
+      }
+
+      .stat h3 {
+        font-family: 'Poppins', sans-serif;
+        font-size: 2rem;
+        margin-bottom: 0.25rem;
+      }
+
+      .stat p {
+        color: var(--muted);
+        font-size: 0.92rem;
       }
 
       main {
-        margin-top: -3rem;
-        padding: 3rem 1.25rem 5rem;
+        position: relative;
+        z-index: 1;
+        padding: 0 0 6rem;
+      }
+
+      section {
+        margin: 0 auto 6rem;
+        width: min(1100px, 92vw);
+      }
+
+      .section-heading {
+        display: grid;
+        gap: 0.6rem;
+        margin-bottom: 2.6rem;
+      }
+
+      .section-heading h2 {
+        font-family: 'Poppins', sans-serif;
+        font-size: clamp(1.8rem, 3.3vw, 2.6rem);
+        letter-spacing: -0.01em;
+      }
+
+      .section-heading p {
+        color: var(--muted);
+        max-width: 36rem;
+      }
+
+      .how-steps {
+        display: grid;
+        gap: 1.4rem;
+      }
+
+      .step-card {
+        position: relative;
+        padding: 1.6rem 1.6rem 1.6rem 4.2rem;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(140deg, rgba(7, 27, 34, 0.9), rgba(15, 138, 138, 0.15));
+        border: 1px solid rgba(241, 178, 74, 0.18);
+        overflow: hidden;
+      }
+
+      .step-card::before {
+        content: attr(data-step);
+        position: absolute;
+        left: 1.4rem;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 18px;
+        background: rgba(241, 178, 74, 0.2);
+        border: 1px solid rgba(241, 178, 74, 0.35);
+        display: grid;
+        place-items: center;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+        color: var(--gold-200);
+      }
+
+      .step-card h3 {
+        font-size: 1.2rem;
+        margin-bottom: 0.4rem;
+      }
+
+      .step-card p {
+        color: var(--muted);
+      }
+
+      .benefits-grid {
+        display: grid;
+        gap: 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+
+      .benefit-card {
+        padding: 1.8rem;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(150deg, rgba(5, 16, 20, 0.9), rgba(15, 138, 138, 0.18));
+        border: 1px solid rgba(58, 199, 194, 0.18);
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.4s ease, border-color 0.4s ease;
+      }
+
+      .benefit-card:hover {
+        transform: translateY(-6px);
+        border-color: rgba(241, 178, 74, 0.4);
+      }
+
+      .benefit-card i {
+        font-size: 1.8rem;
+        color: var(--gold-400);
+        margin-bottom: 0.8rem;
+      }
+
+      .benefit-card h3 {
+        font-family: 'Poppins', sans-serif;
+        margin-bottom: 0.45rem;
+      }
+
+      .benefit-card p {
+        color: var(--muted);
+      }
+
+      .coverage-section {
+        display: grid;
+        gap: 2.5rem;
+      }
+
+      .coverage-layout {
+        display: grid;
+        gap: 2rem;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+      }
+
+      .globe-wrap {
+        position: relative;
+        aspect-ratio: 1 / 1;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        background: radial-gradient(circle at 35% 25%, rgba(241, 178, 74, 0.15), transparent 65%),
+          linear-gradient(160deg, rgba(5, 16, 20, 0.9), rgba(15, 138, 138, 0.3));
+        border: 1px solid rgba(58, 199, 194, 0.2);
+        backdrop-filter: blur(12px);
+        box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.4);
+      }
+
+      #coverage-globe {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .coverage-list {
+        display: grid;
+        gap: 1.2rem;
+        align-content: start;
+      }
+
+      .coverage-item {
+        padding: 1.1rem 1.3rem;
+        border-radius: var(--radius-sm);
+        background: rgba(7, 27, 34, 0.65);
+        border: 1px solid rgba(58, 199, 194, 0.16);
+        transition: border-color 0.3s ease, transform 0.3s ease;
+      }
+
+      .coverage-item.active {
+        border-color: rgba(241, 178, 74, 0.45);
+        transform: translateX(4px);
+      }
+
+      .coverage-item h3 {
+        font-family: 'Poppins', sans-serif;
+        margin-bottom: 0.35rem;
+      }
+
+      .coverage-item p {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .coverage-tip {
+        padding: 1rem 1.2rem;
+        border-radius: var(--radius-sm);
+        border: 1px dashed rgba(241, 178, 74, 0.45);
+        background: rgba(241, 178, 74, 0.07);
+        color: var(--gold-100);
+        font-size: 0.9rem;
+      }
+
+      .testimonials {
+        position: relative;
+      }
+
+      .testimonial-track {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(320px, 1fr);
+        gap: 1.6rem;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+        scroll-snap-type: x mandatory;
+      }
+
+      .testimonial-track::-webkit-scrollbar {
+        height: 6px;
+      }
+
+      .testimonial-track::-webkit-scrollbar-thumb {
+        background: rgba(241, 178, 74, 0.4);
+        border-radius: 999px;
+      }
+
+      .testimonial-card {
+        scroll-snap-align: start;
+        padding: 1.8rem;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(150deg, rgba(5, 16, 20, 0.9), rgba(15, 138, 138, 0.18));
+        border: 1px solid rgba(241, 178, 74, 0.18);
+        display: grid;
+        gap: 1.1rem;
+      }
+
+      .testimonial-card .role {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .testimonial-quote {
+        font-size: 1.05rem;
+        color: var(--gold-100);
+        font-style: italic;
+      }
+
+      .pricing-header {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 1.4rem;
+        align-items: center;
+        margin-bottom: 2.4rem;
+      }
+
+      .plan-switcher {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.35rem;
+        border-radius: 999px;
+        background: rgba(7, 27, 34, 0.75);
+        border: 1px solid rgba(58, 199, 194, 0.18);
+      }
+
+      .plan-switcher button {
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        padding: 0.7rem 1.6rem;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      .plan-switcher button.active {
+        background: linear-gradient(135deg, rgba(241, 178, 74, 0.25), rgba(241, 178, 74, 0.4));
+        color: white;
+      }
+
+      .plan-grid {
+        display: grid;
+        gap: 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+
+      .plan-card {
+        position: relative;
+        padding: 2rem 1.8rem 2.3rem;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(150deg, rgba(5, 16, 20, 0.94), rgba(15, 138, 138, 0.18));
+        border: 1px solid rgba(58, 199, 194, 0.2);
+        display: grid;
+        gap: 1.3rem;
+        overflow: hidden;
+        transition: transform 0.4s ease, border-color 0.4s ease;
+      }
+
+      .plan-card[data-featured='true'] {
+        border-color: rgba(241, 178, 74, 0.45);
+        transform: translateY(-6px);
+      }
+
+      .plan-card:hover {
+        transform: translateY(-6px);
+        border-color: rgba(241, 178, 74, 0.45);
+      }
+
+      .plan-card h3 {
+        font-family: 'Poppins', sans-serif;
+        font-size: 1.3rem;
+      }
+
+      .plan-price {
+        font-size: 2.2rem;
+        font-weight: 600;
+        font-family: 'Poppins', sans-serif;
+      }
+
+      .plan-price span {
+        font-size: 0.95rem;
+        color: var(--muted);
+        font-weight: 400;
+      }
+
+      .plan-meta {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .plan-features {
+        list-style: none;
+        display: grid;
+        gap: 0.6rem;
+        color: var(--muted);
+        padding-left: 0;
+      }
+
+      .plan-features li::before {
+        content: '▹';
+        color: var(--gold-200);
+        margin-right: 0.45rem;
+      }
+
+      .plan-cta {
+        margin-top: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        align-self: flex-start;
+        padding: 0.75rem 1.4rem;
+        border-radius: 999px;
+        border: 1px solid rgba(241, 178, 74, 0.45);
+        color: var(--gold-200);
+        font-weight: 600;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      .plan-cta:hover {
+        background: rgba(241, 178, 74, 0.18);
+        color: white;
+      }
+
+      .cta-footer {
+        margin-top: 8rem;
+        margin-bottom: 6rem;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .cta-footer .grid-container {
+        position: relative;
+        padding: clamp(2.6rem, 4vw, 3.8rem);
+        display: grid;
+        gap: 1.4rem;
+        text-align: center;
+      }
+
+      .cta-footer::before {
+        content: '';
+        position: absolute;
+        inset: -50% -20%;
+        background: radial-gradient(circle, rgba(241, 178, 74, 0.18), transparent 65%);
+        z-index: -1;
+      }
+
+      .cta-footer h2 {
+        font-family: 'Poppins', sans-serif;
+        font-size: clamp(2rem, 3.5vw, 2.8rem);
+      }
+
+      .cta-footer p {
+        color: var(--muted);
+        max-width: 34rem;
+        margin: 0 auto;
+      }
+
+      .cta-actions {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        justify-items: center;
+      }
+
+      .email-input {
+        display: flex;
+        align-items: center;
+        background: rgba(7, 27, 34, 0.8);
+        border-radius: 999px;
+        padding: 0.35rem;
+        border: 1px solid rgba(58, 199, 194, 0.25);
+        width: min(400px, 100%);
+      }
+
+      .email-input input {
+        flex: 1;
+        background: transparent;
+        border: none;
+        padding: 0.8rem 1.2rem;
+        color: white;
+        font-size: 0.95rem;
+        font-family: inherit;
+      }
+
+      .email-input input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+      }
+
+      .email-input button {
+        border: none;
+        border-radius: 999px;
+        padding: 0.8rem 1.6rem;
+        background: linear-gradient(135deg, var(--gold-400), var(--gold-500));
+        color: #161616;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+      }
+
+      .email-input button:hover {
+        transform: translateY(-2px);
+      }
+
+      .whatsapp-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        color: var(--teal-300);
+        padding: 0.8rem 1.4rem;
+        border-radius: 999px;
+        border: 1px solid rgba(58, 199, 194, 0.35);
+        transition: border-color 0.3s ease, color 0.3s ease;
+      }
+
+      .whatsapp-link:hover {
+        border-color: rgba(241, 178, 74, 0.45);
+        color: var(--gold-200);
       }
 
       footer {
-        padding: 3rem 1.25rem;
-      }
-    }
-
-    @media (max-width: 520px) {
-      .hero-content {
-        padding: 1.75rem;
+        padding: 2.5rem 0 3.5rem;
+        border-top: 1px solid rgba(58, 199, 194, 0.15);
+        background: rgba(5, 16, 20, 0.9);
       }
 
-      .cta-button {
-        width: 100%;
+      footer .grid-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 1.4rem;
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 0.9rem;
       }
 
-      .email-signup {
-        flex-direction: column;
-        align-items: stretch;
+      .reveal {
+        opacity: 0;
+        transform: translateY(30px);
+        transition: opacity 0.8s ease, transform 0.8s ease;
       }
 
-      .email-signup input,
-      .email-signup button {
-        width: 100%;
+      .reveal.in-view {
+        opacity: 1;
+        transform: translateY(0);
       }
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <svg class="signal-overlay" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <linearGradient id="signalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="rgba(241,178,74,0.55)" />
-          <stop offset="100%" stop-color="rgba(13,122,122,0.35)" />
-        </linearGradient>
-      </defs>
-      <g fill="none" stroke="url(#signalGradient)" stroke-width="2">
-        <circle cx="200" cy="200" r="40" opacity="0.9" />
-        <circle cx="200" cy="200" r="80" opacity="0.7" />
-        <circle cx="200" cy="200" r="120" opacity="0.5" />
-        <circle cx="200" cy="200" r="160" opacity="0.35" />
-        <circle cx="200" cy="200" r="200" opacity="0.25" />
-      </g>
-    </svg>
 
-    <div class="hero-content">
-      <span class="badge">SIMPLIFY AFRICA</span>
-      <h1>Stay Connected, Wherever Africa Takes You.</h1>
-      <p>Activate your eSIM in minutes and explore Africa with instant 4G/5G coverage. No more hunting for SIM cards or waiting in line—just seamless travel across Namibia, South Africa, Kenya, Tanzania, and Zanzibar.</p>
-      <a class="cta-button" href="#pricing">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 2a1 1 0 0 1 1 1v14.586l4.293-4.293a1 1 0 0 1 1.414 1.414l-6 6a1 1 0 0 1-1.414 0l-6-6A1 1 0 0 1 6.707 13.293L11 17.586V3a1 1 0 0 1 1-1Z" />
-        </svg>
-        Get Your eSIM
-      </a>
-    </div>
-  </header>
+      @media (max-width: 900px) {
+        nav {
+          flex-wrap: wrap;
+          gap: 0.8rem;
+          padding: 0.8rem 1rem;
+        }
 
-  <main>
-    <section class="how-it-works" id="how-it-works">
-      <h2 class="section-title">How It Works</h2>
-      <p class="section-subtitle">Get online in three effortless steps designed for travelers, adventurers, and remote professionals who value time and reliability.</p>
-      <div class="grid three">
-        <div class="card">
-          <div class="icon-circle">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
-              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm.75 17.938V18a.75.75 0 0 0-1.5 0v1.938A8.502 8.502 0 0 1 3.062 12H5a.75.75 0 0 0 0-1.5H3.062A8.502 8.502 0 0 1 11.25 4.062V6a.75.75 0 0 0 1.5 0V4.062A8.502 8.502 0 0 1 20.938 10.5H19a.75.75 0 0 0 0 1.5h1.938A8.502 8.502 0 0 1 12.75 19.938Z" />
-            </svg>
-          </div>
-          <h3>Choose Your Destination</h3>
-          <p>Select a country or regional pass that matches your African itinerary—Namibia, South Africa, Kenya, Tanzania, Zanzibar, and more.</p>
-        </div>
-        <div class="card">
-          <div class="icon-circle">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="28" height="28" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v4.5m0 9V21m0-9h9m-9 0H3" />
-            </svg>
-          </div>
-          <h3>Buy and Scan QR Code</h3>
-          <p>Complete a secure checkout and receive your eSIM instantly by email. Scan the QR code or enter setup details manually.</p>
-        </div>
-        <div class="card">
-          <div class="icon-circle">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
-              <path d="M3 5a2 2 0 0 1 2-2h4.586a2 2 0 0 1 1.414.586l1.414 1.414A2 2 0 0 0 14.828 6H19a2 2 0 0 1 2 2v2.25h-4.64a3.5 3.5 0 1 0 0 7H21V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm16.5 9.75a2 2 0 1 0 0-4h-4.64a2 2 0 1 0 0 4h4.64Z" />
-            </svg>
-          </div>
-          <h3>Connect Instantly</h3>
-          <p>Enable data roaming and go. Enjoy fast 4G/5G coverage with automatic network switching across the region.</p>
-        </div>
+        nav ul {
+          display: none;
+        }
+
+        .coverage-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .globe-wrap {
+          aspect-ratio: 4 / 3;
+        }
+      }
+
+      @media (max-width: 600px) {
+        nav {
+          inset: 18px 0 auto;
+          width: calc(100% - 36px);
+          transform: none;
+          left: 18px;
+        }
+
+        header {
+          padding-top: 6.5rem;
+        }
+
+        .hero-content {
+          padding: 2.2rem 1.7rem;
+        }
+
+        .floating-stats {
+          grid-template-columns: 1fr;
+        }
+
+        .testimonial-track {
+          grid-auto-columns: 85%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <div class="hero-media" aria-hidden="true">
+        <video
+          class="hero-video"
+          src="https://cdn.coverr.co/videos/coverr-desert-jeep-journey-4990/1080p.mp4"
+          autoplay
+          muted
+          loop
+          playsinline
+        ></video>
+        <div class="hero-gradient"></div>
       </div>
-    </section>
 
-    <section class="benefits" id="benefits">
-      <h2 class="section-title">Why Travelers Choose SIMplify Africa</h2>
-      <p class="section-subtitle">Freedom, flexibility, and fintech-level security—all in one powerful eSIM experience tailored for the African continent.</p>
-      <div class="grid two">
-        <div class="card">
-          <div class="icon-circle">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="28" height="28" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5.25 8.25h13.5m-13.5 4.5h13.5M3 5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25v13.5A2.25 2.25 0 0 1 18.75 21H5.25A2.25 2.25 0 0 1 3 18.75V5.25Z" />
-            </svg>
-          </div>
-          <h3>No Physical SIM or Queues</h3>
-          <p>Skip airport kiosks and tourist traps. Install your eSIM before you land and hit the road fully connected.</p>
+      <nav>
+        <div class="brand">
+          <i class="ph ph-wifi-high"></i>
+          <span>SIMplify Africa</span>
         </div>
-        <div class="card">
-          <div class="icon-circle">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
-              <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm5 11a1 1 0 0 1-1 1H8a1 1 0 0 1 0-2h8a1 1 0 0 1 1 1Zm-2 3a1 1 0 0 1-1 1H8a1 1 0 0 1 0-2h6a1 1 0 0 1 1 1Zm2-6a1 1 0 0 1-1 1H8a1 1 0 0 1 0-2h8a1 1 0 0 1 1 1Z" />
-            </svg>
-          </div>
-          <h3>Works Across Multiple Countries</h3>
-          <p>Roam seamlessly across Namibia, South Africa, Kenya, Tanzania, and Zanzibar without swapping SIMs.</p>
-        </div>
-        <div class="card">
-          <div class="icon-circle">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="28" height="28" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v12m-3-3 3 3 3-3" />
-            </svg>
-          </div>
-          <h3>Affordable Regional Plans</h3>
-          <p>Choose data options built for safaris, city escapes, or months-long remote work without breaking the budget.</p>
-        </div>
-        <div class="card">
-          <div class="icon-circle">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
-              <path d="M12 1.5a10.5 10.5 0 1 0 10.5 10.5A10.512 10.512 0 0 0 12 1.5Zm0 4.5a3 3 0 1 1-3 3 3 3 0 0 1 3-3Zm0 13.2a7.2 7.2 0 0 1-6-3.22c.03-1.99 4-3.08 6-3.08s5.97 1.09 6 3.08a7.2 7.2 0 0 1-6 3.22Z" />
-            </svg>
-          </div>
-          <h3>Secure Online Payment</h3>
-          <p>Protected transactions with global fintech security standards and instant delivery to your inbox.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="coverage" id="coverage">
-      <h2 class="section-title">Coverage Across Iconic African Destinations</h2>
-      <p class="section-subtitle">Explore a connected Africa—from the dunes of Namibia to the spice markets of Zanzibar. Hover over each country to see availability.</p>
-      <div class="map-container">
-        <div class="map" aria-hidden="true">
-          <svg viewBox="0 0 500 360" xmlns="http://www.w3.org/2000/svg">
-            <path class="country" data-name="Namibia" d="M160 250l-10-40 20-45 35-15 25 35-20 55-30 20z" />
-            <path class="country" data-name="South Africa" d="M200 300l-20-45 35-20 60 5 60 35-45 45-55-5z" />
-            <path class="country" data-name="Kenya" d="M320 150l20-50 50-10 20 40-30 45-45 5z" />
-            <path class="country" data-name="Tanzania" d="M300 200l15-35 45-5 35 45-25 65-60-15z" />
-            <path class="country" data-name="Zanzibar" d="M400 230l8-18 12 6-6 18z" />
-          </svg>
-          <div class="tooltip" role="status" aria-live="polite"></div>
-        </div>
-        <div class="map-legend">
-          <span>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="8" cy="8" r="8" fill="rgba(241, 178, 74, 0.65)" />
-            </svg>
-            Included in SIMplify regional passes
-          </span>
-          <span>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="8" cy="8" r="8" fill="rgba(13, 122, 122, 0.75)" />
-            </svg>
-            Hover to see local tips &amp; availability
-          </span>
-        </div>
-      </div>
-    </section>
-
-    <section class="testimonials-section" id="testimonials">
-      <h2 class="section-title">Loved by Travelers &amp; Remote Creatives</h2>
-      <p class="section-subtitle">Real stories from explorers who refused to go offline in Africa.</p>
-      <div class="testimonials">
-        <div class="testimonial">
-          <p>“I activated SIMplify while flying into Windhoek. By the time we landed, I was sharing safari shots with clients back home—zero downtime.”</p>
-          <div>
-            <cite>Amelia R.</cite>
-            <span>Wildlife Photographer, USA</span>
-          </div>
-        </div>
-        <div class="testimonial">
-          <p>“From Cape Town coworking spaces to Kilimanjaro base camps, the connection stayed strong. It’s the best investment for remote work across Africa.”</p>
-          <div>
-            <cite>Samuel K.</cite>
-            <span>Remote Product Designer, Ghana/UK</span>
-          </div>
-        </div>
-        <div class="testimonial">
-          <p>“Buying a regional pass saved me so much time. No more chasing SIM vendors in every country—SIMplify handled it all.”</p>
-          <div>
-            <cite>Lucia M.</cite>
-            <span>Adventure Vlogger, Spain</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="pricing" id="pricing">
-      <h2 class="section-title">Flexible Plans for Every Journey</h2>
-      <p class="section-subtitle">Choose a plan that matches your itinerary and data needs. Upgrade or top up anytime from your SIMplify dashboard.</p>
-      <div class="pricing-grid">
-        <div class="pricing-card">
-          <h3>Namibia Only</h3>
-          <p class="price">$19<span>/ 5GB</span></p>
-          <ul class="feature-list">
-            <li>5GB high-speed data for 15 days</li>
-            <li>Windhoek, Etosha, Sossusvlei coverage</li>
-            <li>Instant activation via QR code</li>
-            <li>Top up available in-app</li>
-          </ul>
-          <a class="cta-button" href="#">Select Plan</a>
-        </div>
-        <div class="pricing-card featured">
-          <h3>Southern Africa Pass</h3>
-          <p class="price">$39<span>/ 10GB</span></p>
-          <ul class="feature-list">
-            <li>Coverage in Namibia, South Africa, Botswana</li>
-            <li>Fast 4G/5G in major cities &amp; safari hubs</li>
-            <li>Personalized travel network support</li>
-            <li>Priority customer care</li>
-          </ul>
-          <a class="cta-button" href="#">Most Popular</a>
-        </div>
-        <div class="pricing-card">
-          <h3>Africa Explorer</h3>
-          <p class="price">$69<span>/ 20GB</span></p>
-          <ul class="feature-list">
-            <li>Works in 15+ destinations including Kenya &amp; Tanzania</li>
-            <li>Multi-device hotspot friendly</li>
-            <li>Usage dashboard with alerts</li>
-            <li>Free plan swaps during trip</li>
-          </ul>
-          <a class="cta-button" href="#">Select Plan</a>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="footer-inner">
-      <h2 class="section-title">Ready to travel? Get your SIMplify eSIM today.</h2>
-      <p>Stay online from the moment you arrive. Subscribe for launch offers and message us anytime for tailored travel data advice.</p>
-      <div class="cta-footer">
-        <form class="email-signup">
-          <input type="email" name="email" placeholder="Enter your email" aria-label="Email address" required />
-          <button type="submit">Notify Me</button>
-        </form>
-        <a class="whatsapp-link" href="https://wa.me/1234567890" target="_blank" rel="noopener">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24" fill="currentColor" aria-hidden="true">
-            <path d="M16 3C9.383 3 4 8.383 4 15c0 2.442.701 4.72 1.918 6.642L4 29l7.511-1.888C13.36 28.35 14.645 29 16 29c6.617 0 12-5.383 12-12S22.617 3 16 3Zm0 22c-1.133 0-2.237-.289-3.214-.837l-.23-.129-4.464 1.121 1.192-4.353-.149-.237A8.962 8.962 0 0 1 7 15c0-4.963 4.038-9 9-9s9 4.037 9 9-4.038 9-9 9Zm5.262-6.188c-.288-.144-1.7-.839-1.962-.934-.262-.097-.453-.144-.645.144-.192.288-.739.934-.906 1.126-.166.192-.336.216-.624.072-.288-.144-1.216-.447-2.317-1.425-.857-.764-1.435-1.707-1.603-1.995-.166-.288-.018-.443.126-.587.13-.129.288-.336.432-.504.144-.168.192-.288.288-.48.096-.192.048-.36-.024-.504-.072-.144-.645-1.556-.883-2.126-.232-.556-.469-.48-.645-.489l-.552-.01c-.192 0-.504.072-.768.36-.264.288-1.008.984-1.008 2.4s1.032 2.784 1.176 2.976c.144.192 2.031 3.105 4.918 4.347.687.296 1.223.473 1.64.605.688.219 1.316.188 1.812.114.552-.082 1.7-.694 1.94-1.365.24-.672.24-1.248.168-1.368-.072-.12-.264-.192-.552-.336Z" />
-          </svg>
-          WhatsApp Support
+        <ul>
+          <li><a href="#how-it-works">How it works</a></li>
+          <li><a href="#benefits">Benefits</a></li>
+          <li><a href="#coverage">Coverage</a></li>
+          <li><a href="#pricing">Plans</a></li>
+          <li><a href="#contact">Support</a></li>
+        </ul>
+        <a class="nav-cta" href="#pricing">
+          <i class="ph ph-sparkle"></i>
+          Get eSIM
         </a>
-      </div>
+      </nav>
+
+      <header>
+        <div class="hero-content glass-panel reveal">
+          <div class="hero-badge">
+            <span>Ultra-fast digital onboarding</span>
+          </div>
+          <h1 class="hero-title">Stay Connected, Wherever Africa Takes You.</h1>
+          <p class="hero-subtitle">
+            Activate your eSIM in minutes and explore Africa with instant 4G/5G coverage. One QR code unlocks reliable data across Namibia, South Africa, Kenya, Tanzania, and Zanzibar.
+          </p>
+          <div class="cta-group">
+            <a class="primary-cta" href="#pricing">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M5 12h14M13 6l6 6-6 6"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Get Your eSIM
+            </a>
+            <a class="secondary-cta" href="#coverage">
+              <i class="ph ph-globe"></i>
+              View Coverage
+            </a>
+          </div>
+          <div class="floating-stats">
+            <div class="stat">
+              <h3>5 min</h3>
+              <p>Average activation from checkout to connected roaming.</p>
+            </div>
+            <div class="stat">
+              <h3>40+</h3>
+              <p>Partnered African networks delivering premium speeds.</p>
+            </div>
+            <div class="stat">
+              <h3>Zero fees</h3>
+              <p>Transparent pricing with secure multi-currency payments.</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section id="how-it-works" class="reveal">
+          <div class="section-heading">
+            <h2>How SIMplify Africa Works</h2>
+            <p>Skip store queues. Set up in minutes with a digital onboarding flow that works across every supported country.</p>
+          </div>
+          <div class="how-steps">
+            <article class="step-card" data-step="01">
+              <h3>Choose Your Destination</h3>
+              <p>Select a country pass or regional bundle tailored to your travel route. Plans automatically switch to the best local network.</p>
+            </article>
+            <article class="step-card" data-step="02">
+              <h3>Buy and Scan QR Code</h3>
+              <p>Receive an instant QR code by email and WhatsApp. Scan it with your device to add your eSIM profile before or during travel.</p>
+            </article>
+            <article class="step-card" data-step="03">
+              <h3>Connect Instantly</h3>
+              <p>Land, toggle on roaming, and you&apos;re live with 4G/5G data. Manage top-ups, support, and add-ons inside the SIMplify dashboard.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="benefits" class="reveal">
+          <div class="section-heading">
+            <h2>Designed for explorers and remote professionals</h2>
+            <p>Every detail, from the coverage footprint to the fintech-grade checkout, is tuned for smooth cross-border journeys.</p>
+          </div>
+          <div class="benefits-grid">
+            <article class="benefit-card">
+              <i class="ph ph-cell-signal-full"></i>
+              <h3>Instant digital eSIM</h3>
+              <p>No physical SIMs. Install your profile in advance and land ready for business or adventure.</p>
+            </article>
+            <article class="benefit-card">
+              <i class="ph ph-map-trifold"></i>
+              <h3>Pan-African roaming</h3>
+              <p>Works across Namibia, South Africa, Kenya, Tanzania, and Zanzibar with smart network switching.</p>
+            </article>
+            <article class="benefit-card">
+              <i class="ph ph-currency-circle-dollar"></i>
+              <h3>Transparent plans</h3>
+              <p>Affordable regional bundles with no hidden fees, surprise throttling, or expiry gimmicks.</p>
+            </article>
+            <article class="benefit-card">
+              <i class="ph ph-shield-check"></i>
+              <h3>Secure payments</h3>
+              <p>Checkout via Apple Pay, Google Pay, major cards, and local wallets with bank-grade encryption.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="coverage" class="coverage-section reveal">
+          <div class="section-heading">
+            <h2>Immersive Coverage Map</h2>
+            <p>Spin the interactive globe to see where your SIMplify eSIM keeps you connected. Highlighted regions are fully optimized for high-speed roaming.</p>
+          </div>
+          <div class="coverage-layout">
+            <div class="globe-wrap glass-panel">
+              <canvas id="coverage-globe" aria-label="Coverage map"></canvas>
+            </div>
+            <div class="coverage-list" role="list">
+              <article class="coverage-item active" data-country="south-africa" tabindex="0">
+                <h3>Southern Africa Pass</h3>
+                <p>One plan covers South Africa, Namibia, Botswana, and Eswatini with 5G priority access in major hubs.</p>
+              </article>
+              <article class="coverage-item" data-country="namibia" tabindex="0">
+                <h3>Namibia Explorer</h3>
+                <p>Desert-proof coverage from Windhoek to Sossusvlei with satellite-backed redundancy.</p>
+              </article>
+              <article class="coverage-item" data-country="kenya" tabindex="0">
+                <h3>Kenya Remote Pro</h3>
+                <p>Ideal for Nairobi HQs and safari fieldwork with bundled hotspot allowances.</p>
+              </article>
+              <article class="coverage-item" data-country="tanzania" tabindex="0">
+                <h3>Tanzania + Zanzibar</h3>
+                <p>Island and mainland coverage for seamless switching between Dar es Salaam and Zanzibar.</p>
+              </article>
+              <div class="coverage-tip">
+                Hover over a plan to see each hotspot pulsing on the 3D globe. Best experienced on modern browsers.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="testimonials" class="testimonials reveal">
+          <div class="section-heading">
+            <h2>Trusted by travelers, creators, and remote teams</h2>
+            <p>From safari photographers to VC-backed digital nomads, SIMplify keeps their stories uploading in real time.</p>
+          </div>
+          <div class="testimonial-track">
+            <article class="testimonial-card">
+              <div>
+                <strong>Amara K.</strong>
+                <div class="role">Wildlife filmmaker, Kenya</div>
+              </div>
+              <p class="testimonial-quote">“The eSIM activated on my layover and my footage synced to the studio before I even cleared customs.”</p>
+            </article>
+            <article class="testimonial-card">
+              <div>
+                <strong>Luis P.</strong>
+                <div class="role">Product designer, Remote</div>
+              </div>
+              <p class="testimonial-quote">“Zanzibar beach stand-ups with 5G? Absolutely. The dashboard made top-ups during sprints effortless.”</p>
+            </article>
+            <article class="testimonial-card">
+              <div>
+                <strong>Nandi S.</strong>
+                <div class="role">Expedition photographer, Namibia</div>
+              </div>
+              <p class="testimonial-quote">“From dunes to desert camps the signal never dropped. I now recommend SIMplify to every production crew.”</p>
+            </article>
+            <article class="testimonial-card">
+              <div>
+                <strong>Jonah F.</strong>
+                <div class="role">Fintech consultant, South Africa</div>
+              </div>
+              <p class="testimonial-quote">“Security audits passed instantly and the payment experience matched our enterprise standards.”</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="pricing" class="reveal">
+          <div class="pricing-header">
+            <div class="section-heading">
+              <h2>Flexible plans that move with your itinerary</h2>
+              <p>Pay only for the data you need. Toggle between Lite and Pro data bundles depending on how heavy your travel workflows are.</p>
+            </div>
+            <div class="plan-switcher" role="group" aria-label="Plan tiers">
+              <button class="active" data-tier="lite">Lite</button>
+              <button data-tier="pro">Pro</button>
+            </div>
+          </div>
+          <div class="plan-grid" data-active-tier="lite">
+            <article class="plan-card" data-tier="lite" data-featured="true">
+              <div>
+                <h3>Namibia Only</h3>
+                <p class="plan-meta">Perfect for desert safaris and capital city stays.</p>
+              </div>
+              <div class="plan-price">$19<span>/ 5 GB</span></div>
+              <ul class="plan-features">
+                <li>Instant activation + offline installation guide</li>
+                <li>High-speed data for 15 days</li>
+                <li>500 MB daily hotspot allowance</li>
+              </ul>
+              <a class="plan-cta" href="#" aria-label="Select Namibia Only plan">
+                <i class="ph ph-shopping-cart"></i>
+                Choose plan
+              </a>
+            </article>
+            <article class="plan-card" data-tier="lite">
+              <div>
+                <h3>Southern Africa Pass</h3>
+                <p class="plan-meta">Connect across South Africa, Namibia, Botswana, and Eswatini.</p>
+              </div>
+              <div class="plan-price">$39<span>/ 10 GB</span></div>
+              <ul class="plan-features">
+                <li>Best-network auto switching</li>
+                <li>5G-ready in Cape Town &amp; Johannesburg</li>
+                <li>Multi-device management</li>
+              </ul>
+              <a class="plan-cta" href="#" aria-label="Select Southern Africa Pass plan">
+                <i class="ph ph-shopping-cart"></i>
+                Choose plan
+              </a>
+            </article>
+            <article class="plan-card" data-tier="lite">
+              <div>
+                <h3>Africa Explorer</h3>
+                <p class="plan-meta">Roam seamlessly through Kenya, Tanzania, Zanzibar, and beyond.</p>
+              </div>
+              <div class="plan-price">$59<span>/ 15 GB</span></div>
+              <ul class="plan-features">
+                <li>Priority partner networks in 7 countries</li>
+                <li>Unlimited eSIM swaps</li>
+                <li>eKYC-ready receipts for business travel</li>
+              </ul>
+              <a class="plan-cta" href="#" aria-label="Select Africa Explorer plan">
+                <i class="ph ph-shopping-cart"></i>
+                Choose plan
+              </a>
+            </article>
+
+            <article class="plan-card" data-tier="pro">
+              <div>
+                <h3>Namibia Field Team</h3>
+                <p class="plan-meta">Mission-critical connectivity with rugged redundancy.</p>
+              </div>
+              <div class="plan-price">$49<span>/ 15 GB</span></div>
+              <ul class="plan-features">
+                <li>Priority support with 24/7 sat fallback</li>
+                <li>Shareable pool for up to 5 devices</li>
+                <li>Static IP add-on available</li>
+              </ul>
+              <a class="plan-cta" href="#" aria-label="Select Namibia Field Team plan">
+                <i class="ph ph-shopping-cart"></i>
+                Choose plan
+              </a>
+            </article>
+            <article class="plan-card" data-tier="pro" data-featured="true">
+              <div>
+                <h3>Southern Africa Executive</h3>
+                <p class="plan-meta">Perfect for leadership roadshows and hybrid teams.</p>
+              </div>
+              <div class="plan-price">$79<span>/ 30 GB</span></div>
+              <ul class="plan-features">
+                <li>5G priority lanes + airport lounge Wi-Fi passes</li>
+                <li>Unlimited hotspot &amp; tethering</li>
+                <li>Dedicated concierge via WhatsApp</li>
+              </ul>
+              <a class="plan-cta" href="#" aria-label="Select Southern Africa Executive plan">
+                <i class="ph ph-shopping-cart"></i>
+                Choose plan
+              </a>
+            </article>
+            <article class="plan-card" data-tier="pro">
+              <div>
+                <h3>Africa Remote HQ</h3>
+                <p class="plan-meta">For distributed teams hopping across regions weekly.</p>
+              </div>
+              <div class="plan-price">$119<span>/ 50 GB</span></div>
+              <ul class="plan-features">
+                <li>Multi-user management console</li>
+                <li>Compliance-ready invoicing</li>
+                <li>Unlimited plan stacking &amp; data rollover</li>
+              </ul>
+              <a class="plan-cta" href="#" aria-label="Select Africa Remote HQ plan">
+                <i class="ph ph-shopping-cart"></i>
+                Choose plan
+              </a>
+            </article>
+          </div>
+        </section>
+
+        <section id="contact" class="cta-footer reveal">
+          <div class="grid-container glass-panel">
+            <h2>Ready to travel? Get your SIMplify eSIM today.</h2>
+            <p>Secure your data lifeline before departure. We&apos;ll send setup guides, travel hacks, and VIP support to your inbox.</p>
+            <div class="cta-actions">
+              <form class="email-input" action="#" method="post">
+                <input type="email" name="email" placeholder="Enter your email" required />
+                <button type="submit">Notify me</button>
+              </form>
+              <a class="whatsapp-link" href="https://wa.me/00000000000" target="_blank" rel="noopener">
+                <i class="ph ph-whatsapp-logo"></i>
+                WhatsApp Support
+              </a>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div class="grid-container">
+          <div>© <span id="year"></span> SIMplify Africa. All rights reserved.</div>
+          <div>Crafted for modern explorers — secure, borderless, future-ready.</div>
+        </div>
+      </footer>
     </div>
-  </footer>
 
-  <script>
-    const tooltip = document.querySelector('.tooltip');
-    const countries = document.querySelectorAll('.country');
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+    <script>
+      const observer = new IntersectionObserver(
+        entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('in-view');
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.1 }
+      );
 
-    const tips = {
-      Namibia: 'Desert dunes, Etosha safaris, and Windhoek city life with 4G coverage.',
-      'South Africa': 'Cape Town to Kruger—5G in major hubs, dependable 4G in remote areas.',
-      Kenya: 'Safari-ready data in Maasai Mara, Nairobi coworking, and coastal retreats.',
-      Tanzania: 'Stay online while summiting Kilimanjaro or relaxing in Serengeti lodges.',
-      Zanzibar: 'Beach-perfect connection across Stone Town and spice islands.'
-    };
+      document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-    countries.forEach((country) => {
-      country.addEventListener('mousemove', (event) => {
-        const name = country.dataset.name;
-        tooltip.textContent = `${name}: ${tips[name]}`;
-        tooltip.style.opacity = 1;
-        const rect = event.currentTarget.ownerSVGElement.getBoundingClientRect();
-        tooltip.style.left = `${event.clientX - rect.left + 10}px`;
-        tooltip.style.top = `${event.clientY - rect.top + 10}px`;
+      const yearEl = document.getElementById('year');
+      if (yearEl) {
+        yearEl.textContent = new Date().getFullYear();
+      }
+
+      const tierButtons = document.querySelectorAll('.plan-switcher button');
+      const planGrid = document.querySelector('.plan-grid');
+      tierButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const tier = button.dataset.tier;
+          tierButtons.forEach(btn => btn.classList.toggle('active', btn === button));
+          planGrid.dataset.activeTier = tier;
+          planGrid.querySelectorAll('.plan-card').forEach(card => {
+            card.style.display = card.dataset.tier === tier ? 'grid' : 'none';
+          });
+        });
+      });
+      tierButtons[0].click();
+
+      const coverageData = {
+        'south-africa': { lat: -30.5595, lng: 22.9375 },
+        namibia: { lat: -22.9576, lng: 18.4904 },
+        kenya: { lat: -0.0236, lng: 37.9062 },
+        tanzania: { lat: -6.369, lng: 34.8888 }
+      };
+
+      const coverageItems = document.querySelectorAll('.coverage-item');
+      coverageItems.forEach(item => {
+        item.addEventListener('mouseenter', () => highlightLocation(item.dataset.country));
+        item.addEventListener('focus', () => highlightLocation(item.dataset.country));
       });
 
-      country.addEventListener('mouseleave', () => {
-        tooltip.style.opacity = 0;
-      });
-    });
-  </script>
-</body>
+      let renderer, scene, camera, globe, glow, pulseMesh;
+
+      function initGlobe() {
+        const canvas = document.getElementById('coverage-globe');
+        if (!canvas || !window.THREE) return;
+
+        renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        resizeRenderer();
+
+        scene = new THREE.Scene();
+
+        camera = new THREE.PerspectiveCamera(32, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+        camera.position.set(0, 0, 3.4);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xf1b24a, 1.1);
+        directionalLight.position.set(4, 3, 4);
+        scene.add(directionalLight);
+
+        const geometry = new THREE.SphereGeometry(1.2, 64, 64);
+        const textureLoader = new THREE.TextureLoader();
+        const texture = textureLoader.load('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/textures/earth-night.jpg');
+        const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0.1 });
+        globe = new THREE.Mesh(geometry, material);
+        scene.add(globe);
+
+        const glowGeometry = new THREE.SphereGeometry(1.22, 64, 64);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+          color: 0x0f8a8a,
+          transparent: true,
+          opacity: 0.25,
+          blending: THREE.AdditiveBlending
+        });
+        glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        scene.add(glow);
+
+        const pulseGeometry = new THREE.SphereGeometry(1.22, 64, 64);
+        const pulseMaterial = new THREE.MeshBasicMaterial({
+          color: 0xf1b24a,
+          transparent: true,
+          opacity: 0.0,
+          blending: THREE.AdditiveBlending
+        });
+        pulseMesh = new THREE.Mesh(pulseGeometry, pulseMaterial);
+        scene.add(pulseMesh);
+
+        window.addEventListener('resize', resizeRenderer);
+        animate();
+        highlightLocation('south-africa');
+      }
+
+      function resizeRenderer() {
+        if (!renderer) return;
+        const canvas = renderer.domElement;
+        const { clientWidth, clientHeight } = canvas;
+        renderer.setSize(clientWidth, clientHeight, false);
+        if (camera) {
+          camera.aspect = clientWidth / clientHeight;
+          camera.updateProjectionMatrix();
+        }
+      }
+
+      let rotationTarget = { x: 0, y: 0 };
+      function highlightLocation(country) {
+        coverageItems.forEach(item => item.classList.toggle('active', item.dataset.country === country));
+        const coords = coverageData[country];
+        if (!coords || !globe) return;
+        const latRad = (coords.lat * Math.PI) / 180;
+        const lonRad = ((coords.lng - 90) * Math.PI) / 180;
+        rotationTarget = { x: -latRad, y: -lonRad };
+        pulseMesh.material.opacity = 0.45;
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        if (globe) {
+          globe.rotation.x += (rotationTarget.x - globe.rotation.x) * 0.03;
+          globe.rotation.y += (rotationTarget.y - globe.rotation.y) * 0.03;
+          glow.rotation.copy(globe.rotation);
+          pulseMesh.rotation.copy(globe.rotation);
+          pulseMesh.material.opacity = Math.max(pulseMesh.material.opacity * 0.96, 0.02);
+          const scale = 1.22 + Math.sin(Date.now() * 0.003) * 0.02;
+          pulseMesh.scale.set(scale, scale, scale);
+        }
+        renderer && renderer.render(scene, camera);
+      }
+
+      initGlobe();
+    </script>
+  </body>
 </html>
