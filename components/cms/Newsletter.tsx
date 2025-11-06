@@ -1,4 +1,5 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { ArrowUpRight } from "lucide-react";
 import type { NewsletterSection } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
 import { getExternalLinkProps, normalizeHref } from "@/lib/links";
@@ -38,7 +39,7 @@ export function Newsletter({ section }: { section: NewsletterSection }) {
                   <p className="text-sm font-medium text-white">{topic}</p>
                   <p className="text-xs text-sand-200/70">5 min read</p>
                 </div>
-                <span className="material-symbols-rounded text-sand-200">arrow_outward</span>
+                <ArrowUpRight className="h-5 w-5 text-sand-200" />
               </div>
             ))}
           </div>

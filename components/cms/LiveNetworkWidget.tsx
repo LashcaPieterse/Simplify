@@ -1,3 +1,4 @@
+import { Radio, SignalHigh } from "lucide-react";
 import type { LiveNetworkWidgetSection } from "@/lib/sanity.queries";
 
 export function LiveNetworkWidget({ section }: { section: LiveNetworkWidgetSection }) {
@@ -7,7 +8,7 @@ export function LiveNetworkWidget({ section }: { section: LiveNetworkWidgetSecti
         <div className="mb-6 flex items-center justify-between">
           <p className="text-sm font-semibold text-brand-700">{section.title}</p>
           <span className="inline-flex items-center gap-2 text-xs font-medium text-brand-500">
-            <span className="material-symbols-rounded text-brand-400">podcasts</span>
+            <Radio className="h-4 w-4 text-brand-400" />
             Updated moments ago
           </span>
         </div>
@@ -23,7 +24,7 @@ export function LiveNetworkWidget({ section }: { section: LiveNetworkWidgetSecti
                 <p className="text-xs text-brand-500">Latency {region.latencyMs}ms</p>
               </div>
               <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-600">
-                <span className="material-symbols-rounded text-brand-400">signal_cellular_alt</span>
+                <SignalHigh className="h-4 w-4 text-brand-400" />
                 {region.signalQuality}
               </span>
             </div>

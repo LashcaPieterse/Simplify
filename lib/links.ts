@@ -59,3 +59,15 @@ export function getExternalLinkProps(href: string | null | undefined) {
     rel: "noopener noreferrer" as const
   };
 }
+
+export function resolveLinkHref(link: { url?: string } | string | null | undefined) {
+  if (typeof link === "string") {
+    return normalizeHref(link);
+  }
+
+  if (link && typeof link.url === "string") {
+    return normalizeHref(link.url);
+  }
+
+  return normalizeHref(undefined);
+}
