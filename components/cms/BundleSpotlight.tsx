@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import type { RegionalBundleSpotlightSection } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
 import { urlForImage } from "@/lib/image";
@@ -49,11 +48,11 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
           <div className="mt-8 flex flex-wrap items-center gap-4">
             {bundle.ctaTarget && bundle.ctaLabel ? (
               <Button size="lg" className="shadow-subtle" asChild>
-                <Link href={bundle.ctaTarget}>{bundle.ctaLabel}</Link>
+                <a href={bundle.ctaTarget}>{bundle.ctaLabel}</a>
               </Button>
             ) : null}
             <Button variant="ghost" size="lg" asChild>
-              <Link href="/#coverage">Compare all regions</Link>
+              <a href="/#coverage">Compare all regions</a>
             </Button>
           </div>
         </div>
