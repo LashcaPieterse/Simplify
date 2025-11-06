@@ -12,8 +12,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-inter)", ...fontFamily.sans],
-        display: ["var(--font-manrope)", "var(--font-inter)", ...fontFamily.sans]
+        sans: [...fontFamily.sans],
+        display: [...fontFamily.sans]
       },
       colors: {
         brand: {

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import type { RegionalBundleSpotlightSection } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
+import { CheckCircle2, Map, TrendingUp } from "lucide-react";
 import { urlForImage } from "@/lib/image";
 import { getExternalLinkProps, normalizeHref } from "@/lib/links";
 
@@ -34,7 +35,7 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {bundle.includes.map((item) => (
               <div key={item} className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-white px-4 py-3">
-                <span className="material-symbols-rounded text-brand-500">check_circle</span>
+                <CheckCircle2 className="h-5 w-5 text-brand-500" />
                 <span className="text-sm font-medium text-brand-700">{item}</span>
               </div>
             ))}
@@ -66,7 +67,7 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
           <div className="mb-6 flex items-center justify-between">
             <p className="text-sm font-semibold text-brand-700">Included destinations</p>
             <span className="inline-flex items-center gap-2 text-xs font-medium text-brand-500">
-              <span className="material-symbols-rounded text-brand-400">map</span>
+              <Map className="h-4 w-4 text-brand-400" />
               {bundle.countries.length} countries
             </span>
           </div>
@@ -77,7 +78,7 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
                   <p className="text-sm font-semibold text-brand-800">{country.title}</p>
                   <p className="text-xs text-brand-500">/country/{country.slug}</p>
                 </div>
-                <span className="material-symbols-rounded text-brand-400">trending_up</span>
+                <TrendingUp className="h-4 w-4 text-brand-400" />
               </li>
             ))}
           </ul>

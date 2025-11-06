@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Clock3, Gauge, Router, SignalHigh, Star, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getCountryBySlug,
@@ -43,7 +44,7 @@ export default async function CountryPage({ params }: CountryPageProps) {
           <div className="flex flex-wrap items-center gap-4 text-sm text-brand-600">
             {country.badge ? (
               <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                <span className="material-symbols-rounded text-brand-400">star</span>
+                <Star className="h-4 w-4 text-brand-400" />
                 {country.badge}
               </span>
             ) : null}
@@ -69,7 +70,7 @@ export default async function CountryPage({ params }: CountryPageProps) {
                   {logoUrl ? (
                     <Image src={logoUrl} alt={carrier.title} width={48} height={48} className="rounded-full" />
                   ) : (
-                    <span className="material-symbols-rounded text-brand-400">wifi</span>
+                    <Wifi className="h-6 w-6 text-brand-400" />
                   )}
                   <div>
                     <p className="font-semibold text-brand-800">{carrier.title}</p>
@@ -114,19 +115,19 @@ function PlanCard({ plan }: { plan: PlanDetail }) {
       </div>
       <ul className="mt-6 space-y-2 text-sm text-brand-600">
         <li className="flex items-center gap-2">
-          <span className="material-symbols-rounded text-brand-400">data_usage</span>
+          <Gauge className="h-5 w-5 text-brand-400" />
           {plan.dataGB}GB high-speed data
         </li>
         <li className="flex items-center gap-2">
-          <span className="material-symbols-rounded text-brand-400">schedule</span>
+          <Clock3 className="h-5 w-5 text-brand-400" />
           {plan.validityDays}-day validity
         </li>
         <li className="flex items-center gap-2">
-          <span className="material-symbols-rounded text-brand-400">wifi_tethering</span>
+          <Router className="h-5 w-5 text-brand-400" />
           {plan.hotspot ? "Hotspot enabled" : "Hotspot not supported"}
         </li>
         <li className="flex items-center gap-2">
-          <span className="material-symbols-rounded text-brand-400">network_wifi_3_bar</span>
+          <SignalHigh className="h-5 w-5 text-brand-400" />
           {plan.fiveG ? "5G where available" : "4G/LTE coverage"}
         </li>
       </ul>
