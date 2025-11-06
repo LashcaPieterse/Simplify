@@ -1,9 +1,27 @@
-import Link from "next/link";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import type { NewsletterSection } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
 
+type ExternalLinkProps = {
+  target: "_blank";
+  rel: "noopener noreferrer";
+};
+
+const getExternalLinkProps = (href: string): Partial<ExternalLinkProps> => {
+  if (href.startsWith("/")) {
+    return {};
+  }
+
+  return {
+    target: "_blank",
+    rel: "noopener noreferrer"
+  };
+};
+
 export function Newsletter({ section }: { section: NewsletterSection }) {
+  const href = section.ctaTarget.trim() ? section.ctaTarget : "#";
+  const externalProps = getExternalLinkProps(href);
+
   return (
     <section id="resources" className="mx-auto mb-24 max-w-6xl px-6 lg:px-10">
       <div className="rounded-[2rem] border border-brand-100/80 bg-brand-900 px-10 py-14 text-sand-50 shadow-card">
@@ -22,7 +40,9 @@ export function Newsletter({ section }: { section: NewsletterSection }) {
                 />
               </label>
               <Button variant="secondary" size="lg" className="bg-white/15 text-white hover:bg-white/25" asChild>
-                <Link href={section.ctaTarget}>{section.ctaLabel}</Link>
+                <a href={href} {...externalProps}>
+                  {section.ctaLabel}
+                </a>
               </Button>
             </div>
           </div>
