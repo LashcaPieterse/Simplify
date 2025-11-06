@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CheckCircle2, Globe2, Router, SignalHigh } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
 import { getPlanBySlug, getPosts } from "@/lib/sanity.queries";
@@ -35,18 +36,18 @@ export default async function PlanPage({ params }: PlanPageProps) {
             <p className="text-base text-brand-600">{plan.shortBlurb}</p>
             <div className="flex flex-wrap items-center gap-3 text-sm text-brand-600">
               <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                <span className="material-symbols-rounded text-brand-400">public</span>
+                <Globe2 className="h-5 w-5 text-brand-400" />
                 {plan.country?.title}
               </span>
               {plan.fiveG ? (
                 <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                  <span className="material-symbols-rounded text-brand-400">network_wifi_3_bar</span>
+                  <SignalHigh className="h-5 w-5 text-brand-400" />
                   5G access
                 </span>
               ) : null}
               {plan.hotspot ? (
                 <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                  <span className="material-symbols-rounded text-brand-400">wifi_tethering</span>
+                  <Router className="h-5 w-5 text-brand-400" />
                   Hotspot enabled
                 </span>
               ) : null}
@@ -73,7 +74,7 @@ export default async function PlanPage({ params }: PlanPageProps) {
             <ul className="mt-4 space-y-3 text-sm text-brand-600">
               {plan.whatsIncluded.map((item) => (
                 <li key={item} className="flex items-center gap-2">
-                  <span className="material-symbols-rounded text-brand-400">check_circle</span>
+                  <CheckCircle2 className="h-5 w-5 text-brand-400" />
                   {item}
                 </li>
               ))}

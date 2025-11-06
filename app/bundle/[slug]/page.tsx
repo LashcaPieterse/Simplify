@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CheckCircle2, Headset, SignalHigh } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getBundleBySlug, getRegionBundles } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
@@ -39,12 +40,12 @@ export default async function BundlePage({ params }: BundlePageProps) {
           <div className="flex flex-wrap gap-3 text-sm text-brand-600">
             {bundle.fiveG ? (
               <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                <span className="material-symbols-rounded text-brand-400">network_wifi_3_bar</span>
+                <SignalHigh className="h-5 w-5 text-brand-400" />
                 5G ready
               </span>
             ) : null}
             <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-              <span className="material-symbols-rounded text-brand-400">headset_mic</span>
+              <Headset className="h-5 w-5 text-brand-400" />
               {bundle.support}
             </span>
           </div>
@@ -86,7 +87,7 @@ export default async function BundlePage({ params }: BundlePageProps) {
           <ul className="mt-4 space-y-3 text-sm text-brand-600">
             {bundle.includes.map((item) => (
               <li key={item} className="flex items-center gap-2">
-                <span className="material-symbols-rounded text-brand-400">check_circle</span>
+                <CheckCircle2 className="h-5 w-5 text-brand-400" />
                 {item}
               </li>
             ))}
