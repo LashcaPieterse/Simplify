@@ -69,7 +69,7 @@ export function Hero({ hero, tagline, featuredCountries }: HeroProps) {
                 key={cta.label}
                 size="lg"
                 asChild
-                variant={index === 0 ? "default" : "secondary"}
+                variant={index === 0 ? "primary" : "secondary"}
                 className={index === 0 ? "shadow-subtle" : undefined}
               >
                 <Link href={getCtaHref(cta)}>{cta.label}</Link>
