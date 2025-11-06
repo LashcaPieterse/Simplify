@@ -31,7 +31,10 @@ export default defineConfig({
   document: {
     newDocumentOptions: (prev, { creationContext }) => {
       if (creationContext.type === "global") {
-        return prev.filter((templateItem) => !singletonTypes.has(templateItem.schemaType));
+        return prev.filter((templateItem) => {
+          const schemaType = (templateItem as { schemaType?: string }).schemaType;
+          return !schemaType || !singletonTypes.has(schemaType);
+        });
       }
 
       return prev;
