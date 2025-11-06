@@ -1,5 +1,5 @@
 import type { SiteSettings } from "@/lib/sanity.queries";
-import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
+import { getExternalLinkProps, normalizeHref } from "@/lib/links";
 
 export function SiteFooter({ settings }: { settings: SiteSettings }) {
   return (
@@ -8,7 +8,7 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
       <div className="flex items-center gap-4">
         {settings.footerLinks?.length
           ? settings.footerLinks.map((link) => {
-              const href = resolveLinkHref(link);
+              const href = normalizeHref(link?.url);
               const externalProps = getExternalLinkProps(href);
 
               return (
