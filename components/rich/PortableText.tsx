@@ -7,8 +7,10 @@ type LinkValue = {
   href?: string | null;
 };
 
+type PortableTextRendererProps = Parameters<typeof PortableTextRenderer>[0];
+
 type PortableTextProps = {
-  value: unknown;
+  value: PortableTextRendererProps["value"];
   components?: PortableTextComponents;
 };
 
