@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { SiteSettings } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
+import { Wifi } from "lucide-react";
 import { urlForImage } from "@/lib/image";
 import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
 
@@ -15,7 +16,7 @@ export function SiteHeader({ settings }: { settings: SiteSettings }) {
           {logoUrl ? (
             <Image src={logoUrl} alt={settings.title} width={36} height={36} className="rounded-full" />
           ) : (
-            <span className="material-symbols-rounded text-2xl text-brand-600">wifi</span>
+            <Wifi className="h-6 w-6 text-brand-600" />
           )}
           {settings.title}
         </Link>

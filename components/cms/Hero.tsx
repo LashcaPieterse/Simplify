@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { MagnifyingGlassIcon, StarIcon } from "@heroicons/react/24/outline";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useMemo } from "react";
@@ -115,7 +116,7 @@ export function Hero({ hero, tagline, featuredCountries }: HeroProps) {
             placeholder="Search by country or city"
             className="w-full border-none bg-transparent text-sm text-brand-900 placeholder:text-brand-400 focus:outline-none"
           />
-          <span className="material-symbols-rounded text-brand-500">arrow_outward</span>
+          <ArrowUpRight className="h-5 w-5 text-brand-500" />
         </label>
 
         <div className="space-y-4">

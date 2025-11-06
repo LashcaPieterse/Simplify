@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
@@ -51,7 +52,7 @@ export default async function ResourcesPage() {
                 <div className="mt-auto flex items-center justify-between text-sm font-semibold text-brand-600">
                   <Link href={`/resources/${post.slug}`} className="inline-flex items-center gap-2 hover:text-brand-800">
                     Read article
-                    <span className="material-symbols-rounded text-base">arrow_outward</span>
+                    <ArrowUpRight className="h-4 w-4" />
                   </Link>
                   {post.tags?.length ? (
                     <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-600">
