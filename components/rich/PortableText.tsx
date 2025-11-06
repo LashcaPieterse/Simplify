@@ -1,6 +1,7 @@
 import { PortableText, type PortableTextComponents } from "@portabletext/react";
 import type { PortableTextBlock } from "sanity";
-import Link from "next/link";
+
+import { getExternalLinkProps, normalizeHref } from "@/lib/links";
 
 const components: PortableTextComponents = {
   block: {
@@ -14,12 +15,11 @@ const components: PortableTextComponents = {
   },
   marks: {
     link: ({ children, value }) => {
-      const href = (value?.href as string) || "#";
-      if (!href.startsWith("http")) {
-        return <Link href={href} className="text-brand-600 underline">{children}</Link>;
-      }
+      const href = normalizeHref(value?.href as string | undefined);
+      const externalProps = getExternalLinkProps(href);
+
       return (
-        <a href={href} className="text-brand-600 underline" target="_blank" rel="noreferrer">
+        <a href={href} className="text-brand-600 underline" {...externalProps}>
           {children}
         </a>
       );
