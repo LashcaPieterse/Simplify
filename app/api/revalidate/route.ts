@@ -50,9 +50,9 @@ export async function POST(request: Request) {
     paths.add("/resources");
   }
 
-  for (const path of paths) {
+  Array.from(paths).forEach((path) => {
     revalidatePath(path);
-  }
+  });
 
   return NextResponse.json({ revalidated: true, paths: Array.from(paths) });
 }
