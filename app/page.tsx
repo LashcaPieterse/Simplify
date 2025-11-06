@@ -17,10 +17,10 @@ const fadeIn = {
 };
 
 const navLinks = [
-  { label: "eSIM Store", href: "#store" },
-  { label: "How it works", href: "#how" },
-  { label: "Coverage", href: "#coverage" },
-  { label: "Resources", href: "#resources" }
+  { label: "eSIM Store", hash: "store" },
+  { label: "How it works", hash: "how" },
+  { label: "Coverage", hash: "coverage" },
+  { label: "Resources", hash: "resources" }
 ];
 
 const features = [
@@ -117,7 +117,7 @@ export default function HomePage() {
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-medium text-brand-700 lg:flex">
             {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="transition hover:text-brand-900">
+              <Link key={link.hash} href={{ hash: link.hash }} className="transition hover:text-brand-900">
                 {link.label}
               </Link>
             ))}
