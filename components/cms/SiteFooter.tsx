@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { SiteSettings } from "@/lib/sanity.queries";
+import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
 
 export function SiteFooter({ settings }: { settings: SiteSettings }) {
   return (
@@ -7,11 +7,16 @@ export function SiteFooter({ settings }: { settings: SiteSettings }) {
       <p>© {new Date().getFullYear()} {settings.title}. All rights reserved.</p>
       <div className="flex items-center gap-4">
         {settings.footerLinks?.length
-          ? settings.footerLinks.map((link) => (
-              <Link key={link.label} href={link.url} className="hover:text-brand-900">
-                {link.label}
-              </Link>
-            ))
+          ? settings.footerLinks.map((link) => {
+              const href = resolveLinkHref(link);
+              const externalProps = getExternalLinkProps(href);
+
+              return (
+                <a key={link.label} href={href} className="hover:text-brand-900" {...externalProps}>
+                  {link.label}
+                </a>
+              );
+            })
           : null}
       </div>
     </footer>

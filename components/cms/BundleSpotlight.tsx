@@ -2,10 +2,13 @@ import Image from "next/image";
 import type { RegionalBundleSpotlightSection } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
 import { urlForImage } from "@/lib/image";
+import { getExternalLinkProps, normalizeHref } from "@/lib/links";
 
 export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightSection }) {
   const bundle = section.bundle;
   const heroImage = bundle.heroImage ? urlForImage(bundle.heroImage)?.width(640).height(480).url() : null;
+  const primaryCtaHref = bundle.ctaTarget ? normalizeHref(bundle.ctaTarget) : null;
+  const primaryCtaExternalProps = primaryCtaHref ? getExternalLinkProps(primaryCtaHref) : undefined;
 
   return (
     <section id="coverage" className="mx-auto mb-24 max-w-6xl px-6 lg:px-10">
@@ -46,9 +49,11 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
             </div>
           ) : null}
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            {bundle.ctaTarget && bundle.ctaLabel ? (
+            {bundle.ctaLabel && primaryCtaHref ? (
               <Button size="lg" className="shadow-subtle" asChild>
-                <a href={bundle.ctaTarget}>{bundle.ctaLabel}</a>
+                <a href={primaryCtaHref} {...primaryCtaExternalProps}>
+                  {bundle.ctaLabel}
+                </a>
               </Button>
             ) : null}
             <Button variant="ghost" size="lg" asChild>

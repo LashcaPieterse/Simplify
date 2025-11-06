@@ -1,10 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Link as SanityLink, SiteSettings } from "@/lib/sanity.queries";
+import type { SiteSettings } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
 import { urlForImage } from "@/lib/image";
-
-const getHref = (link: SanityLink) => link.url ?? "#";
+import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
 
 export function SiteHeader({ settings }: { settings: SiteSettings }) {
   const logoUrl = settings.logo ? urlForImage(settings.logo)?.width(120).height(120).url() : null;
@@ -21,11 +20,16 @@ export function SiteHeader({ settings }: { settings: SiteSettings }) {
           {settings.title}
         </Link>
         <nav className="hidden items-center gap-8 text-sm font-medium text-brand-700 lg:flex">
-          {settings.navigation?.map((link) => (
-            <Link key={link.label} href={getHref(link)} className="transition hover:text-brand-900">
-              {link.label}
-            </Link>
-          ))}
+          {settings.navigation?.map((link) => {
+            const href = resolveLinkHref(link);
+            const externalProps = getExternalLinkProps(href);
+
+            return (
+              <a key={link.label} href={href} className="transition hover:text-brand-900" {...externalProps}>
+                {link.label}
+              </a>
+            );
+          })}
         </nav>
       </div>
       <div className="flex items-center gap-3">

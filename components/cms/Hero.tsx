@@ -8,6 +8,7 @@ import Image from "next/image";
 import { useMemo } from "react";
 import type { CountrySummary, HeroSection, Link as SanityLink } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
+import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
 
 const fadeIn = {
   initial: { opacity: 0, y: 24 },
@@ -30,18 +31,7 @@ const formatPrice = (price?: number) => {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
 };
 
-const getCtaHref = (cta: SanityLink) => cta.url ?? "#";
-
-const getExternalLinkProps = (href: string) => {
-  if (href.startsWith("/")) {
-    return {} as const;
-  }
-
-  return {
-    target: "_blank" as const,
-    rel: "noopener noreferrer"
-  } as const;
-};
+const getCtaHref = (cta: SanityLink) => resolveLinkHref(cta);
 
 export function Hero({ hero, tagline, featuredCountries }: HeroProps) {
   const staggeredCountries = useMemo(() => {
