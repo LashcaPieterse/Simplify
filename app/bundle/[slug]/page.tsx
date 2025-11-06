@@ -51,7 +51,7 @@ export default async function BundlePage({ params }: BundlePageProps) {
           <div className="mt-8 flex flex-wrap items-center gap-4">
             {bundle.ctaTarget && bundle.ctaLabel ? (
               <Button size="lg" className="shadow-subtle" asChild>
-                <Link href={bundle.ctaTarget}>{bundle.ctaLabel}</Link>
+                <a href={bundle.ctaTarget}>{bundle.ctaLabel}</a>
               </Button>
             ) : null}
             <Button variant="ghost" size="lg" asChild>
