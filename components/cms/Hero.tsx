@@ -32,6 +32,17 @@ const formatPrice = (price?: number) => {
 
 const getCtaHref = (cta: SanityLink) => cta.url ?? "#";
 
+const getExternalLinkProps = (href: string) => {
+  if (href.startsWith("/")) {
+    return {} as const;
+  }
+
+  return {
+    target: "_blank" as const,
+    rel: "noopener noreferrer"
+  } as const;
+};
+
 export function Hero({ hero, tagline, featuredCountries }: HeroProps) {
   const staggeredCountries = useMemo(() => {
     if (!featuredCountries?.length) {
@@ -64,17 +75,24 @@ export function Hero({ hero, tagline, featuredCountries }: HeroProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.6, ease: "easeOut" }}
           >
-            {hero.ctas.map((cta, index) => (
-              <Button
-                key={cta.label}
-                size="lg"
-                asChild
-                variant={index === 0 ? "primary" : "secondary"}
-                className={index === 0 ? "shadow-subtle" : undefined}
-              >
-                <Link href={getCtaHref(cta)}>{cta.label}</Link>
-              </Button>
-            ))}
+            {hero.ctas.map((cta, index) => {
+              const href = getCtaHref(cta);
+              const externalProps = getExternalLinkProps(href);
+
+              return (
+                <Button
+                  key={cta.label}
+                  size="lg"
+                  asChild
+                  variant={index === 0 ? "primary" : "secondary"}
+                  className={index === 0 ? "shadow-subtle" : undefined}
+                >
+                  <a href={href} {...externalProps}>
+                    {cta.label}
+                  </a>
+                </Button>
+              );
+            })}
           </motion.div>
         ) : null}
         {hero.stats?.length ? (
