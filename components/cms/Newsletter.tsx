@@ -1,25 +1,10 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import type { NewsletterSection } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
-
-type ExternalLinkProps = {
-  target: "_blank";
-  rel: "noopener noreferrer";
-};
-
-const getExternalLinkProps = (href: string): Partial<ExternalLinkProps> => {
-  if (href.startsWith("/")) {
-    return {};
-  }
-
-  return {
-    target: "_blank",
-    rel: "noopener noreferrer"
-  };
-};
+import { getExternalLinkProps, normalizeHref } from "@/lib/links";
 
 export function Newsletter({ section }: { section: NewsletterSection }) {
-  const href = section.ctaTarget.trim() ? section.ctaTarget : "#";
+  const href = normalizeHref(section.ctaTarget);
   const externalProps = getExternalLinkProps(href);
 
   return (
