@@ -3,11 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
-import {
-  getPlanBySlug,
-  getPosts,
-  type PlanDetail
-} from "@/lib/sanity.queries";
+import { getPlanBySlug, getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 
 export const revalidate = 60;

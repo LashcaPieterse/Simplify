@@ -1,4 +1,4 @@
-import { groq } from "groq";
+import groq from "groq";
 import type { PortableTextBlock, Image as SanityImage } from "sanity";
 import { sanityClient } from "./sanity.client";
 
