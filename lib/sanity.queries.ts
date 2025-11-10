@@ -1,3 +1,5 @@
+import { groq } from "next-sanity";
+import { getSanityClient } from "./sanity.client";
 import type { ImageLike } from "./image";
 
 export type PortableTextSpan = {
@@ -42,6 +44,7 @@ export type CountrySummary = {
   summary: string;
   coverImage?: ImageLike;
   plan?: PlanSummary;
+  featured?: boolean;
 };
 
 export type CountryGridSection = {
@@ -164,7 +167,6 @@ export type PostSummary = {
 };
 
 export type CountryDetail = CountrySummary & {
-  featured?: boolean;
   carriers?: CarrierSummary[];
   plans?: PlanSummary[];
 };
@@ -195,509 +197,281 @@ export type HomePagePayload = {
   sections: HomeSection[];
 };
 
-const image = (url: string): ImageLike => ({
-  _type: "image",
-  asset: { url }
-});
+const CARRIER_SUMMARY_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  logo
+`;
 
-const carriers: CarrierSummary[] = [
-  {
-    _id: "carrier-tn-mobile",
-    title: "TN Mobile",
-    slug: "tn-mobile",
-    logo: image("/illustrations/namibia-card.svg")
-  },
-  {
-    _id: "carrier-vodaconnect",
-    title: "VodaConnect",
-    slug: "vodaconnect",
-    logo: image("/illustrations/south-africa-card.svg")
-  },
-  {
-    _id: "carrier-safarinet",
-    title: "SafariNet",
-    slug: "safarinet",
-    logo: image("/illustrations/kenya-card.svg")
+const PLAN_SUMMARY_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  priceUSD,
+  dataGB,
+  validityDays,
+  hotspot,
+  fiveG,
+  label,
+  shortBlurb,
+  provider->{
+    ${CARRIER_SUMMARY_FIELDS}
   }
-];
+`;
 
-const countries: CountryDetail[] = [
-  {
-    _id: "country-namibia",
-    title: "Namibia",
-    slug: "namibia",
-    badge: "Popular",
-    summary: "Perfect signal strength across Etosha, Sossusvlei, and Windhoek with zero roaming fees.",
-    coverImage: image("/illustrations/namibia-card.svg"),
-    featured: true,
-    carriers: [carriers[0]],
-    plans: []
-  },
-  {
-    _id: "country-south-africa",
-    title: "South Africa",
-    slug: "south-africa",
-    badge: "Best value",
-    summary: "Covering the Garden Route, Cape Town, and Kruger with seamless 5G handoffs.",
-    coverImage: image("/illustrations/south-africa-card.svg"),
-    featured: true,
-    carriers: [carriers[1]],
-    plans: []
-  },
-  {
-    _id: "country-kenya",
-    title: "Kenya",
-    slug: "kenya",
-    badge: "New",
-    summary: "Stay connected from Nairobi to the Mara with unlimited messaging add-ons.",
-    coverImage: image("/illustrations/kenya-card.svg"),
-    featured: true,
-    carriers: [carriers[2]],
-    plans: []
-  },
-  {
-    _id: "country-botswana",
-    title: "Botswana",
-    slug: "botswana",
-    summary: "Reliable coverage across the Okavango Delta and Gaborone business district.",
-    coverImage: image("/illustrations/namibia-card.svg"),
-    carriers: [],
-    plans: []
-  },
-  {
-    _id: "country-zambia",
-    title: "Zambia",
-    slug: "zambia",
-    summary: "High-speed connectivity from Victoria Falls to Lusaka with seamless roaming.",
-    coverImage: image("/illustrations/south-africa-card.svg"),
-    carriers: [],
-    plans: []
+const COUNTRY_CARD_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  badge,
+  summary,
+  coverImage,
+  featured,
+  "plan": plans[0]->{
+    ${PLAN_SUMMARY_FIELDS}
   }
-];
+`;
 
-const countryBySlug = Object.fromEntries(countries.map((country) => [country.slug, country]));
+const COUNTRY_REFERENCE_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  badge,
+  summary,
+  coverImage,
+  featured
+`;
 
-type PlanSeed = Omit<PlanDetail, "country"> & { countrySlug: string };
+const REGION_BUNDLE_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  countries[]->{
+    ${COUNTRY_CARD_FIELDS}
+  },
+  sharedDataGB,
+  includes,
+  fiveG,
+  support,
+  perks,
+  heroImage,
+  ctaLabel,
+  ctaTarget
+`;
 
-const planSeeds: PlanSeed[] = [
-  {
-    _id: "plan-nama",
-    title: "Nama Explorer",
-    slug: "nama-explorer",
-    priceUSD: 18,
-    dataGB: 15,
-    validityDays: 14,
-    hotspot: true,
-    fiveG: false,
-    label: "Popular",
-    shortBlurb: "Perfect for safari adventurers with 15GB of high-speed data.",
-    features: ["Instant QR activation", "Usage alerts in the app"],
-    whatsIncluded: [
-      "15GB of high-speed data",
-      "Unlimited messaging apps",
-      "24/7 Simplify concierge"
-    ],
-    installSteps: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Scan the QR code from your Simplify dashboard." }]
+const POST_SUMMARY_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  excerpt,
+  coverImage,
+  readingMinutes,
+  tags,
+  "publishedAt": coalesce(publishedAt, _updatedAt)
+`;
+
+const PLAN_DETAIL_FIELDS = `
+  ${PLAN_SUMMARY_FIELDS},
+  features,
+  whatsIncluded,
+  installSteps[]{..., markDefs[], children[]},
+  terms[]{..., markDefs[], children[]},
+  country->{
+    ${COUNTRY_REFERENCE_FIELDS}
+  }
+`;
+
+const siteSettingsQuery = groq`
+  *[_type == "siteSettings"][0]{
+    title,
+    tagline,
+    logo,
+    contactEmail,
+    navigation[]{label, "url": url},
+    footerLinks[]{label, "url": url}
+  }
+`;
+
+const homePageQuery = groq`
+  *[_type == "homePage"][0]{
+    title,
+    sections[]{
+      _type == "heroSection" => {
+        _type,
+        headline,
+        subhead,
+        ctas[]{label, "url": url},
+        stats[]{label, value}
       },
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Label the eSIM 'Simplify Nama' for easy switching." }]
-      },
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Turn on data roaming once you land in Namibia." }]
-      }
-    ],
-    terms: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Valid for 14 days from first network connection." }]
-      }
-    ],
-    provider: carriers[0],
-    countrySlug: "namibia"
-  },
-  {
-    _id: "plan-cape-explorer",
-    title: "Cape Explorer",
-    slug: "cape-explorer",
-    priceUSD: 22,
-    dataGB: 25,
-    validityDays: 21,
-    hotspot: true,
-    fiveG: true,
-    label: "Roam free",
-    shortBlurb: "Seamless 5G across Cape Town, Johannesburg, and the Garden Route.",
-    features: ["5G where available", "Wi-Fi calling"],
-    whatsIncluded: [
-      "25GB of high-speed data",
-      "Unlimited messaging apps",
-      "Simplify lounge support"
-    ],
-    installSteps: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Activate through the Simplify app before departure." }]
-      },
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Toggle roaming on once you arrive in South Africa." }]
-      }
-    ],
-    terms: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Hotspot usage counts toward total data." }]
-      }
-    ],
-    provider: carriers[1],
-    countrySlug: "south-africa"
-  },
-  {
-    _id: "plan-maasai",
-    title: "Maasai Voyager",
-    slug: "maasai-voyager",
-    priceUSD: 20,
-    dataGB: 20,
-    validityDays: 21,
-    hotspot: true,
-    fiveG: false,
-    shortBlurb: "Unlimited messaging add-on with generous roaming in the Mara.",
-    features: ["Unlimited WhatsApp", "Pause and resume data"],
-    whatsIncluded: [
-      "20GB of high-speed data",
-      "Unlimited messaging apps",
-      "Priority support"
-    ],
-    installSteps: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Add the plan from the Simplify mobile app." }]
-      },
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Restart your device after installation completes." }]
-      }
-    ],
-    terms: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [{ _type: "span", text: "Speeds may reduce after 20GB in peak hours." }]
-      }
-    ],
-    provider: carriers[2],
-    countrySlug: "kenya"
-  }
-];
-
-const planDetails: PlanDetail[] = planSeeds.map(({ countrySlug, ...plan }) => {
-  const detail: PlanDetail = { ...plan, country: undefined };
-  const country = countryBySlug[countrySlug];
-  if (country) {
-    detail.country = {
-      _id: country._id,
-      title: country.title,
-      slug: country.slug,
-      badge: country.badge,
-      summary: country.summary,
-      coverImage: country.coverImage
-    };
-    const summary = toPlanSummary(detail);
-    country.plans = [...(country.plans ?? []), summary];
-    if (!country.plan) {
-      country.plan = summary;
-    }
-  }
-  return detail;
-});
-
-const regionBundles: RegionBundle[] = [
-  {
-    _id: "bundle-southern-africa",
-    title: "Southern Africa Explorer",
-    slug: "southern-africa-explorer",
-    countries: ["namibia", "south-africa", "botswana", "zambia"].map((slug) => toCountrySummary(countryBySlug[slug])),
-    sharedDataGB: 40,
-    includes: ["Shared data pool", "Unified travel support", "Complimentary lounge passes"],
-    fiveG: true,
-    support: "24/7 concierge",
-    perks: ["Pause data anytime", "Top destinations curated in-app"],
-    heroImage: image("/illustrations/south-africa-card.svg"),
-    ctaLabel: "Get the explorer bundle",
-    ctaTarget: "/plan/cape-explorer"
-  }
-];
-
-const posts: PostDetail[] = [
-  {
-    _id: "post-namibia-checklist",
-    title: "Namibia safari connectivity checklist",
-    slug: "namibia-safari-connectivity",
-    excerpt: "Everything you need to stay online across Etosha, Swakopmund, and the Skeleton Coast.",
-    coverImage: image("/illustrations/namibia-card.svg"),
-    readingMinutes: 6,
-    tags: ["namibia", "itinerary"],
-    publishedAt: "2024-05-12",
-    body: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [
-          {
-            _type: "span",
-            text: "Carry an unlocked device, download offline maps, and enable Simplify alerts before landing."
-          }
-        ]
-      }
-    ]
-  },
-  {
-    _id: "post-cape-town-guide",
-    title: "Cape Town digital nomad starter pack",
-    slug: "cape-town-digital-nomad",
-    excerpt: "Coworking spaces, coffee shop Wi-Fi, and the best time to activate your Simplify plan.",
-    coverImage: image("/illustrations/south-africa-card.svg"),
-    readingMinutes: 5,
-    tags: ["south africa", "remote work"],
-    publishedAt: "2024-04-08",
-    body: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [
-          {
-            _type: "span",
-            text: "Start your day at Oranjezicht Market with 5G coverage and finish with sunset emails in Camps Bay."
-          }
-        ]
-      }
-    ]
-  },
-  {
-    _id: "post-kenya-hotspot",
-    title: "Kenya hotspot hacks for photographers",
-    slug: "kenya-hotspot-hacks",
-    excerpt: "Tips for backing up RAW files from the Mara without draining your Simplify allowance.",
-    coverImage: image("/illustrations/kenya-card.svg"),
-    readingMinutes: 7,
-    tags: ["kenya", "photography"],
-    publishedAt: "2024-03-19",
-    body: [
-      {
-        _type: "block",
-        style: "normal",
-        children: [
-          {
-            _type: "span",
-            text: "Schedule uploads overnight and toggle hotspot sharing in the Simplify app to conserve bandwidth."
-          }
-        ]
-      }
-    ]
-  }
-];
-
-const siteSettings: SiteSettings = {
-  title: "Simplify",
-  tagline: "#1 eSIM marketplace in Africa 2024",
-  contactEmail: "hello@simplify.africa",
-  logo: image("/illustrations/namibia-card.svg"),
-  navigation: [
-    { label: "eSIM Store", url: "#store" },
-    { label: "How it works", url: "#how" },
-    { label: "Coverage", url: "#coverage" },
-    { label: "Resources", url: "/resources" }
-  ],
-  footerLinks: [
-    { label: "Privacy", url: "https://simplify.africa/privacy" },
-    { label: "Terms", url: "https://simplify.africa/terms" },
-    { label: "Support", url: "mailto:support@simplify.africa" }
-  ]
-};
-
-const homePage: HomePagePayload = {
-  title: "Simplify home",
-  sections: [
-    {
-      _type: "heroSection",
-      headline: "Instant eSIMs across Africa",
-      subhead: "Choose a destination, activate in minutes, and roam with confidence across the Simplify network.",
-      ctas: [
-        { label: "Browse plans", url: "#store" },
-        { label: "Talk to an expert", url: "mailto:concierge@simplify.africa" }
-      ],
-      stats: [
-        { label: "Destinations online", value: "40+" },
-        { label: "Avg. setup time", value: "3 mins" },
-        { label: "Traveller rating", value: "4.9/5" }
-      ]
-    },
-    {
-      _type: "countryGridSection",
-      title: "Handpicked for your next adventure",
-      countries: countries.map((country) => toCountrySummary(country))
-    },
-    {
-      _type: "whyChooseUsSection",
-      title: "Why travellers choose Simplify",
-      bullets: [
-        {
-          iconName: "shield",
-          title: "Trusted connectivity",
-          body: "Partnerships with tier-one carriers across 40+ destinations."
-        },
-        {
-          iconName: "bolt",
-          title: "Instant activation",
-          body: "QR codes delivered instantly with guided setup in the app."
-        },
-        {
-          iconName: "globe",
-          title: "Roam like a local",
-          body: "Regional bundles that keep you online across borders without surprise fees."
+      _type == "countryGridSection" => {
+        _type,
+        title,
+        "countries": countries[]->{
+          ${COUNTRY_CARD_FIELDS}
         }
-      ]
-    },
-    {
-      _type: "stepsSection",
-      title: "Three steps to stay connected",
-      steps: [
-        { stepNo: 1, title: "Pick your plan", body: "Choose a destination or regional bundle." },
-        { stepNo: 2, title: "Activate in the app", body: "Scan your QR code or install directly on device." },
-        { stepNo: 3, title: "Roam with support", body: "Chat with our team anytime you need a boost." }
-      ]
-    },
-    {
-      _type: "regionalBundleSpotlightSection",
-      title: "One bundle for every border",
-      bundle: regionBundles[0]
-    },
-    {
-      _type: "liveNetworkWidgetSection",
-      title: "Live network status",
-      regions: [
-        { name: "Cape Town", latencyMs: 28, signalQuality: "Excellent" },
-        { name: "Windhoek", latencyMs: 45, signalQuality: "Great" },
-        { name: "Nairobi", latencyMs: 38, signalQuality: "Excellent" }
-      ]
-    },
-    {
-      _type: "newsletterSection",
-      title: "Join 25,000 travellers staying connected",
-      body: "Weekly coverage intelligence, local travel tips, and exclusive Simplify offers straight to your inbox.",
-      ctaLabel: "Subscribe",
-      ctaTarget: "https://simplify.africa/newsletter"
-    },
-    {
-      _type: "articlesSection",
-      title: "Travel intelligence",
-      posts: posts.map((post) => toPostSummary(post))
+      },
+      _type == "whyChooseUsSection" => {
+        _type,
+        title,
+        bullets[]{iconName, title, body}
+      },
+      _type == "stepsSection" => {
+        _type,
+        title,
+        steps[]{stepNo, title, body}
+      },
+      _type == "regionalBundleSpotlightSection" => {
+        _type,
+        title,
+        bundle->{
+          ${REGION_BUNDLE_FIELDS}
+        }
+      },
+      _type == "liveNetworkWidgetSection" => {
+        _type,
+        title,
+        regions[]{name, latencyMs, signalQuality}
+      },
+      _type == "newsletterSection" => {
+        _type,
+        title,
+        body,
+        ctaLabel,
+        "ctaTarget": ctaTarget
+      },
+      _type == "articlesSection" => {
+        _type,
+        title,
+        posts[]->{
+          ${POST_SUMMARY_FIELDS}
+        }
+      }
     }
-  ]
-};
-
-function toCountrySummary(country: CountryDetail | undefined): CountrySummary {
-  if (!country) {
-    throw new Error("Unknown country");
   }
+`;
 
-  return {
-    _id: country._id,
-    title: country.title,
-    slug: country.slug,
-    badge: country.badge,
-    summary: country.summary,
-    coverImage: country.coverImage,
-    plan: country.plan
-  };
+const countriesQuery = groq`
+  *[_type == "country"] | order(title asc) {
+    ${COUNTRY_CARD_FIELDS}
+  }
+`;
+
+const countryBySlugQuery = groq`
+  *[_type == "country" && slug.current == $slug][0]{
+    ${COUNTRY_CARD_FIELDS},
+    carriers[]->{
+      ${CARRIER_SUMMARY_FIELDS}
+    },
+    plans[]->{
+      ${PLAN_SUMMARY_FIELDS}
+    }
+  }
+`;
+
+const plansForCountryQuery = groq`
+  *[_type == "plan" && country->slug.current == $slug] | order(priceUSD asc) {
+    ${PLAN_DETAIL_FIELDS}
+  }
+`;
+
+const planBySlugQuery = groq`
+  *[_type == "plan" && slug.current == $slug][0]{
+    ${PLAN_DETAIL_FIELDS}
+  }
+`;
+
+const planSlugsQuery = groq`
+  *[_type == "plan" && defined(slug.current)]{ "slug": slug.current }
+`;
+
+const regionBundlesQuery = groq`
+  *[_type == "regionBundle"] | order(title asc) {
+    ${REGION_BUNDLE_FIELDS}
+  }
+`;
+
+const bundleBySlugQuery = groq`
+  *[_type == "regionBundle" && slug.current == $slug][0]{
+    ${REGION_BUNDLE_FIELDS}
+  }
+`;
+
+const postsQuery = groq`
+  *[_type == "post"] | order(publishedAt desc) {
+    ${POST_SUMMARY_FIELDS}
+  }
+`;
+
+const postBySlugQuery = groq`
+  *[_type == "post" && slug.current == $slug][0]{
+    ${POST_SUMMARY_FIELDS},
+    body[]{..., markDefs[], children[]}
+  }
+`;
+
+export async function getSiteSettings(): Promise<SiteSettings | null> {
+  const client = getSanityClient();
+  const settings = await client.fetch<SiteSettings | null>(siteSettingsQuery);
+  return settings ?? null;
 }
 
-function toPlanSummary(plan: PlanDetail): PlanSummary {
-  return {
-    _id: plan._id,
-    title: plan.title,
-    slug: plan.slug,
-    priceUSD: plan.priceUSD,
-    dataGB: plan.dataGB,
-    validityDays: plan.validityDays,
-    hotspot: plan.hotspot,
-    fiveG: plan.fiveG,
-    label: plan.label,
-    shortBlurb: plan.shortBlurb,
-    provider: plan.provider
-  };
+export async function getHomePage(): Promise<HomePagePayload | null> {
+  const client = getSanityClient();
+  const home = await client.fetch<HomePagePayload | null>(homePageQuery);
+  return home ?? null;
 }
 
-function toPostSummary(post: PostDetail): PostSummary {
-  return {
-    _id: post._id,
-    title: post.title,
-    slug: post.slug,
-    excerpt: post.excerpt,
-    coverImage: post.coverImage,
-    readingMinutes: post.readingMinutes,
-    tags: post.tags,
-    publishedAt: post.publishedAt
-  };
+export async function getCountriesList(): Promise<CountrySummary[]> {
+  const client = getSanityClient();
+  const results = await client.fetch<CountrySummary[]>(countriesQuery);
+  return results ?? [];
 }
 
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value));
+export async function getCountryBySlug(slug: string): Promise<CountryDetail | null> {
+  const client = getSanityClient();
+  const country = await client.fetch<CountryDetail | null>(countryBySlugQuery, { slug });
+  return country ?? null;
 }
 
-export async function getSiteSettings() {
-  return clone(siteSettings);
+export async function getPlansForCountry(slug: string): Promise<PlanDetail[]> {
+  const client = getSanityClient();
+  const plans = await client.fetch<PlanDetail[]>(plansForCountryQuery, { slug });
+  return plans ?? [];
 }
 
-export async function getHomePage() {
-  return clone(homePage);
+export async function getPlanBySlug(slug: string): Promise<PlanDetail | null> {
+  const client = getSanityClient();
+  const plan = await client.fetch<PlanDetail | null>(planBySlugQuery, { slug });
+  return plan ?? null;
 }
 
-export async function getCountriesList() {
-  return clone(countries.map((country) => ({ ...toCountrySummary(country), featured: country.featured })));
+export async function getPlanSlugs(): Promise<string[]> {
+  const client = getSanityClient();
+  const slugs = await client.fetch<{ slug: string }[]>(planSlugsQuery);
+  return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
 }
 
-export async function getCountryBySlug(slug: string) {
-  const country = countryBySlug[slug];
-  return country ? clone(country) : null;
+export async function getRegionBundles(): Promise<RegionBundle[]> {
+  const client = getSanityClient();
+  const bundles = await client.fetch<RegionBundle[]>(regionBundlesQuery);
+  return bundles ?? [];
 }
 
-export async function getPlansForCountry(slug: string) {
-  return clone(planDetails.filter((plan) => plan.country?.slug === slug));
+export async function getBundleBySlug(slug: string): Promise<RegionBundle | null> {
+  const client = getSanityClient();
+  const bundle = await client.fetch<RegionBundle | null>(bundleBySlugQuery, { slug });
+  return bundle ?? null;
 }
 
-export async function getPlanBySlug(slug: string) {
-  const plan = planDetails.find((item) => item.slug === slug);
-  return plan ? clone(plan) : null;
+export async function getPosts(): Promise<PostSummary[]> {
+  const client = getSanityClient();
+  const posts = await client.fetch<PostSummary[]>(postsQuery);
+  return posts ?? [];
 }
 
-export async function getRegionBundles() {
-  return clone(regionBundles);
-}
-
-export async function getBundleBySlug(slug: string) {
-  const bundle = regionBundles.find((item) => item.slug === slug);
-  return bundle ? clone(bundle) : null;
-}
-
-export async function getPosts() {
-  return clone(posts.map((post) => toPostSummary(post)));
-}
-
-export async function getPostBySlug(slug: string) {
-  const post = posts.find((item) => item.slug === slug);
-  return post ? clone(post) : null;
+export async function getPostBySlug(slug: string): Promise<PostDetail | null> {
+  const client = getSanityClient();
+  const post = await client.fetch<PostDetail | null>(postBySlugQuery, { slug });
+  return post ?? null;
 }

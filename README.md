@@ -20,13 +20,17 @@ The content for the site lives in Sanity and is managed through the embedded Stu
 Create `.env.local` and populate the following values:
 
 ```
-NEXT_PUBLIC_SANITY_PROJECT_ID=<your-sanity-project-id>
-NEXT_PUBLIC_SANITY_DATASET=production
+SANITY_PROJECT_ID=<your-sanity-project-id>
+SANITY_DATASET=production
 SANITY_API_VERSION=2025-01-01
 SANITY_READ_TOKEN=<sanity-token-with-write-access>
 SANITY_STUDIO_BASE_PATH=/studio
 SANITY_PREVIEW_SECRET=<long-random-string>
+SANITY_WEBHOOK_SECRET=<long-random-string>
 ```
+
+> Already using `NEXT_PUBLIC_SANITY_PROJECT_ID`/`NEXT_PUBLIC_SANITY_DATASET`? Those environment variables remain supported as a
+> fallback, but the app now prefers the server-only `SANITY_*` variants above.
 
 > Tip: Set `SANITY_STUDIO_PREVIEW_BASE_URL` if the Studio is hosted separately and needs to open the live preview on a specific origin.
 
@@ -54,7 +58,7 @@ Configure a Vercel deploy hook or generic HTTP request webhook in Sanity that PO
 {
   "_type": "<documentType>",
   "slug": { "current": "<document-slug>" },
-  "secret": "<SANITY_PREVIEW_SECRET>"
+  "secret": "<SANITY_WEBHOOK_SECRET>"
 }
 ```
 

@@ -8,7 +8,7 @@ type SanityWebhookPayload = {
   secret?: string;
 };
 
-const PREVIEW_SECRET = process.env.SANITY_PREVIEW_SECRET;
+const WEBHOOK_SECRET = process.env.SANITY_WEBHOOK_SECRET || process.env.SANITY_PREVIEW_SECRET;
 
 const pathForDocument = (type?: string, slug?: string | null) => {
   if (!type) {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as SanityWebhookPayload | null;
   const secret = request.headers.get("x-sanity-secret") ?? body?.secret;
 
-  if (!body || !secret || secret !== PREVIEW_SECRET) {
+  if (!body || !secret || secret !== WEBHOOK_SECRET) {
     return NextResponse.json({ message: "Invalid secret" }, { status: 401 });
   }
 

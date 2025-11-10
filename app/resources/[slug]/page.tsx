@@ -5,7 +5,8 @@ import { getPostBySlug, getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
 
-export const revalidate = 60;
+export const dynamic = "force-static";
+export const revalidate = false;
 
 export async function generateStaticParams() {
   const posts = await getPosts();
