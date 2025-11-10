@@ -1,6 +1,8 @@
-import imageUrlBuilder, { type ImageUrlBuilder } from "@sanity/image-url";
+import imageUrlBuilder from "@sanity/image-url";
 import type { SanityImageSource } from "@sanity/image-url/lib/types/types";
 import { dataset, projectId } from "./sanity.client";
+
+type ImageUrlBuilder = ReturnType<typeof imageUrlBuilder>;
 
 export type ImageAsset = {
   url?: string;
