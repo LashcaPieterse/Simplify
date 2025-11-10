@@ -94,16 +94,18 @@ const resolveUrl = (source: ImageLike | string | null | undefined) => {
   return null;
 };
 
-const isSanityImageSource = (source: ImageLike | string): source is SanityImageSource => {
-  if (!source || typeof source === "string") {
+const isSanityImageSource = (source: unknown): source is SanityImageSource => {
+  if (!source || typeof source !== "object") {
     return false;
   }
 
-  if (source._type === "image") {
+  const candidate = source as { [key: string]: unknown };
+
+  if (candidate._type === "image") {
     return true;
   }
 
-  return typeof source.asset !== "undefined";
+  return typeof candidate.asset !== "undefined";
 };
 
 export const urlForImage = (source: ImageLike | string | null | undefined) => {
