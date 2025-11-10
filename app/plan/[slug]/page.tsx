@@ -4,10 +4,16 @@ import { notFound } from "next/navigation";
 import { CheckCircle2, Globe2, Router, SignalHigh } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
-import { getPlanBySlug, getPosts } from "@/lib/sanity.queries";
+import { getPlanBySlug, getPlanSlugs, getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 
-export const revalidate = 60;
+export const dynamic = "force-static";
+export const revalidate = false;
+
+export async function generateStaticParams() {
+  const slugs = await getPlanSlugs();
+  return slugs.map((slug) => ({ slug }));
+}
 
 type PlanPageProps = {
   params: { slug: string };

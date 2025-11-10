@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 
-export const revalidate = 60;
+export const dynamic = "force-static";
+export const revalidate = false;
 
 const formatDate = (date?: string) => {
   if (!date) return "";

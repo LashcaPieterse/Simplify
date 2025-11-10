@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { getBundleBySlug, getRegionBundles } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 
-export const revalidate = 60;
+export const dynamic = "force-static";
+export const revalidate = false;
 
 export async function generateStaticParams() {
   const bundles = await getRegionBundles();
