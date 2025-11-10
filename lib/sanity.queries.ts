@@ -1,5 +1,18 @@
 import { groq } from "next-sanity";
-import { getSanityClient } from "./sanity.client";
+import { getSanityClient, isSanityConfigured } from "./sanity.client";
+import {
+  fallbackCountryDetails,
+  fallbackCountrySummaries,
+  fallbackHomePage,
+  fallbackPlanDetails,
+  fallbackPostSummaries,
+  fallbackRegionBundles,
+  fallbackSiteSettings,
+  getFallbackBundleBySlug,
+  getFallbackCountryPlans,
+  getFallbackPlanBySlug,
+  getFallbackPostBySlug
+} from "./sanity.fallback";
 import type { ImageLike } from "./image";
 
 export type PortableTextSpan = {
@@ -195,6 +208,20 @@ export type SiteSettings = {
 export type HomePagePayload = {
   title: string;
   sections: HomeSection[];
+};
+
+const structuredCloneFn: (<T>(value: T) => T) | undefined = (globalThis as { structuredClone?: <T>(value: T) => T }).structuredClone;
+
+const clone = <T>(value: T): T => {
+  if (typeof value === "undefined" || value === null) {
+    return value;
+  }
+
+  if (structuredCloneFn) {
+    return structuredCloneFn(value);
+  }
+
+  return JSON.parse(JSON.stringify(value)) as T;
 };
 
 const CARRIER_SUMMARY_FIELDS = `
@@ -411,67 +438,174 @@ const postBySlugQuery = groq`
 `;
 
 export async function getSiteSettings(): Promise<SiteSettings | null> {
-  const client = getSanityClient();
-  const settings = await client.fetch<SiteSettings | null>(siteSettingsQuery);
-  return settings ?? null;
+  if (!isSanityConfigured) {
+    return clone(fallbackSiteSettings);
+  }
+
+  try {
+    const client = getSanityClient();
+    const settings = await client.fetch<SiteSettings | null>(siteSettingsQuery);
+    return settings ?? clone(fallbackSiteSettings);
+  } catch (error) {
+    console.error("Failed to fetch site settings from Sanity", error);
+    return clone(fallbackSiteSettings);
+  }
 }
 
 export async function getHomePage(): Promise<HomePagePayload | null> {
-  const client = getSanityClient();
-  const home = await client.fetch<HomePagePayload | null>(homePageQuery);
-  return home ?? null;
+  if (!isSanityConfigured) {
+    return clone(fallbackHomePage);
+  }
+
+  try {
+    const client = getSanityClient();
+    const home = await client.fetch<HomePagePayload | null>(homePageQuery);
+    return home ?? clone(fallbackHomePage);
+  } catch (error) {
+    console.error("Failed to fetch home page content from Sanity", error);
+    return clone(fallbackHomePage);
+  }
 }
 
 export async function getCountriesList(): Promise<CountrySummary[]> {
-  const client = getSanityClient();
-  const results = await client.fetch<CountrySummary[]>(countriesQuery);
-  return results ?? [];
+  if (!isSanityConfigured) {
+    return clone(fallbackCountrySummaries);
+  }
+
+  try {
+    const client = getSanityClient();
+    const results = await client.fetch<CountrySummary[]>(countriesQuery);
+    return results ?? [];
+  } catch (error) {
+    console.error("Failed to fetch countries from Sanity", error);
+    return clone(fallbackCountrySummaries);
+  }
 }
 
 export async function getCountryBySlug(slug: string): Promise<CountryDetail | null> {
-  const client = getSanityClient();
-  const country = await client.fetch<CountryDetail | null>(countryBySlugQuery, { slug });
-  return country ?? null;
+  if (!isSanityConfigured) {
+    const fallback = fallbackCountryDetails.find((country) => country.slug === slug);
+    return fallback ? clone(fallback) : null;
+  }
+
+  try {
+    const client = getSanityClient();
+    const country = await client.fetch<CountryDetail | null>(countryBySlugQuery, { slug });
+    return country ?? null;
+  } catch (error) {
+    console.error(`Failed to fetch country '${slug}' from Sanity`, error);
+    const fallback = fallbackCountryDetails.find((country) => country.slug === slug);
+    return fallback ? clone(fallback) : null;
+  }
 }
 
 export async function getPlansForCountry(slug: string): Promise<PlanDetail[]> {
-  const client = getSanityClient();
-  const plans = await client.fetch<PlanDetail[]>(plansForCountryQuery, { slug });
-  return plans ?? [];
+  if (!isSanityConfigured) {
+    return clone(getFallbackCountryPlans(slug));
+  }
+
+  try {
+    const client = getSanityClient();
+    const plans = await client.fetch<PlanDetail[]>(plansForCountryQuery, { slug });
+    return plans ?? [];
+  } catch (error) {
+    console.error(`Failed to fetch plans for country '${slug}' from Sanity`, error);
+    return clone(getFallbackCountryPlans(slug));
+  }
 }
 
 export async function getPlanBySlug(slug: string): Promise<PlanDetail | null> {
-  const client = getSanityClient();
-  const plan = await client.fetch<PlanDetail | null>(planBySlugQuery, { slug });
-  return plan ?? null;
+  if (!isSanityConfigured) {
+    const fallback = getFallbackPlanBySlug(slug);
+    return fallback ? clone(fallback) : null;
+  }
+
+  try {
+    const client = getSanityClient();
+    const plan = await client.fetch<PlanDetail | null>(planBySlugQuery, { slug });
+    return plan ?? null;
+  } catch (error) {
+    console.error(`Failed to fetch plan '${slug}' from Sanity`, error);
+    const fallback = getFallbackPlanBySlug(slug);
+    return fallback ? clone(fallback) : null;
+  }
 }
 
 export async function getPlanSlugs(): Promise<string[]> {
-  const client = getSanityClient();
-  const slugs = await client.fetch<{ slug: string }[]>(planSlugsQuery);
-  return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
+  if (!isSanityConfigured) {
+    return fallbackPlanDetails.map((plan) => plan.slug);
+  }
+
+  try {
+    const client = getSanityClient();
+    const slugs = await client.fetch<{ slug: string }[]>(planSlugsQuery);
+    return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
+  } catch (error) {
+    console.error("Failed to fetch plan slugs from Sanity", error);
+    return fallbackPlanDetails.map((plan) => plan.slug);
+  }
 }
 
 export async function getRegionBundles(): Promise<RegionBundle[]> {
-  const client = getSanityClient();
-  const bundles = await client.fetch<RegionBundle[]>(regionBundlesQuery);
-  return bundles ?? [];
+  if (!isSanityConfigured) {
+    return clone(fallbackRegionBundles);
+  }
+
+  try {
+    const client = getSanityClient();
+    const bundles = await client.fetch<RegionBundle[]>(regionBundlesQuery);
+    return bundles ?? [];
+  } catch (error) {
+    console.error("Failed to fetch region bundles from Sanity", error);
+    return clone(fallbackRegionBundles);
+  }
 }
 
 export async function getBundleBySlug(slug: string): Promise<RegionBundle | null> {
-  const client = getSanityClient();
-  const bundle = await client.fetch<RegionBundle | null>(bundleBySlugQuery, { slug });
-  return bundle ?? null;
+  if (!isSanityConfigured) {
+    const fallback = getFallbackBundleBySlug(slug);
+    return fallback ? clone(fallback) : null;
+  }
+
+  try {
+    const client = getSanityClient();
+    const bundle = await client.fetch<RegionBundle | null>(bundleBySlugQuery, { slug });
+    return bundle ?? null;
+  } catch (error) {
+    console.error(`Failed to fetch bundle '${slug}' from Sanity`, error);
+    const fallback = getFallbackBundleBySlug(slug);
+    return fallback ? clone(fallback) : null;
+  }
 }
 
 export async function getPosts(): Promise<PostSummary[]> {
-  const client = getSanityClient();
-  const posts = await client.fetch<PostSummary[]>(postsQuery);
-  return posts ?? [];
+  if (!isSanityConfigured) {
+    return clone(fallbackPostSummaries);
+  }
+
+  try {
+    const client = getSanityClient();
+    const posts = await client.fetch<PostSummary[]>(postsQuery);
+    return posts ?? [];
+  } catch (error) {
+    console.error("Failed to fetch posts from Sanity", error);
+    return clone(fallbackPostSummaries);
+  }
 }
 
 export async function getPostBySlug(slug: string): Promise<PostDetail | null> {
-  const client = getSanityClient();
-  const post = await client.fetch<PostDetail | null>(postBySlugQuery, { slug });
-  return post ?? null;
+  if (!isSanityConfigured) {
+    const fallback = getFallbackPostBySlug(slug);
+    return fallback ? clone(fallback) : null;
+  }
+
+  try {
+    const client = getSanityClient();
+    const post = await client.fetch<PostDetail | null>(postBySlugQuery, { slug });
+    return post ?? null;
+  } catch (error) {
+    console.error(`Failed to fetch post '${slug}' from Sanity`, error);
+    const fallback = getFallbackPostBySlug(slug);
+    return fallback ? clone(fallback) : null;
+  }
 }

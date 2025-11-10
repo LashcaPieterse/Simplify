@@ -6,6 +6,8 @@ export const dataset =
   process.env.SANITY_DATASET || process.env.NEXT_PUBLIC_SANITY_DATASET || "";
 export const apiVersion = process.env.SANITY_API_VERSION || "2025-01-01";
 
+export const isSanityConfigured = Boolean(projectId && dataset);
+
 const defaultConfig: ClientConfig = {
   projectId,
   dataset,
@@ -18,7 +20,7 @@ let cachedClient: SanityClient | null = null;
 let cachedPreviewClient: SanityClient | null = null;
 
 const assertConfig = () => {
-  if (!projectId || !dataset) {
+  if (!isSanityConfigured) {
     throw new Error(
       "Missing Sanity project ID or dataset. Add SANITY_PROJECT_ID and SANITY_DATASET to your environment."
     );
@@ -52,7 +54,8 @@ export const getSanityClient = ({ preview = false }: { preview?: boolean } = {})
   return cachedClient;
 };
 
-export const sanityClient = getSanityClient();
-export const previewClient = process.env.SANITY_READ_TOKEN
-  ? getSanityClient({ preview: true })
-  : sanityClient;
+export const sanityClient = isSanityConfigured ? getSanityClient() : null;
+export const previewClient =
+  isSanityConfigured && process.env.SANITY_READ_TOKEN
+    ? getSanityClient({ preview: true })
+    : sanityClient;
