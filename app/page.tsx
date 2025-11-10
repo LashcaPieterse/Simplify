@@ -22,7 +22,8 @@ import { Articles } from "@/components/cms/Articles";
 import { SiteHeader } from "@/components/cms/SiteHeader";
 import { SiteFooter } from "@/components/cms/SiteFooter";
 
-export const revalidate = 60;
+export const dynamic = "force-static";
+export const revalidate = false;
 
 export default async function HomePage() {
   const [settings, home] = await Promise.all([getSiteSettings(), getHomePage()]);

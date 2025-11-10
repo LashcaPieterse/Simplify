@@ -11,7 +11,8 @@ import {
 } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 
-export const revalidate = 60;
+export const dynamic = "force-static";
+export const revalidate = false;
 
 export async function generateStaticParams() {
   const countries = await getCountriesList();

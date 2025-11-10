@@ -1,3 +1,7 @@
+import imageUrlBuilder, { type ImageUrlBuilder } from "@sanity/image-url";
+import type { SanityImageSource } from "@sanity/image-url/lib/types/types";
+import { dataset, projectId } from "./sanity.client";
+
 export type ImageAsset = {
   url?: string;
   path?: string;
@@ -39,7 +43,21 @@ class StaticImageBuilder {
   }
 }
 
-function resolveUrl(source: ImageLike | string | null | undefined) {
+let cachedBuilder: ImageUrlBuilder | null = null;
+
+const getImageBuilder = () => {
+  if (!projectId || !dataset) {
+    return null;
+  }
+
+  if (!cachedBuilder) {
+    cachedBuilder = imageUrlBuilder({ projectId, dataset });
+  }
+
+  return cachedBuilder;
+};
+
+const resolveUrl = (source: ImageLike | string | null | undefined) => {
   if (!source) {
     return null;
   }
@@ -72,9 +90,38 @@ function resolveUrl(source: ImageLike | string | null | undefined) {
   }
 
   return null;
-}
+};
+
+const isSanityImageSource = (source: ImageLike | string): source is SanityImageSource => {
+  if (!source || typeof source === "string") {
+    return false;
+  }
+
+  if (source._type === "image") {
+    return true;
+  }
+
+  return typeof source.asset !== "undefined";
+};
 
 export const urlForImage = (source: ImageLike | string | null | undefined) => {
+  if (!source) {
+    return null;
+  }
+
+  if (typeof source === "string") {
+    return new StaticImageBuilder(source);
+  }
+
+  const builder = getImageBuilder();
+  if (builder && isSanityImageSource(source)) {
+    try {
+      return builder.image(source as SanityImageSource);
+    } catch {
+      // fall through to static resolution
+    }
+  }
+
   const url = resolveUrl(source);
   return url ? new StaticImageBuilder(url) : null;
 };
