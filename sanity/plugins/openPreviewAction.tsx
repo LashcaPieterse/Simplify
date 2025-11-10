@@ -20,7 +20,7 @@ const previewableTypes = new Set<SupportedActionTypes>([
 ]);
 
 export const openPreviewAction: DocumentActionComponent = (props) => {
-  const doc = (props.draft || props.published || props.initialValue) as SanityDocument | undefined;
+  const doc = (props.draft || props.published) as SanityDocument | undefined;
 
   if (!doc || !previewableTypes.has(doc._type as SupportedActionTypes)) {
     return null;
