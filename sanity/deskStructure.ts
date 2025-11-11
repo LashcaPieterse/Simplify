@@ -23,6 +23,7 @@ const previewableTypes = new Set([
   "homePage",
   "country",
   "plan",
+  "eSimProduct",
   "regionBundle",
   "post"
 ]);
@@ -45,6 +46,7 @@ export const structure = (S: StructureBuilder) =>
       S.documentTypeListItem("country").title("Countries").icon(EarthGlobeIcon),
       S.documentTypeListItem("carrier").title("Carriers").icon(DocumentTextIcon),
       S.documentTypeListItem("plan").title("Plans").icon(PackageIcon),
+      S.documentTypeListItem("eSimProduct").title("eSIM Products").icon(PackageIcon),
       S.documentTypeListItem("regionBundle").title("Region Bundles").icon(PackageIcon),
       S.documentTypeListItem("post").title("Posts").icon(BookIcon)
     ]);
