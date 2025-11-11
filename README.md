@@ -17,7 +17,7 @@ The content for the site lives in Sanity and is managed through the embedded Stu
 
 ### Configure environment variables
 
-Create `.env.local` and populate the following values:
+Copy `.env.example` to `.env.local` (this file stays out of git thanks to the existing ignore rule) and populate the following values:
 
 ```
 SANITY_PROJECT_ID=<your-sanity-project-id>
@@ -33,6 +33,8 @@ SANITY_WEBHOOK_SECRET=<long-random-string>
 > fallback, but the app now prefers the server-only `SANITY_*` variants above.
 
 > Tip: Set `SANITY_STUDIO_PREVIEW_BASE_URL` if the Studio is hosted separately and needs to open the live preview on a specific origin.
+
+For production deploys (e.g. Vercel), add the same keys—especially `SANITY_READ_TOKEN`—to your project’s environment-variable configuration so the Next.js server and ISR webhooks can authenticate with Sanity.
 
 ### Initialise the dataset
 
