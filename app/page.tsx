@@ -49,23 +49,16 @@ export default async function HomePage() {
   );
   const articlesSection = sections.find((section): section is ArticlesSection => section._type === "articlesSection");
 
-  const heroCountries = countrySection?.countries?.slice(0, 3) ?? [];
-  const remainingCountrySection = countrySection && countrySection.countries.length > 3
-    ? { ...countrySection, countries: countrySection.countries.slice(3) }
-    : countrySection && countrySection.countries.length <= 3
-      ? null
-      : countrySection;
-
   return (
     <div className="relative isolate overflow-hidden">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-radial-fade" aria-hidden />
       <SiteHeader settings={settings} />
       <main>
         <Container size="4" px={{ initial: "4", sm: "6" }}>
-          {heroSection ? <Hero hero={heroSection} tagline={settings.tagline} featuredCountries={heroCountries} /> : null}
+          {heroSection ? <Hero hero={heroSection} tagline={settings.tagline} /> : null}
         </Container>
         <AfricaCoverageMap />
-        {remainingCountrySection ? <CountryGrid section={remainingCountrySection} /> : null}
+        {countrySection ? <CountryGrid section={countrySection} /> : null}
         {whySection ? <WhyChooseUs section={whySection} /> : null}
         {stepsSection ? <Steps section={stepsSection} /> : null}
         {bundleSection ? <BundleSpotlight section={bundleSection} /> : null}

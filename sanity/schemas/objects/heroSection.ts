@@ -32,6 +32,20 @@ export const heroSection = defineType({
       validation: (Rule) => Rule.max(2)
     }),
     defineField({
+      name: "featuredProducts",
+      title: "Featured products",
+      description: "Highlight up to three hero products to surface in the storefront card.",
+      type: "array",
+      of: [
+        defineField({
+          name: "product",
+          type: "reference",
+          to: [{ type: "eSimProduct" }]
+        })
+      ],
+      validation: (Rule) => Rule.max(3)
+    }),
+    defineField({
       name: "stats",
       title: "Stats",
       type: "array",
