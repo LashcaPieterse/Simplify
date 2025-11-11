@@ -23,7 +23,7 @@ export type EsimProductCardData = {
   };
 };
 
-export const getEsimProductHref = (product: EsimProductSummary): LinkHref | null => {
+export const getEsimProductHref = (product: EsimProductSummary): LinkHref | undefined => {
   if (product.plan?.slug) {
     return {
       pathname: "/plan/[slug]",
@@ -45,7 +45,7 @@ export const getEsimProductHref = (product: EsimProductSummary): LinkHref | null
     } as const;
   }
 
-  return null;
+  return undefined;
 };
 
 export const mapProductToCardData = (product: EsimProductSummary): EsimProductCardData => {
