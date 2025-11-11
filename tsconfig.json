@@ -19,9 +19,16 @@
     "jsx": "preserve",
     "incremental": true,
     "baseUrl": ".",
+    "typeRoots": [
+      "./types",
+      "./node_modules/@types"
+    ],
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "react-simple-maps": [
+        "./types/react-simple-maps"
       ]
     },
     "plugins": [
