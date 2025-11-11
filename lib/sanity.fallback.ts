@@ -4,7 +4,8 @@ import type {
   CountryDetail,
   CountryGridSection,
   CountrySummary,
-  ESimProduct,
+  EsimProductDetail,
+  EsimProductSummary,
   HeroSection,
   HomePagePayload,
   IconBullet,
@@ -259,7 +260,7 @@ const planDetailsBySlug = Object.fromEntries(planDetailsBase.map((plan) => [plan
 
 export const fallbackPlanDetails: PlanDetail[] = planDetailsBase;
 
-export const fallbackESimProducts: ESimProduct[] = [
+export const fallbackEsimProducts: EsimProductDetail[] = [
   {
     _id: "product-namibia-explorer",
     displayName: "Namibia Explorer eSIM",
@@ -315,6 +316,21 @@ export const fallbackESimProducts: ESimProduct[] = [
     keywords: ["kenya", "maasai", "messaging", "safari"]
   }
 ];
+
+const toEsimProductSummary = (product: EsimProductDetail): EsimProductSummary => ({
+  _id: product._id,
+  displayName: product.displayName,
+  slug: product.slug,
+  priceUSD: product.priceUSD,
+  coverImage: product.coverImage,
+  shortDescription: product.shortDescription,
+  providerBadge: product.providerBadge,
+  status: product.status,
+  plan: product.plan,
+  country: product.country
+});
+
+export const fallbackEsimProductSummaries: EsimProductSummary[] = fallbackEsimProducts.map(toEsimProductSummary);
 
 const fallbackBundleCountries = [
   countrySummaries["south-africa"],
@@ -385,6 +401,9 @@ const heroStats: Stat[] = [
   { label: "Average activation", value: "<3 mins" }
 ];
 
+const heroFeaturedProducts = fallbackEsimProductSummaries.slice(0, 3);
+const heroFeaturedProductIds = heroFeaturedProducts.map((product) => product._id);
+
 const heroSection: HeroSection = {
   _type: "heroSection",
   headline: "Instant eSIMs for every leg of your journey.",
@@ -394,7 +413,9 @@ const heroSection: HeroSection = {
     { label: "Browse plans", url: "#store" },
     { label: "Check compatibility", url: "https://simplify.africa/compatibility" }
   ],
-  stats: heroStats
+  stats: heroStats,
+  featuredProductIds: heroFeaturedProductIds,
+  featuredProducts: heroFeaturedProducts
 };
 
 const countrySection: CountryGridSection = {
@@ -522,5 +543,5 @@ export const getFallbackBundleBySlug = (slug: string): RegionBundle | undefined 
 export const getFallbackPostBySlug = (slug: string): PostDetail | undefined =>
   postsBase.find((post) => post.slug === slug);
 
-export const getFallbackProductBySlug = (slug: string): ESimProduct | undefined =>
-  fallbackESimProducts.find((product) => product.slug === slug);
+export const getFallbackProductBySlug = (slug: string): EsimProductDetail | undefined =>
+  fallbackEsimProducts.find((product) => product.slug === slug);

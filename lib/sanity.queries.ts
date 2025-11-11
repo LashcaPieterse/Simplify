@@ -3,7 +3,7 @@ import { getSanityClient, isSanityConfigured } from "./sanity.client";
 import {
   fallbackCountryDetails,
   fallbackCountrySummaries,
-  fallbackESimProducts,
+  fallbackEsimProductSummaries,
   fallbackHomePage,
   fallbackPlanDetails,
   fallbackPostSummaries,
@@ -49,6 +49,8 @@ export type HeroSection = {
   subhead: string;
   ctas?: Link[];
   stats: Stat[];
+  featuredProductIds?: string[];
+  featuredProducts?: EsimProductSummary[];
 };
 
 export type CountrySummary = {
@@ -170,20 +172,23 @@ export type RegionBundle = {
   ctaTarget?: string;
 };
 
-export type ESimProductStatus = "active" | "comingSoon" | "archived";
+export type EsimProductStatus = "active" | "comingSoon" | "archived";
 
-export type ESimProduct = {
+export type EsimProductSummary = {
   _id: string;
   displayName: string;
   slug: string;
   priceUSD: number;
   coverImage?: ImageLike;
   shortDescription: string;
-  longDescription: PortableTextBlock[];
+  providerBadge?: string;
+  status: EsimProductStatus;
   plan?: PlanSummary;
   country?: CountrySummary;
-  providerBadge?: string;
-  status: ESimProductStatus;
+};
+
+export type EsimProductDetail = EsimProductSummary & {
+  longDescription: PortableTextBlock[];
   keywords: string[];
 };
 
@@ -328,23 +333,27 @@ const PLAN_DETAIL_FIELDS = `
   }
 `;
 
-const ESIM_PRODUCT_FIELDS = `
+const ESIM_PRODUCT_CARD_FIELDS = `
   _id,
   displayName,
   "slug": slug.current,
   priceUSD,
   coverImage,
   shortDescription,
-  longDescription[]{..., markDefs[], children[]},
   providerBadge,
   status,
-  keywords,
   plan->{
     ${PLAN_SUMMARY_FIELDS}
   },
   country->{
     ${COUNTRY_REFERENCE_FIELDS}
   }
+`;
+
+const ESIM_PRODUCT_DETAIL_FIELDS = `
+  ${ESIM_PRODUCT_CARD_FIELDS},
+  longDescription[]{..., markDefs[], children[]},
+  keywords
 `;
 
 const siteSettingsQuery = groq`
@@ -367,7 +376,11 @@ const homePageQuery = groq`
         headline,
         subhead,
         ctas[]{label, "url": url},
-        stats[]{label, value}
+        stats[]{label, value},
+        "featuredProductIds": featuredProducts[]._ref,
+        "featuredProducts": featuredProducts[]->{
+          ${ESIM_PRODUCT_CARD_FIELDS}
+        }
       },
       _type == "countryGridSection" => {
         _type,
@@ -450,16 +463,20 @@ const planSlugsQuery = groq`
   *[_type == "plan" && defined(slug.current)]{ "slug": slug.current }
 `;
 
-const eSimProductsQuery = groq`
+export const esimProductsQuery = groq`
   *[_type == "eSimProduct"] | order(displayName asc) {
-    ${ESIM_PRODUCT_FIELDS}
+    ${ESIM_PRODUCT_CARD_FIELDS}
   }
 `;
 
-const eSimProductBySlugQuery = groq`
+export const esimProductBySlugQuery = groq`
   *[_type == "eSimProduct" && slug.current == $slug][0]{
-    ${ESIM_PRODUCT_FIELDS}
+    ${ESIM_PRODUCT_DETAIL_FIELDS}
   }
+`;
+
+export const esimProductSlugsQuery = groq`
+  *[_type == "eSimProduct" && defined(slug.current)]{ "slug": slug.current }
 `;
 
 const regionBundlesQuery = groq`
@@ -596,22 +613,22 @@ export async function getPlanSlugs(): Promise<string[]> {
   }
 }
 
-export async function getESimProducts(): Promise<ESimProduct[]> {
+export async function getEsimProducts(): Promise<EsimProductSummary[]> {
   if (!isSanityConfigured) {
-    return clone(fallbackESimProducts);
+    return clone(fallbackEsimProductSummaries);
   }
 
   try {
     const client = getSanityClient();
-    const products = await client.fetch<ESimProduct[]>(eSimProductsQuery);
+    const products = await client.fetch<EsimProductSummary[]>(esimProductsQuery);
     return products ?? [];
   } catch (error) {
     console.error("Failed to fetch eSIM products from Sanity", error);
-    return clone(fallbackESimProducts);
+    return clone(fallbackEsimProductSummaries);
   }
 }
 
-export async function getESimProductBySlug(slug: string): Promise<ESimProduct | null> {
+export async function getEsimProductBySlug(slug: string): Promise<EsimProductDetail | null> {
   if (!isSanityConfigured) {
     const fallback = getFallbackProductBySlug(slug);
     return fallback ? clone(fallback) : null;
@@ -619,12 +636,27 @@ export async function getESimProductBySlug(slug: string): Promise<ESimProduct | 
 
   try {
     const client = getSanityClient();
-    const product = await client.fetch<ESimProduct | null>(eSimProductBySlugQuery, { slug });
+    const product = await client.fetch<EsimProductDetail | null>(esimProductBySlugQuery, { slug });
     return product ?? null;
   } catch (error) {
     console.error(`Failed to fetch eSIM product '${slug}' from Sanity`, error);
     const fallback = getFallbackProductBySlug(slug);
     return fallback ? clone(fallback) : null;
+  }
+}
+
+export async function getEsimProductSlugs(): Promise<string[]> {
+  if (!isSanityConfigured) {
+    return fallbackEsimProductSummaries.map((product) => product.slug);
+  }
+
+  try {
+    const client = getSanityClient();
+    const slugs = await client.fetch<{ slug: string }[]>(esimProductSlugsQuery);
+    return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
+  } catch (error) {
+    console.error("Failed to fetch eSIM product slugs from Sanity", error);
+    return fallbackEsimProductSummaries.map((product) => product.slug);
   }
 }
 
