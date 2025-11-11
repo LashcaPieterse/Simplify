@@ -1,10 +1,10 @@
 import { defineField, defineType } from "sanity";
 
-const statusOptions = [
+const statusOptions: { title: string; value: "active" | "comingSoon" | "archived" }[] = [
   { title: "Active", value: "active" },
   { title: "Coming soon", value: "comingSoon" },
   { title: "Archived", value: "archived" }
-] as const;
+];
 
 export const eSimProduct = defineType({
   name: "eSimProduct",
