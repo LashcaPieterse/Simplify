@@ -327,7 +327,8 @@ const toEsimProductSummary = (product: EsimProductDetail): EsimProductSummary =>
   providerBadge: product.providerBadge,
   status: product.status,
   plan: product.plan,
-  country: product.country
+  country: product.country,
+  keywords: product.keywords
 });
 
 export const fallbackEsimProductSummaries: EsimProductSummary[] = fallbackEsimProducts.map(toEsimProductSummary);
