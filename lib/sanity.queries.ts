@@ -185,6 +185,7 @@ export type EsimProductSummary = {
   status: EsimProductStatus;
   plan?: PlanSummary;
   country?: CountrySummary;
+  keywords?: string[];
 };
 
 export type EsimProductDetail = EsimProductSummary & {
@@ -342,6 +343,7 @@ const ESIM_PRODUCT_CARD_FIELDS = `
   shortDescription,
   providerBadge,
   status,
+  keywords,
   plan->{
     ${PLAN_SUMMARY_FIELDS}
   },

@@ -3,13 +3,15 @@ import {
   type ArticlesSection,
   type CountryGridSection,
   type HeroSection,
+  type EsimProductSummary,
   type LiveNetworkWidgetSection,
   type NewsletterSection,
   type RegionalBundleSpotlightSection,
   type StepsSection,
   type WhyChooseUsSection,
   getHomePage,
-  getSiteSettings
+  getSiteSettings,
+  getEsimProducts
 } from "@/lib/sanity.queries";
 import { Hero } from "@/components/cms/Hero";
 import { CountryGrid } from "@/components/cms/CountryGrid";
@@ -27,7 +29,7 @@ export const dynamic = "force-static";
 export const revalidate = false;
 
 export default async function HomePage() {
-  const [settings, home] = await Promise.all([getSiteSettings(), getHomePage()]);
+  const [settings, home, products] = await Promise.all([getSiteSettings(), getHomePage(), getEsimProducts()]);
 
   if (!settings || !home) {
     return null;
@@ -49,13 +51,36 @@ export default async function HomePage() {
   );
   const articlesSection = sections.find((section): section is ArticlesSection => section._type === "articlesSection");
 
+  const allProducts = products ?? [];
+
+  const highlightedProducts: EsimProductSummary[] = heroSection?.featuredProductIds?.length
+    ? heroSection.featuredProductIds
+        .map((id) => {
+          const fromAll = allProducts.find((product) => product._id === id);
+          if (fromAll) {
+            return fromAll;
+          }
+
+          return heroSection.featuredProducts?.find((product) => product._id === id) ?? null;
+        })
+        .filter((product): product is EsimProductSummary => Boolean(product))
+    : heroSection?.featuredProducts ?? [];
+
   return (
     <div className="relative isolate overflow-hidden">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-radial-fade" aria-hidden />
       <SiteHeader settings={settings} />
       <main>
         <Container size="4" px={{ initial: "4", sm: "6" }}>
-          {heroSection ? <Hero hero={heroSection} tagline={settings.tagline} /> : null}
+          {heroSection ? (
+            <Hero
+              hero={heroSection}
+              tagline={settings.tagline}
+              highlightedProducts={highlightedProducts}
+              allProducts={allProducts}
+              fallbackCountries={countrySection?.countries ?? []}
+            />
+          ) : null}
         </Container>
         <AfricaCoverageMap />
         {countrySection ? <CountryGrid section={countrySection} /> : null}

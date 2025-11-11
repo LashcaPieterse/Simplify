@@ -1,13 +1,21 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { MagnifyingGlassIcon, StarIcon } from "@heroicons/react/24/outline";
 import { ArrowUpRight } from "lucide-react";
 import Image from "next/image";
-import type { HeroSection, Link as SanityLink } from "@/lib/sanity.queries";
+import Link from "next/link";
+import type {
+  CountrySummary,
+  EsimProductSummary,
+  HeroSection,
+  Link as SanityLink
+} from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
+import { ProductCard } from "./ProductCard";
 
 const fadeIn = {
   initial: { opacity: 0, y: 24 },
@@ -19,6 +27,9 @@ const fadeIn = {
 type HeroProps = {
   hero: HeroSection;
   tagline: string;
+  highlightedProducts: EsimProductSummary[];
+  allProducts: EsimProductSummary[];
+  fallbackCountries?: CountrySummary[];
 };
 
 const formatPrice = (price?: number) => {
@@ -31,9 +42,39 @@ const formatPrice = (price?: number) => {
 
 const getCtaHref = (cta: SanityLink) => resolveLinkHref(cta);
 
-export function Hero({ hero, tagline }: HeroProps) {
-  const featuredProducts = hero.featuredProducts ?? [];
-  const staggeredProducts = featuredProducts.map((product, index) => ({ product, delay: 0.2 * index }));
+const normalize = (value: string) => value.toLowerCase();
+
+export function Hero({ hero, tagline, highlightedProducts, allProducts, fallbackCountries = [] }: HeroProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const hasProductData = highlightedProducts.length > 0 || allProducts.length > 0;
+
+  const productsToDisplay = useMemo(() => {
+    if (!hasProductData) {
+      return [] as EsimProductSummary[];
+    }
+
+    if (!normalizedSearch) {
+      return highlightedProducts.length ? highlightedProducts : allProducts;
+    }
+
+    return allProducts.filter((product) => {
+      const name = product.displayName ? normalize(product.displayName) : "";
+      const provider = product.plan?.provider?.title ? normalize(product.plan.provider.title) : "";
+      const country = product.country?.title ? normalize(product.country.title) : "";
+      const keywords = (product.keywords ?? []).map((keyword) => normalize(keyword));
+
+      if (name.includes(normalizedSearch) || provider.includes(normalizedSearch) || country.includes(normalizedSearch)) {
+        return true;
+      }
+
+      return keywords.some((keyword) => keyword.includes(normalizedSearch));
+    });
+  }, [allProducts, hasProductData, highlightedProducts, normalizedSearch]);
+
+  const showNoMatches = Boolean(normalizedSearch) && hasProductData && productsToDisplay.length === 0;
+  const shouldShowCountryFallback = !hasProductData && fallbackCountries.length > 0;
+  const staggeredProducts = productsToDisplay.map((product, index) => ({ product, delay: Math.min(index * 0.18, 0.6) }));
 
   return (
     <section className="relative mb-24 grid gap-10 lg:grid-cols-[1.1fr,0.9fr] lg:items-center">
@@ -105,80 +146,87 @@ export function Hero({ hero, tagline }: HeroProps) {
           <MagnifyingGlassIcon className="h-5 w-5 text-brand-500" />
           <input
             type="search"
-            placeholder="Search by country or city"
+            placeholder="Search by product, provider, country, or keyword"
             className="w-full border-none bg-transparent text-sm text-brand-900 placeholder:text-brand-400 focus:outline-none"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            disabled={!hasProductData}
           />
           <ArrowUpRight className="h-5 w-5 text-brand-500" />
         </label>
 
         <div className="space-y-4">
-          {staggeredProducts.length ? (
-            staggeredProducts.map(({ product, delay }) => {
-              const plan = product.plan;
-              const imageUrl = product.coverImage
-                ? urlForImage(product.coverImage)?.width(240).height(160).url()
-                : null;
-              const href = plan?.slug
-                ? `/plan/${plan.slug}`
-                : product.country?.slug
-                  ? `/country/${product.country.slug}`
-                  : null;
-              const hasHref = Boolean(href);
-
-              return (
-                <motion.article
-                  key={product._id}
-                  className="flex items-start gap-4 rounded-2xl border border-brand-100/80 bg-white px-4 py-4 shadow-sm"
-                  initial={{ opacity: 0, x: 24 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay, duration: 0.5, ease: "easeOut" }}
-                >
-                  <div className="relative h-16 w-20 overflow-hidden rounded-xl bg-sand-100/70">
-                    {imageUrl ? (
-                      <Image src={imageUrl} alt={`${product.displayName} cover`} fill className="object-cover" sizes="80px" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-brand-400">No image</div>
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-brand-800">{product.displayName}</p>
-                      {product.providerBadge ? (
-                        <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase text-brand-600">
-                          {product.providerBadge}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-brand-500">
-                      {product.country?.title ? <span>{product.country.title}</span> : null}
-                      {plan?.provider?.title ? <span>{plan.provider.title}</span> : null}
-                    </div>
-                    {plan?.title ? <p className="font-medium text-brand-900">{plan.title}</p> : null}
-                    <p className="text-sm text-brand-600">{product.shortDescription}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-3">
-                    {product.priceUSD ? (
-                      <p className="font-semibold text-brand-900">{formatPrice(product.priceUSD)}</p>
-                    ) : null}
-                    {hasHref ? (
-                      <Button variant="ghost" size="sm" className="text-xs" asChild>
-                        <a href={href!}>View</a>
-                      </Button>
-                    ) : (
-                      <Button variant="ghost" size="sm" className="text-xs" disabled>
-                        View
-                      </Button>
-                    )}
-                  </div>
-                </motion.article>
-              );
-            })
+          {shouldShowCountryFallback ? (
+            fallbackCountries.map((country, index) => (
+              <motion.article
+                key={country._id}
+                className="flex items-start gap-4 rounded-2xl border border-brand-100/80 bg-white px-4 py-4 shadow-sm"
+                initial={{ opacity: 0, x: 24 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: Math.min(index * 0.18, 0.6), duration: 0.5, ease: "easeOut" }}
+              >
+                <HeroCountryCard country={country} />
+              </motion.article>
+            ))
+          ) : showNoMatches ? (
+            <p className="text-sm text-brand-500">
+              No products matched “{searchTerm}”. Try another destination, provider, or keyword.
+            </p>
+          ) : staggeredProducts.length ? (
+            staggeredProducts.map(({ product, delay }) => (
+              <motion.div
+                key={product._id}
+                initial={{ opacity: 0, x: 24 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay, duration: 0.5, ease: "easeOut" }}
+              >
+                <ProductCard product={product} />
+              </motion.div>
+            ))
           ) : (
-            <p className="text-sm text-brand-500">Add featured products to this section to highlight storefront offers.</p>
+            <p className="text-sm text-brand-500">
+              Add hero products in Sanity to activate the storefront search experience.
+            </p>
           )}
         </div>
       </motion.div>
     </section>
+  );
+}
+
+function HeroCountryCard({ country }: { country: CountrySummary }) {
+  const imageUrl = country.coverImage ? urlForImage(country.coverImage)?.width(240).height(160).url() : null;
+  const plan = country.plan;
+
+  return (
+    <>
+      <div className="relative h-16 w-20 overflow-hidden rounded-xl bg-sand-100/70">
+        {imageUrl ? (
+          <Image src={imageUrl} alt={`${country.title} cover`} fill className="object-cover" sizes="80px" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-brand-400">No image</div>
+        )}
+      </div>
+      <div className="flex-1 space-y-1">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-brand-800">{country.title}</p>
+          {country.badge ? (
+            <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase text-brand-600">
+              {country.badge}
+            </span>
+          ) : null}
+        </div>
+        {plan?.provider?.title ? <p className="text-xs text-brand-500">{plan.provider.title}</p> : null}
+        <p className="text-sm text-brand-600">{plan?.shortBlurb ?? country.summary}</p>
+      </div>
+      <div className="flex flex-col items-end gap-3">
+        {plan?.priceUSD ? <p className="font-semibold text-brand-900">{formatPrice(plan.priceUSD)}</p> : null}
+        <Button variant="ghost" size="sm" className="text-xs" asChild>
+          <Link href={`/country/${country.slug}`}>View plans</Link>
+        </Button>
+      </div>
+    </>
   );
 }
