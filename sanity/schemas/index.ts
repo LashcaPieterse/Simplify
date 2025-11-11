@@ -15,6 +15,7 @@ import { plan } from "./plan";
 import { post } from "./post";
 import { regionBundle } from "./regionBundle";
 import { siteSettings } from "./siteSettings";
+import { eSimProduct } from "./eSimProduct";
 
 export const schemaTypes = [
   siteSettings,
@@ -22,6 +23,7 @@ export const schemaTypes = [
   country,
   carrier,
   plan,
+  eSimProduct,
   regionBundle,
   post,
   link,

@@ -4,6 +4,7 @@ import type {
   CountryDetail,
   CountryGridSection,
   CountrySummary,
+  ESimProduct,
   HeroSection,
   HomePagePayload,
   IconBullet,
@@ -258,6 +259,63 @@ const planDetailsBySlug = Object.fromEntries(planDetailsBase.map((plan) => [plan
 
 export const fallbackPlanDetails: PlanDetail[] = planDetailsBase;
 
+export const fallbackESimProducts: ESimProduct[] = [
+  {
+    _id: "product-namibia-explorer",
+    displayName: "Namibia Explorer eSIM",
+    slug: "namibia-explorer-esim",
+    priceUSD: 18,
+    coverImage: { url: "https://images.unsplash.com/photo-1523419409543-0c1df022bdd1" },
+    shortDescription: "Instant QR activation with top-tier coverage across Etosha and Windhoek.",
+    longDescription: [
+      createBlock("Designed for travellers who want reliable LTE while tracking wildlife in Etosha and Sossusvlei."),
+      createBlock("Includes concierge support for reactivation and hotspot troubleshooting on the road."),
+      createBlock("Pairs perfectly with the Nama data plan from TN Mobile for continuous roaming-free service.")
+    ],
+    plan: planSummaryBySlug["nama"],
+    country: countrySummaries.namibia,
+    providerBadge: "TN Mobile partner",
+    status: "active",
+    keywords: ["namibia", "safari", "tn mobile", "lte"]
+  },
+  {
+    _id: "product-cape-digital-nomad",
+    displayName: "Cape Town Digital Nomad eSIM",
+    slug: "cape-town-digital-nomad-esim",
+    priceUSD: 26,
+    coverImage: { url: "https://images.unsplash.com/photo-1544986581-efac024faf62" },
+    shortDescription: "5G-ready data with lounge Wi-Fi vouchers for city hopping between Cape Town and Joburg.",
+    longDescription: [
+      createBlock("Optimised for hybrid workers splitting time between the Cape and Gauteng, with 5G in supported metros."),
+      createBlock("Comes bundled with airport lounge Wi-Fi passes and priority chat support during business hours."),
+      createBlock("Backed by the Cape Explorer plan to keep you online during multi-week stays.")
+    ],
+    plan: planSummaryBySlug["cape-explorer"],
+    country: countrySummaries["south-africa"],
+    providerBadge: "VodaConnect 5G",
+    status: "active",
+    keywords: ["south africa", "digital nomad", "5g", "vodaconnect"]
+  },
+  {
+    _id: "product-maasai-safari-pro",
+    displayName: "Maasai Safari Pro eSIM",
+    slug: "maasai-safari-pro-esim",
+    priceUSD: 19,
+    coverImage: { url: "https://images.unsplash.com/photo-1523800503107-5bc3ba2a6f81" },
+    shortDescription: "Unlimited messaging and weather alerts tailored to the Maasai Mara migration season.",
+    longDescription: [
+      createBlock("Focus on the Great Migration with daily weather notifications and roaming protection across conservancies."),
+      createBlock("Ideal for group trips needing coordinated check-ins and local guide communications."),
+      createBlock("Built on the Maasai plan from SafariNet with simplified top-ups for extended stays.")
+    ],
+    plan: planSummaryBySlug["maasai"],
+    country: countrySummaries.kenya,
+    providerBadge: "SafariNet verified",
+    status: "comingSoon",
+    keywords: ["kenya", "maasai", "messaging", "safari"]
+  }
+];
+
 const fallbackBundleCountries = [
   countrySummaries["south-africa"],
   countrySummaries.namibia,
@@ -463,3 +521,6 @@ export const getFallbackBundleBySlug = (slug: string): RegionBundle | undefined 
 
 export const getFallbackPostBySlug = (slug: string): PostDetail | undefined =>
   postsBase.find((post) => post.slug === slug);
+
+export const getFallbackProductBySlug = (slug: string): ESimProduct | undefined =>
+  fallbackESimProducts.find((product) => product.slug === slug);

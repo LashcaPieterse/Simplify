@@ -31,13 +31,26 @@ async function uploadImage(url: string, filename: string) {
 
 async function seed() {
   console.info("Uploading media assets...");
-  const [namibiaCover, southAfricaCover, kenyaCover, botswanaCover, zambiaCover, blogCover] = await Promise.all([
+  const [
+    namibiaCover,
+    southAfricaCover,
+    kenyaCover,
+    botswanaCover,
+    zambiaCover,
+    blogCover,
+    productNamibiaCover,
+    productSouthAfricaCover,
+    productKenyaCover
+  ] = await Promise.all([
     uploadImage("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee", "namibia.jpg"),
     uploadImage("https://images.unsplash.com/photo-1526481280695-3c469928b67b", "south-africa.jpg"),
     uploadImage("https://images.unsplash.com/photo-1500534623283-312aade485b7", "kenya.jpg"),
     uploadImage("https://images.unsplash.com/photo-1582719478250-c89cae4dc85b", "botswana.jpg"),
     uploadImage("https://images.unsplash.com/photo-1526498460520-4c246339dccb", "zambia.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1", "blog-cover.jpg")
+    uploadImage("https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1", "blog-cover.jpg"),
+    uploadImage("https://images.unsplash.com/photo-1523419409543-0c1df022bdd1", "product-namibia.jpg"),
+    uploadImage("https://images.unsplash.com/photo-1544986581-efac024faf62", "product-south-africa.jpg"),
+    uploadImage("https://images.unsplash.com/photo-1523800503107-5bc3ba2a6f81", "product-kenya.jpg")
   ]);
 
   console.info("Creating core documents...");
@@ -264,6 +277,117 @@ async function seed() {
       ],
       provider: { _type: "reference", _ref: "carrier-safarinet" },
       country: { _type: "reference", _ref: "country-kenya" }
+    },
+    {
+      _id: "product-namibia-explorer",
+      _type: "eSimProduct",
+      displayName: "Namibia Explorer eSIM",
+      slug: { _type: "slug", current: "namibia-explorer-esim" },
+      priceUSD: 18,
+      coverImage: productNamibiaCover,
+      shortDescription: "Instant QR activation with top-tier coverage across Etosha and Windhoek.",
+      longDescription: [
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Designed for travellers who want reliable LTE while tracking wildlife in Etosha and Sossusvlei." }
+          ]
+        },
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Includes concierge support for reactivation and hotspot troubleshooting on the road." }
+          ]
+        },
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Pairs perfectly with the Nama data plan from TN Mobile for continuous roaming-free service." }
+          ]
+        }
+      ],
+      plan: { _type: "reference", _ref: "plan-nama" },
+      country: { _type: "reference", _ref: "country-namibia" },
+      providerBadge: "TN Mobile partner",
+      status: "active",
+      keywords: ["namibia", "safari", "tn mobile", "lte"]
+    },
+    {
+      _id: "product-cape-digital-nomad",
+      _type: "eSimProduct",
+      displayName: "Cape Town Digital Nomad eSIM",
+      slug: { _type: "slug", current: "cape-town-digital-nomad-esim" },
+      priceUSD: 26,
+      coverImage: productSouthAfricaCover,
+      shortDescription: "5G-ready data with lounge Wi-Fi vouchers for city hopping between Cape Town and Joburg.",
+      longDescription: [
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Optimised for hybrid workers splitting time between the Cape and Gauteng, with 5G in supported metros." }
+          ]
+        },
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Comes bundled with airport lounge Wi-Fi passes and priority chat support during business hours." }
+          ]
+        },
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Backed by the Cape Explorer plan to keep you online during multi-week stays." }
+          ]
+        }
+      ],
+      plan: { _type: "reference", _ref: "plan-cape-explorer" },
+      country: { _type: "reference", _ref: "country-south-africa" },
+      providerBadge: "VodaConnect 5G",
+      status: "active",
+      keywords: ["south africa", "digital nomad", "5g", "vodaconnect"]
+    },
+    {
+      _id: "product-maasai-safari-pro",
+      _type: "eSimProduct",
+      displayName: "Maasai Safari Pro eSIM",
+      slug: { _type: "slug", current: "maasai-safari-pro-esim" },
+      priceUSD: 19,
+      coverImage: productKenyaCover,
+      shortDescription: "Unlimited messaging and weather alerts tailored to the Maasai Mara migration season.",
+      longDescription: [
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Focus on the Great Migration with daily weather notifications and roaming protection across conservancies." }
+          ]
+        },
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Ideal for group trips needing coordinated check-ins and local guide communications." }
+          ]
+        },
+        {
+          _type: "block",
+          style: "normal",
+          children: [
+            { _type: "span", text: "Built on the Maasai plan from SafariNet with simplified top-ups for extended stays." }
+          ]
+        }
+      ],
+      plan: { _type: "reference", _ref: "plan-maasai" },
+      country: { _type: "reference", _ref: "country-kenya" },
+      providerBadge: "SafariNet verified",
+      status: "comingSoon",
+      keywords: ["kenya", "maasai", "messaging", "safari"]
     },
     {
       _id: "bundle-southern-explorer",
