@@ -1,0 +1,81 @@
+import Image from "next/image";
+import Link from "next/link";
+import type { EsimProductSummary } from "@/lib/sanity.queries";
+import { urlForImage } from "@/lib/image";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/components/utils";
+
+const formatPrice = (price?: number) => {
+  if (typeof price !== "number") {
+    return "";
+  }
+
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
+};
+
+const getProductHref = (product: EsimProductSummary) => {
+  if (product.plan?.slug) {
+    return `/plan/${product.plan.slug}`;
+  }
+
+  if (product.slug) {
+    return `/product/${product.slug}`;
+  }
+
+  if (product.country?.slug) {
+    return `/country/${product.country.slug}`;
+  }
+
+  return null;
+};
+
+export function ProductCard({ product, className, ctaLabel = "View" }: {
+  product: EsimProductSummary;
+  className?: string;
+  ctaLabel?: string;
+}) {
+  const imageUrl = product.coverImage ? urlForImage(product.coverImage)?.width(240).height(160).url() : null;
+  const href = getProductHref(product);
+
+  return (
+    <article className={cn("flex items-start gap-4 rounded-2xl border border-brand-100/80 bg-white px-4 py-4 shadow-sm", className)}>
+      <div className="relative h-16 w-20 overflow-hidden rounded-xl bg-sand-100/70">
+        {imageUrl ? (
+          <Image src={imageUrl} alt={`${product.displayName} cover`} fill className="object-cover" sizes="80px" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-xs text-brand-400">No image</div>
+        )}
+      </div>
+      <div className="flex-1 space-y-1">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-brand-800">{product.displayName}</p>
+          {product.providerBadge ? (
+            <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase text-brand-600">
+              {product.providerBadge}
+            </span>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-brand-500">
+          {product.country?.title ? <span>{product.country.title}</span> : null}
+          {product.plan?.provider?.title ? <span>{product.plan.provider.title}</span> : null}
+        </div>
+        {product.plan?.title ? <p className="font-medium text-brand-900">{product.plan.title}</p> : null}
+        <p className="text-sm text-brand-600">{product.shortDescription}</p>
+      </div>
+      <div className="flex flex-col items-end gap-3">
+        {typeof product.priceUSD === "number" ? (
+          <p className="font-semibold text-brand-900">{formatPrice(product.priceUSD)}</p>
+        ) : null}
+        {href ? (
+          <Button variant="ghost" size="sm" className="text-xs" asChild>
+            <Link href={href}>{ctaLabel}</Link>
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" className="text-xs" disabled>
+            {ctaLabel}
+          </Button>
+        )}
+      </div>
+    </article>
+  );
+}
