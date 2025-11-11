@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { MagnifyingGlassIcon, StarIcon } from "@heroicons/react/24/outline";
 import { ArrowUpRight } from "lucide-react";
-import Link from "next/link";
 import Image from "next/image";
 import type { HeroSection, Link as SanityLink } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
@@ -119,7 +118,11 @@ export function Hero({ hero, tagline }: HeroProps) {
               const imageUrl = product.coverImage
                 ? urlForImage(product.coverImage)?.width(240).height(160).url()
                 : null;
-              const href = plan?.slug ? `/plan/${plan.slug}` : product.country?.slug ? `/country/${product.country.slug}` : null;
+              const href = plan?.slug
+                ? `/plan/${plan.slug}`
+                : product.country?.slug
+                  ? `/country/${product.country.slug}`
+                  : null;
               const hasHref = Boolean(href);
 
               return (
@@ -160,7 +163,7 @@ export function Hero({ hero, tagline }: HeroProps) {
                     ) : null}
                     {hasHref ? (
                       <Button variant="ghost" size="sm" className="text-xs" asChild>
-                        <Link href={href!}>View</Link>
+                        <a href={href!}>View</a>
                       </Button>
                     ) : (
                       <Button variant="ghost" size="sm" className="text-xs" disabled>
