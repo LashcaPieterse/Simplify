@@ -21,6 +21,7 @@ import { Newsletter } from "@/components/cms/Newsletter";
 import { Articles } from "@/components/cms/Articles";
 import { SiteHeader } from "@/components/cms/SiteHeader";
 import { SiteFooter } from "@/components/cms/SiteFooter";
+import { AfricaCoverageMap } from "@/components/AfricaCoverageMap";
 
 export const dynamic = "force-static";
 export const revalidate = false;
@@ -63,6 +64,7 @@ export default async function HomePage() {
         <Container size="4" px={{ initial: "4", sm: "6" }}>
           {heroSection ? <Hero hero={heroSection} tagline={settings.tagline} featuredCountries={heroCountries} /> : null}
         </Container>
+        <AfricaCoverageMap />
         {remainingCountrySection ? <CountryGrid section={remainingCountrySection} /> : null}
         {whySection ? <WhyChooseUs section={whySection} /> : null}
         {stepsSection ? <Steps section={stepsSection} /> : null}
