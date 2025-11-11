@@ -2,7 +2,7 @@ import type { LinkProps } from "next/link";
 import { urlForImage } from "./image";
 import type { EsimProductSummary } from "./sanity.queries";
 
-export type LinkHref = LinkProps["href"];
+export type LinkHref = LinkProps<string>["href"];
 
 export type EsimProductCardData = {
   id: string;
