@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { ComponentProps } from "react";
 import type { EsimProductSummary } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { Button } from "@/components/ui/button";
@@ -13,17 +14,28 @@ const formatPrice = (price?: number) => {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
 };
 
-const getProductHref = (product: EsimProductSummary) => {
+type LinkHref = ComponentProps<typeof Link>["href"];
+
+const getProductHref = (product: EsimProductSummary): LinkHref | null => {
   if (product.plan?.slug) {
-    return `/plan/${product.plan.slug}`;
+    return {
+      pathname: "/plan/[slug]",
+      query: { slug: product.plan.slug },
+    } as const;
   }
 
   if (product.slug) {
-    return `/product/${product.slug}`;
+    return {
+      pathname: "/product/[slug]",
+      query: { slug: product.slug },
+    } as const;
   }
 
   if (product.country?.slug) {
-    return `/country/${product.country.slug}`;
+    return {
+      pathname: "/country/[slug]",
+      query: { slug: product.country.slug },
+    } as const;
   }
 
   return null;
