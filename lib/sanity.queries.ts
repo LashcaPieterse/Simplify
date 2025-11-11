@@ -16,6 +16,7 @@ import {
   getFallbackPostBySlug
 } from "./sanity.fallback";
 import type { ImageLike } from "./image";
+import type { EsimProductCardData } from "./products";
 
 export type PortableTextSpan = {
   _type: "span";
@@ -62,6 +63,7 @@ export type CountrySummary = {
   coverImage?: ImageLike;
   plan?: PlanSummary;
   featured?: boolean;
+  productCard?: EsimProductCardData;
 };
 
 export type CountryGridSection = {
@@ -170,6 +172,7 @@ export type RegionBundle = {
   heroImage?: ImageLike;
   ctaLabel?: string;
   ctaTarget?: string;
+  featuredProductCard?: EsimProductCardData;
 };
 
 export type EsimProductStatus = "active" | "comingSoon" | "archived";

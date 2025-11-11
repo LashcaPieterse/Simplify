@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle2, Map, TrendingUp } from "lucide-react";
 import { urlForImage } from "@/lib/image";
 import { getExternalLinkProps, normalizeHref } from "@/lib/links";
+import { EsimProductCard } from "@/components/ui/EsimProductCard";
 
 export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightSection }) {
   const bundle = section.bundle;
@@ -47,6 +48,11 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
                   {perk}
                 </div>
               ))}
+            </div>
+          ) : null}
+          {bundle.featuredProductCard ? (
+            <div className="mt-8">
+              <EsimProductCard product={bundle.featuredProductCard} />
             </div>
           ) : null}
           <div className="mt-8 flex flex-wrap items-center gap-4">
