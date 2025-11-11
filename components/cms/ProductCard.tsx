@@ -1,10 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { ComponentProps } from "react";
 import type { EsimProductSummary } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/utils";
+import { getEsimProductHref } from "@/lib/products";
 
 const formatPrice = (price?: number) => {
   if (typeof price !== "number") {
@@ -14,40 +14,13 @@ const formatPrice = (price?: number) => {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
 };
 
-type LinkHref = ComponentProps<typeof Link>["href"];
-
-const getProductHref = (product: EsimProductSummary): LinkHref | null => {
-  if (product.plan?.slug) {
-    return {
-      pathname: "/plan/[slug]",
-      query: { slug: product.plan.slug },
-    } as const;
-  }
-
-  if (product.slug) {
-    return {
-      pathname: "/product/[slug]",
-      query: { slug: product.slug },
-    } as const;
-  }
-
-  if (product.country?.slug) {
-    return {
-      pathname: "/country/[slug]",
-      query: { slug: product.country.slug },
-    } as const;
-  }
-
-  return null;
-};
-
 export function ProductCard({ product, className, ctaLabel = "View" }: {
   product: EsimProductSummary;
   className?: string;
   ctaLabel?: string;
 }) {
   const imageUrl = product.coverImage ? urlForImage(product.coverImage)?.width(240).height(160).url() : null;
-  const href = getProductHref(product);
+  const href = getEsimProductHref(product);
 
   return (
     <article className={cn("flex items-start gap-4 rounded-2xl border border-brand-100/80 bg-white px-4 py-4 shadow-sm", className)}>
