@@ -70,7 +70,11 @@ model WebhookEvent {
   eventType    String
   order        EsimOrder? @relation(fields: [orderId], references: [id])
   orderId      String?
-  payload      Json
+  /// Raw JSON payload returned by the upstream webhook.
+  ///
+  /// Stored as a string because the SQLite connector used in development
+  /// does not support the Prisma `Json` type.
+  payload      String
   createdAt    DateTime   @default(now())
   processedAt  DateTime?
 }
