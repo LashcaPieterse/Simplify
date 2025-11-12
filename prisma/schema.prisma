@@ -17,6 +17,9 @@ model AiraloPackage {
   validityDays  Int?
   priceCents    Int
   currency      String
+  metadata      String?
+  lastSyncedAt  DateTime?
+  sourceHash    String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   esimOrders    EsimOrder[]

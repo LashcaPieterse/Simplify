@@ -75,3 +75,20 @@ The handler revalidates the homepage, individual country, plan, bundle, and reso
 - `npm run build` – create a production build.
 - `npm run start` – serve the production build.
 - `npm run lint` – run linting.
+
+## Airalo catalog sync
+
+The Airalo catalog can be synchronized into the local database with a dedicated script. Configure the following environment variables with your partner credentials:
+
+```
+AIRALO_CLIENT_ID=<airalo-client-id>
+AIRALO_CLIENT_SECRET=<airalo-client-secret>
+```
+
+Then run the sync script:
+
+```bash
+npx tsx scripts/sync-airalo-packages.ts
+```
+
+> Recommended cadence: execute the script every 60 minutes via cron or a background worker to keep pricing and availability fresh while respecting upstream rate limits.
