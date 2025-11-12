@@ -1,4 +1,4 @@
-import type { ZodSchema } from "zod";
+import type { ZodType, ZodTypeDef } from "zod";
 import {
   OrderResponseSchema,
   PackagesResponseSchema,
@@ -79,7 +79,7 @@ export interface GetUsageOptions {
 
 interface AiraloRequestOptions<T> {
   path: string;
-  schema: ZodSchema<T>;
+  schema: ZodType<T, ZodTypeDef, unknown>;
   init?: RequestInit;
   requiresAuth?: boolean;
 }
