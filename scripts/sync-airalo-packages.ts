@@ -5,13 +5,18 @@
  * to keep pricing and availability fresh without overwhelming the upstream API.
  */
 import { syncAiraloPackages } from "../lib/catalog/sync";
+import prisma from "../lib/db/client";
 
 async function main() {
-  const result = await syncAiraloPackages();
+  try {
+    const result = await syncAiraloPackages();
 
-  console.log(
-    `Synced ${result.total} packages (created: ${result.created}, updated: ${result.updated}, unchanged: ${result.unchanged}).`,
-  );
+    console.log(
+      `Synced ${result.total} packages (created: ${result.created}, updated: ${result.updated}, unchanged: ${result.unchanged}).`,
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
 main().catch((error) => {
