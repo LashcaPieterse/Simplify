@@ -32,12 +32,21 @@ type HeroProps = {
   fallbackCountries?: CountrySummary[];
 };
 
-const formatPrice = (price?: number) => {
-  if (typeof price !== "number") {
+const formatPrice = (amount?: number, currency = "USD") => {
+  if (typeof amount !== "number") {
     return "";
   }
 
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: currency === "USD" ? 0 : 2
+    }).format(amount);
+  } catch (error) {
+    console.warn("Failed to format price", error);
+    return `${amount}`;
+  }
 };
 
 const getCtaHref = (cta: SanityLink) => resolveLinkHref(cta);
@@ -60,7 +69,8 @@ export function Hero({ hero, tagline, highlightedProducts, allProducts, fallback
 
     return allProducts.filter((product) => {
       const name = product.displayName ? normalize(product.displayName) : "";
-      const provider = product.plan?.provider?.title ? normalize(product.plan.provider.title) : "";
+      const providerName = product.provider?.title ?? product.plan?.provider?.title;
+      const provider = providerName ? normalize(providerName) : "";
       const country = product.country?.title ? normalize(product.country.title) : "";
       const keywords = (product.keywords ?? []).map((keyword) => normalize(keyword));
 
@@ -199,6 +209,9 @@ export function Hero({ hero, tagline, highlightedProducts, allProducts, fallback
 function HeroCountryCard({ country }: { country: CountrySummary }) {
   const imageUrl = country.coverImage ? urlForImage(country.coverImage)?.width(240).height(160).url() : null;
   const plan = country.plan;
+  const priceAmount = plan?.price?.amount ?? plan?.priceUSD;
+  const priceCurrency = plan?.price?.currency ?? "USD";
+  const providerName = plan?.provider?.title;
 
   return (
     <>
@@ -218,11 +231,13 @@ function HeroCountryCard({ country }: { country: CountrySummary }) {
             </span>
           ) : null}
         </div>
-        {plan?.provider?.title ? <p className="text-xs text-brand-500">{plan.provider.title}</p> : null}
+        {providerName ? <p className="text-xs text-brand-500">{providerName}</p> : null}
         <p className="text-sm text-brand-600">{plan?.shortBlurb ?? country.summary}</p>
       </div>
       <div className="flex flex-col items-end gap-3">
-        {plan?.priceUSD ? <p className="font-semibold text-brand-900">{formatPrice(plan.priceUSD)}</p> : null}
+        {typeof priceAmount === "number" ? (
+          <p className="font-semibold text-brand-900">{formatPrice(priceAmount, priceCurrency)}</p>
+        ) : null}
         <Button variant="ghost" size="sm" className="text-xs" asChild>
           <Link href={`/country/${country.slug}`}>View plans</Link>
         </Button>
