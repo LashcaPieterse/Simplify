@@ -1,5 +1,7 @@
 import { groq } from "next-sanity";
 import { getSanityClient, isSanityConfigured } from "./sanity.client";
+
+export { prisma } from "./db/client";
 import {
   fallbackCountryDetails,
   fallbackCountrySummaries,
