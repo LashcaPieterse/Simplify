@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AiraloPackage {
+  id            String      @id @default(cuid())
+  externalId    String      @unique
+  name          String
+  description   String?
+  region        String?
+  dataLimitMb   Int?
+  validityDays  Int?
+  priceCents    Int
+  currency      String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  esimOrders    EsimOrder[]
+}
+
+model EsimOrder {
+  id             String         @id @default(cuid())
+  orderNumber    String         @unique
+  package        AiraloPackage  @relation(fields: [packageId], references: [id])
+  packageId      String
+  status         String
+  customerEmail  String?
+  totalCents     Int?
+  currency       String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  profiles       EsimProfile[]
+  usageSnapshots UsageSnapshot[]
+  webhookEvents  WebhookEvent[]
+}
+
+model EsimProfile {
+  id             String         @id @default(cuid())
+  iccid          String         @unique
+  imsi           String?
+  activationCode String?
+  status         String
+  order          EsimOrder      @relation(fields: [orderId], references: [id])
+  orderId        String
+  expiresAt      DateTime?
+  activatedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  usageSnapshots UsageSnapshot[]
+}
+
+model UsageSnapshot {
+  id           String      @id @default(cuid())
+  profile      EsimProfile @relation(fields: [profileId], references: [id])
+  profileId    String
+  order        EsimOrder   @relation(fields: [orderId], references: [id])
+  orderId      String
+  usedMb       Float?
+  remainingMb  Float?
+  recordedAt   DateTime    @default(now())
+}
+
+model WebhookEvent {
+  id           String     @id @default(cuid())
+  eventId      String     @unique
+  eventType    String
+  order        EsimOrder? @relation(fields: [orderId], references: [id])
+  orderId      String?
+  /// Raw JSON payload returned by the upstream webhook.
+  ///
+  /// Stored as a string because the SQLite connector used in development
+  /// does not support the Prisma `Json` type.
+  payload      String
+  createdAt    DateTime   @default(now())
+  processedAt  DateTime?
+}
