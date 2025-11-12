@@ -6,12 +6,21 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/components/utils";
 import { getEsimProductHref } from "@/lib/products";
 
-const formatPrice = (price?: number) => {
-  if (typeof price !== "number") {
+const formatPrice = (amount?: number, currency = "USD") => {
+  if (typeof amount !== "number") {
     return "";
   }
 
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(price);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: currency === "USD" ? 0 : 2
+    }).format(amount);
+  } catch (error) {
+    console.warn("Failed to format price", error);
+    return `${amount}`;
+  }
 };
 
 export function ProductCard({ product, className, ctaLabel = "View" }: {
@@ -21,6 +30,10 @@ export function ProductCard({ product, className, ctaLabel = "View" }: {
 }) {
   const imageUrl = product.coverImage ? urlForImage(product.coverImage)?.width(240).height(160).url() : null;
   const href = getEsimProductHref(product);
+  const priceAmount = product.price?.amount ?? product.priceUSD;
+  const priceCurrency = product.price?.currency ?? "USD";
+  const providerBadge = product.provider?.badge ?? product.providerBadge;
+  const providerName = product.provider?.title ?? product.plan?.provider?.title;
 
   return (
     <article className={cn("flex items-start gap-4 rounded-2xl border border-brand-100/80 bg-white px-4 py-4 shadow-sm", className)}>
@@ -34,22 +47,22 @@ export function ProductCard({ product, className, ctaLabel = "View" }: {
       <div className="flex-1 space-y-1">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-brand-800">{product.displayName}</p>
-          {product.providerBadge ? (
+          {providerBadge ? (
             <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase text-brand-600">
-              {product.providerBadge}
+              {providerBadge}
             </span>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-brand-500">
           {product.country?.title ? <span>{product.country.title}</span> : null}
-          {product.plan?.provider?.title ? <span>{product.plan.provider.title}</span> : null}
+          {providerName ? <span>{providerName}</span> : null}
         </div>
         {product.plan?.title ? <p className="font-medium text-brand-900">{product.plan.title}</p> : null}
         <p className="text-sm text-brand-600">{product.shortDescription}</p>
       </div>
       <div className="flex flex-col items-end gap-3">
-        {typeof product.priceUSD === "number" ? (
-          <p className="font-semibold text-brand-900">{formatPrice(product.priceUSD)}</p>
+        {typeof priceAmount === "number" ? (
+          <p className="font-semibold text-brand-900">{formatPrice(priceAmount, priceCurrency)}</p>
         ) : null}
         {href ? (
           <Button variant="ghost" size="sm" className="text-xs" asChild>

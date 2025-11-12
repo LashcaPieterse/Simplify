@@ -136,6 +136,11 @@ const planDetailsBase: PlanDetail[] = [
     title: "Nama",
     slug: "nama",
     priceUSD: 18,
+    price: {
+      amount: 18,
+      currency: "USD",
+      source: "sanity"
+    },
     dataGB: 15,
     validityDays: 14,
     hotspot: true,
@@ -162,6 +167,11 @@ const planDetailsBase: PlanDetail[] = [
     title: "Cape Explorer",
     slug: "cape-explorer",
     priceUSD: 24,
+    price: {
+      amount: 24,
+      currency: "USD",
+      source: "sanity"
+    },
     dataGB: 20,
     validityDays: 21,
     hotspot: true,
@@ -187,6 +197,11 @@ const planDetailsBase: PlanDetail[] = [
     title: "Maasai",
     slug: "maasai",
     priceUSD: 16,
+    price: {
+      amount: 16,
+      currency: "USD",
+      source: "sanity"
+    },
     dataGB: 10,
     validityDays: 21,
     hotspot: false,
@@ -211,13 +226,19 @@ const toPlanSummary = (plan: PlanDetail): PlanSummary => ({
   title: plan.title,
   slug: plan.slug,
   priceUSD: plan.priceUSD,
+  price: plan.price ?? {
+    amount: plan.priceUSD,
+    currency: "USD",
+    source: "sanity"
+  },
   dataGB: plan.dataGB,
   validityDays: plan.validityDays,
   hotspot: plan.hotspot,
   fiveG: plan.fiveG,
   label: plan.label,
   shortBlurb: plan.shortBlurb,
-  provider: plan.provider
+  provider: plan.provider,
+  package: plan.package ?? null
 });
 
 const planSummaries = planDetailsBase.map(toPlanSummary);
@@ -266,6 +287,11 @@ export const fallbackEsimProducts: EsimProductDetail[] = [
     displayName: "Namibia Explorer eSIM",
     slug: "namibia-explorer-esim",
     priceUSD: 18,
+    price: {
+      amount: 18,
+      currency: "USD",
+      source: "sanity"
+    },
     coverImage: { url: "https://images.unsplash.com/photo-1523419409543-0c1df022bdd1" },
     shortDescription: "Instant QR activation with top-tier coverage across Etosha and Windhoek.",
     longDescription: [
@@ -276,6 +302,16 @@ export const fallbackEsimProducts: EsimProductDetail[] = [
     plan: planSummaryBySlug["nama"],
     country: countrySummaries.namibia,
     providerBadge: "TN Mobile partner",
+    provider: {
+      title: planSummaryBySlug["nama"].provider?.title,
+      slug: planSummaryBySlug["nama"].provider?.slug,
+      badge: "TN Mobile partner"
+    },
+    slugs: {
+      product: "namibia-explorer-esim",
+      plan: "nama",
+      country: "namibia"
+    },
     status: "active",
     keywords: ["namibia", "safari", "tn mobile", "lte"]
   },
@@ -284,6 +320,11 @@ export const fallbackEsimProducts: EsimProductDetail[] = [
     displayName: "Cape Town Digital Nomad eSIM",
     slug: "cape-town-digital-nomad-esim",
     priceUSD: 26,
+    price: {
+      amount: 26,
+      currency: "USD",
+      source: "sanity"
+    },
     coverImage: { url: "https://images.unsplash.com/photo-1544986581-efac024faf62" },
     shortDescription: "5G-ready data with lounge Wi-Fi vouchers for city hopping between Cape Town and Joburg.",
     longDescription: [
@@ -294,6 +335,16 @@ export const fallbackEsimProducts: EsimProductDetail[] = [
     plan: planSummaryBySlug["cape-explorer"],
     country: countrySummaries["south-africa"],
     providerBadge: "VodaConnect 5G",
+    provider: {
+      title: planSummaryBySlug["cape-explorer"].provider?.title,
+      slug: planSummaryBySlug["cape-explorer"].provider?.slug,
+      badge: "VodaConnect 5G"
+    },
+    slugs: {
+      product: "cape-town-digital-nomad-esim",
+      plan: "cape-explorer",
+      country: "south-africa"
+    },
     status: "active",
     keywords: ["south africa", "digital nomad", "5g", "vodaconnect"]
   },
@@ -302,6 +353,11 @@ export const fallbackEsimProducts: EsimProductDetail[] = [
     displayName: "Maasai Safari Pro eSIM",
     slug: "maasai-safari-pro-esim",
     priceUSD: 19,
+    price: {
+      amount: 19,
+      currency: "USD",
+      source: "sanity"
+    },
     coverImage: { url: "https://images.unsplash.com/photo-1523800503107-5bc3ba2a6f81" },
     shortDescription: "Unlimited messaging and weather alerts tailored to the Maasai Mara migration season.",
     longDescription: [
@@ -312,6 +368,16 @@ export const fallbackEsimProducts: EsimProductDetail[] = [
     plan: planSummaryBySlug["maasai"],
     country: countrySummaries.kenya,
     providerBadge: "SafariNet verified",
+    provider: {
+      title: planSummaryBySlug["maasai"].provider?.title,
+      slug: planSummaryBySlug["maasai"].provider?.slug,
+      badge: "SafariNet verified"
+    },
+    slugs: {
+      product: "maasai-safari-pro-esim",
+      plan: "maasai",
+      country: "kenya"
+    },
     status: "comingSoon",
     keywords: ["kenya", "maasai", "messaging", "safari"]
   }
@@ -322,13 +388,29 @@ const toEsimProductSummary = (product: EsimProductDetail): EsimProductSummary =>
   displayName: product.displayName,
   slug: product.slug,
   priceUSD: product.priceUSD,
+  price: product.price ?? {
+    amount: product.priceUSD,
+    currency: "USD",
+    source: "sanity"
+  },
   coverImage: product.coverImage,
   shortDescription: product.shortDescription,
   providerBadge: product.providerBadge,
+  provider: product.provider ?? {
+    title: product.plan?.provider?.title,
+    slug: product.plan?.provider?.slug,
+    badge: product.providerBadge
+  },
   status: product.status,
   plan: product.plan,
   country: product.country,
-  keywords: product.keywords
+  keywords: product.keywords,
+  slugs: product.slugs ?? {
+    product: product.slug,
+    plan: product.plan?.slug,
+    country: product.country?.slug
+  },
+  package: product.package ?? null
 });
 
 export const fallbackEsimProductSummaries: EsimProductSummary[] = fallbackEsimProducts.map(toEsimProductSummary);
