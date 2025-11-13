@@ -1,0 +1,49 @@
+# Prometheus alerting rules for Airalo integration
+# Load this file into your Alertmanager/Prometheus stack.
+
+groups:
+  - name: airalo
+    rules:
+      - alert: AiraloOrderErrorSpike
+        expr: sum by(reason) (increase(airalo_order_requests_total{result="error"}[5m])) > 5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate when creating Airalo orders"
+          description: |
+            More than five order creation failures were observed in the last five minutes.
+            Inspect structured logs (event=airalo.order.create.failed) for the failing Airalo request IDs.
+
+      - alert: AiraloWebhookFailure
+        expr: increase(airalo_webhook_events_total{result="error"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: high
+        annotations:
+          summary: "Airalo webhook failures detected"
+          description: |
+            The webhook handler returned errors in the last five minutes.
+            Check the WebhookEvent table and logs for event details.
+
+      - alert: AiraloRateLimitBreaching
+        expr: increase(airalo_rate_limit_events_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limit responses observed"
+          description: |
+            Airalo responded with 429 or Prisma reported contention.
+            Consider backing off request volume or contacting Airalo support.
+
+      - alert: PublicApiFiveHundreds
+        expr: sum(increase(nextjs_api_requests_total{status=~"5.."}[5m])) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Repeated 5xx responses from Next.js API routes"
+          description: |
+            Investigate /api/orders and /api/airalo/webhooks endpoints for errors.
+            Refer to the Airalo runbook for mitigation guidance.
