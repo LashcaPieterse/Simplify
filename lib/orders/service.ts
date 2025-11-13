@@ -1,7 +1,11 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
-import { AiraloClient, AiraloError } from "../airalo/client";
+import {
+  AiraloClient,
+  AiraloError,
+  type Order as AiraloOrder,
+} from "../airalo/client";
 import prismaClient from "../db/client";
 
 const createOrderInputSchema = z.object({
@@ -55,6 +59,7 @@ export class OrderOutOfStockError extends OrderServiceError {
 export interface CreateOrderOptions {
   prisma?: PrismaClient;
   airaloClient?: AiraloClient;
+  metadata?: Record<string, unknown>;
 }
 
 const DEFAULT_QUANTITY = 1;
@@ -62,7 +67,7 @@ const MAX_QUANTITY = 10;
 
 let cachedAiraloClient: AiraloClient | null = null;
 
-function resolveAiraloClient(): AiraloClient {
+export function resolveAiraloClient(): AiraloClient {
   if (cachedAiraloClient) {
     return cachedAiraloClient;
   }
@@ -93,7 +98,7 @@ function normaliseQuantity(quantity?: number): number {
   return Math.min(Math.max(quantity, DEFAULT_QUANTITY), MAX_QUANTITY);
 }
 
-function createInstallationPayload(order: Awaited<ReturnType<AiraloClient["createOrder"]>>): string {
+function createInstallationPayload(order: AiraloOrder): string {
   const payload = {
     orderId: order.order_id,
     orderReference: order.order_reference ?? null,
@@ -104,6 +109,105 @@ function createInstallationPayload(order: Awaited<ReturnType<AiraloClient["creat
   };
 
   return JSON.stringify(payload);
+}
+
+const ORDER_DETAILS_INCLUDE = {
+  package: true,
+  profiles: {
+    include: {
+      usageSnapshots: {
+        orderBy: { recordedAt: "desc" },
+        take: 1,
+      },
+    },
+  },
+  installation: true,
+} satisfies Prisma.EsimOrderInclude;
+
+export type OrderWithDetails = Prisma.EsimOrderGetPayload<{
+  include: typeof ORDER_DETAILS_INCLUDE;
+}>;
+
+function buildOrderIdentifierWhere(identifier: string): Prisma.EsimOrderWhereInput {
+  return {
+    OR: [{ id: identifier }, { orderNumber: identifier }],
+  };
+}
+
+export async function getOrderWithDetails(
+  identifier: string,
+  options: { prisma?: PrismaClient } = {},
+): Promise<OrderWithDetails | null> {
+  const db = options.prisma ?? prismaClient;
+
+  return db.esimOrder.findFirst({
+    where: buildOrderIdentifierWhere(identifier),
+    include: ORDER_DETAILS_INCLUDE,
+  });
+}
+
+export async function ensureOrderInstallation(
+  identifier: string,
+  options: { prisma?: PrismaClient; airaloClient?: AiraloClient } = {},
+): Promise<OrderWithDetails | null> {
+  const db = options.prisma ?? prismaClient;
+  const existing = await getOrderWithDetails(identifier, { prisma: db });
+
+  if (!existing) {
+    return null;
+  }
+
+  const hasInstallation = Boolean(existing.installation?.payload);
+  const hasProfile = existing.profiles.length > 0;
+
+  if (hasInstallation && hasProfile) {
+    return existing;
+  }
+
+  if (!existing.orderNumber) {
+    return existing;
+  }
+
+  const airalo = options.airaloClient ?? resolveAiraloClient();
+  const airaloOrder = await airalo.getOrderById(existing.orderNumber);
+  const payload = createInstallationPayload(airaloOrder);
+
+  await db.$transaction(async (tx) => {
+    await tx.esimOrder.update({
+      where: { id: existing.id },
+      data: {
+        status: airaloOrder.status,
+      },
+    });
+
+    if (airaloOrder.iccid) {
+      await tx.esimProfile.upsert({
+        where: { iccid: airaloOrder.iccid },
+        create: {
+          iccid: airaloOrder.iccid,
+          status: airaloOrder.status,
+          activationCode: airaloOrder.activation_code ?? null,
+          orderId: existing.id,
+        },
+        update: {
+          status: airaloOrder.status,
+          activationCode: airaloOrder.activation_code ?? null,
+          orderId: existing.id,
+        },
+      });
+    }
+
+    await tx.esimInstallationPayload.upsert({
+      where: { orderId: existing.id },
+      update: { payload },
+      create: {
+        orderId: existing.id,
+        payload,
+      },
+    });
+  });
+
+  return getOrderWithDetails(identifier, { prisma: db });
 }
 
 function mapAiraloError(error: AiraloError): OrderServiceError {
@@ -156,6 +260,7 @@ export async function createOrder(
         packageId: pkg.id,
         packageExternalId: pkg.externalId,
         source: "simplify-web",
+        ...(options.metadata ?? {}),
       },
     })
     .catch((error: unknown) => {
