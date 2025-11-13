@@ -1,10 +1,17 @@
+import type { PrismaClient } from "@prisma/client";
+
 import type { AiraloClient, Package } from "../airalo/client";
+import prismaClient from "../db/client";
 import { resolveAiraloClient } from "./service";
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
+export type TopUpPackage = Package & {
+  localPackageId: string;
+};
+
 type CacheRecord = {
-  options: Package[];
+  options: TopUpPackage[];
   expiresAt: number;
 };
 
@@ -13,12 +20,13 @@ const topUpCache = new Map<string, CacheRecord>();
 export interface GetTopUpOptions {
   airaloClient?: AiraloClient;
   forceRefresh?: boolean;
+  prisma?: PrismaClient;
 }
 
 export async function getTopUpPackages(
   iccid: string,
   options: GetTopUpOptions = {},
-): Promise<Package[]> {
+): Promise<TopUpPackage[]> {
   if (!iccid) {
     return [];
   }
@@ -32,13 +40,45 @@ export async function getTopUpPackages(
 
   const airalo = options.airaloClient ?? resolveAiraloClient();
   const packages = await airalo.getSimPackages(iccid);
+  const db = options.prisma ?? prismaClient;
+
+  const localPackages = await db.airaloPackage.findMany({
+    where: {
+      externalId: {
+        in: packages.map((pkg) => pkg.id),
+      },
+    },
+    select: {
+      id: true,
+      externalId: true,
+    },
+  });
+
+  const localIdByExternalId = new Map(
+    localPackages.map((pkg) => [pkg.externalId, pkg.id] as const),
+  );
+
+  const availablePackages = packages
+    .map((pkg) => {
+      const localId = localIdByExternalId.get(pkg.id);
+
+      if (!localId) {
+        return null;
+      }
+
+      return {
+        ...pkg,
+        localPackageId: localId,
+      } satisfies TopUpPackage;
+    })
+    .filter((pkg): pkg is TopUpPackage => pkg !== null);
 
   topUpCache.set(iccid, {
-    options: packages,
+    options: availablePackages,
     expiresAt: now + FIFTEEN_MINUTES_MS,
   });
 
-  return packages;
+  return availablePackages;
 }
 
 export function clearTopUpCache(iccid?: string): void {
