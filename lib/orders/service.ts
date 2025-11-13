@@ -7,6 +7,8 @@ import {
   type Order as AiraloOrder,
 } from "../airalo/client";
 import prismaClient from "../db/client";
+import { logOrderError, logOrderInfo } from "../observability/logging";
+import { recordOrderMetrics, recordRateLimit } from "../observability/metrics";
 
 const createOrderInputSchema = z.object({
   packageId: z.string().min(1, "A package selection is required."),
@@ -230,13 +232,40 @@ function mapAiraloError(error: AiraloError): OrderServiceError {
   return new OrderServiceError(combinedMessage, status, error);
 }
 
+function extractAiraloRequestId(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) {
+    return null;
+  }
+
+  const candidate =
+    (body as { request_id?: unknown }).request_id ?? (body as { requestId?: unknown }).requestId;
+
+  if (typeof candidate === "string" && candidate.trim()) {
+    return candidate;
+  }
+
+  return null;
+}
+
 export async function createOrder(
   rawInput: unknown,
   options: CreateOrderOptions = {},
 ): Promise<CreateOrderResult> {
+  const startedAt = Date.now();
   const parsedInput = createOrderInputSchema.safeParse(rawInput);
 
   if (!parsedInput.success) {
+    logOrderError("order.validation.failed", {
+      issues: parsedInput.error.issues,
+    });
+
+    recordOrderMetrics({
+      result: "error",
+      reason: "validation_failed",
+      durationMs: Date.now() - startedAt,
+      airaloStatus: "validation",
+    });
+
     throw new OrderValidationError("Invalid order request.", parsedInput.error.issues);
   }
 
@@ -246,13 +275,27 @@ export async function createOrder(
   const pkg = await db.airaloPackage.findUnique({ where: { id: packageId } });
 
   if (!pkg) {
+    logOrderError("order.package.unavailable", {
+      packageId,
+    });
+
+    recordOrderMetrics({
+      result: "error",
+      reason: "validation_failed",
+      durationMs: Date.now() - startedAt,
+      airaloStatus: "validation",
+    });
+
     throw new OrderValidationError("Selected plan is no longer available.");
   }
 
   const normalisedQuantity = normaliseQuantity(quantity);
+  const airaloCallStartedAt = Date.now();
+  let airaloOrder: AiraloOrder;
+  let airaloLatencyMs = 0;
 
-  const airaloOrder = await airalo
-    .createOrder({
+  try {
+    airaloOrder = await airalo.createOrder({
       package_id: pkg.externalId,
       quantity: normalisedQuantity,
       customer_reference: `web-${Date.now()}`,
@@ -262,14 +305,66 @@ export async function createOrder(
         source: "simplify-web",
         ...(options.metadata ?? {}),
       },
-    })
-    .catch((error: unknown) => {
-      if (error instanceof AiraloError) {
-        throw mapAiraloError(error);
+    });
+  } catch (error: unknown) {
+    airaloLatencyMs = Date.now() - airaloCallStartedAt;
+
+    if (error instanceof AiraloError) {
+      const requestId = extractAiraloRequestId(error.details.body);
+      if (error.details.status === 429) {
+        recordRateLimit("orders");
       }
 
-      throw new OrderServiceError("Failed to create order with Airalo.", 500, error);
+      logOrderError("airalo.order.create.failed", {
+        packageId: pkg.id,
+        packageExternalId: pkg.externalId,
+        airaloStatus: error.details.status,
+        airaloRequestId: requestId,
+        latencyMs: airaloLatencyMs,
+        message: error.message,
+      });
+
+      const mapped = mapAiraloError(error);
+
+      recordOrderMetrics({
+        result: "error",
+        reason: error.details.status === 429 ? "rate_limited" : "airalo_error",
+        durationMs: Date.now() - startedAt,
+        airaloStatus: error.details.status,
+      });
+
+      throw mapped;
+    }
+
+    const mapped = new OrderServiceError("Failed to create order with Airalo.", 500, error);
+
+    logOrderError("airalo.order.create.failed", {
+      packageId: pkg.id,
+      packageExternalId: pkg.externalId,
+      latencyMs: airaloLatencyMs,
+      message: mapped.message,
     });
+
+    recordOrderMetrics({
+      result: "error",
+      reason: "unexpected",
+      durationMs: Date.now() - startedAt,
+      airaloStatus: "unknown",
+    });
+
+    throw mapped;
+  }
+
+  airaloLatencyMs = Date.now() - airaloCallStartedAt;
+
+  logOrderInfo("airalo.order.create.succeeded", {
+    packageId: pkg.id,
+    packageExternalId: pkg.externalId,
+    airaloOrderId: airaloOrder.order_id,
+    airaloRequestId: airaloOrder.order_reference ?? null,
+    airaloStatus: airaloOrder.status,
+    latencyMs: airaloLatencyMs,
+  });
 
   try {
     const result = await db.$transaction(async (tx) => {
@@ -303,11 +398,45 @@ export async function createOrder(
       return orderRecord;
     });
 
+    const totalDuration = Date.now() - startedAt;
+
+    logOrderInfo("order.create.completed", {
+      orderId: result.id,
+      orderNumber: result.orderNumber,
+      packageId: pkg.id,
+      airaloOrderId: airaloOrder.order_id,
+      airaloRequestId: airaloOrder.order_reference ?? null,
+      airaloStatus: airaloOrder.status,
+      airaloLatencyMs,
+      totalDurationMs: totalDuration,
+    });
+
+    recordOrderMetrics({
+      result: "success",
+      reason: "ok",
+      durationMs: totalDuration,
+      airaloStatus: airaloOrder.status,
+    });
+
     return {
       orderId: result.id,
       orderNumber: result.orderNumber,
     };
   } catch (error: unknown) {
+    logOrderError("order.persistence.failed", {
+      packageId: pkg.id,
+      airaloOrderId: airaloOrder.order_id,
+      airaloStatus: airaloOrder.status,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+
+    recordOrderMetrics({
+      result: "error",
+      reason: "persistence_failed",
+      durationMs: Date.now() - startedAt,
+      airaloStatus: airaloOrder.status,
+    });
+
     if (error instanceof OrderServiceError) {
       throw error;
     }
