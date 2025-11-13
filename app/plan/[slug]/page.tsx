@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckCircle2, Globe2, Router, SignalHigh } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { OrderButton } from "@/components/orders/OrderButton";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
 import { getPlanBySlug, getPlanSlugs, getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
@@ -68,9 +68,14 @@ export default async function PlanPage({ params }: PlanPageProps) {
                 plan.priceUSD
               )}
             </p>
-            <Button size="lg" className="shadow-subtle">
-              Get this plan
-            </Button>
+            <OrderButton
+              packageId={plan.package?.id}
+              label="Get this plan"
+              pendingLabel="Processing…"
+              size="lg"
+              fullWidth
+              className="w-full"
+            />
           </div>
         </div>
 
