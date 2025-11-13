@@ -32,6 +32,7 @@ model EsimOrder {
   packageId      String
   status         String
   customerEmail  String?
+  quantity       Int      @default(1)
   totalCents     Int?
   currency       String?
   createdAt      DateTime                 @default(now())
