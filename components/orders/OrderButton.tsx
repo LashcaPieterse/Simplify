@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ type OrderButtonProps = {
   variant?: ButtonVariant;
   size?: ButtonSize;
   disabled?: boolean;
-  successPath?: (orderId: string) => string;
+  successPath?: (orderId: string) => Route;
   onSuccess?: (orderId: string) => void;
   fullWidth?: boolean;
 };
@@ -92,7 +93,7 @@ export function OrderButton({
       } else if (successPath) {
         router.push(successPath(data.orderId));
       } else {
-        router.push(`/orders/${data.orderId}`);
+        router.push(`/orders/${data.orderId}` as Route);
       }
     } catch (caughtError) {
       console.error("Failed to submit order", caughtError);
