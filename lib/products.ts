@@ -24,24 +24,27 @@ export type EsimProductCardData = {
 };
 
 export const getEsimProductHref = (product: EsimProductSummary): LinkHref | undefined => {
-  if (product.plan?.slug) {
+  const planSlug = product.slugs?.plan ?? product.plan?.slug;
+  if (planSlug) {
     return {
       pathname: "/plan/[slug]",
-      query: { slug: product.plan.slug }
+      query: { slug: planSlug }
     } as const;
   }
 
-  if (product.slug) {
+  const productSlug = product.slugs?.product ?? product.slug;
+  if (productSlug) {
     return {
       pathname: "/product/[slug]",
-      query: { slug: product.slug }
+      query: { slug: productSlug }
     } as const;
   }
 
-  if (product.country?.slug) {
+  const countrySlug = product.slugs?.country ?? product.country?.slug;
+  if (countrySlug) {
     return {
       pathname: "/country/[slug]",
-      query: { slug: product.country.slug }
+      query: { slug: countrySlug }
     } as const;
   }
 
@@ -51,12 +54,16 @@ export const getEsimProductHref = (product: EsimProductSummary): LinkHref | unde
 export const mapProductToCardData = (product: EsimProductSummary): EsimProductCardData => {
   const href = getEsimProductHref(product);
   const imageUrl = product.coverImage ? urlForImage(product.coverImage)?.width(360).height(240).url() ?? null : null;
+  const priceAmount = product.price?.amount ?? product.priceUSD;
+  const priceCurrency = product.price?.currency ?? "USD";
+  const providerBadge = product.provider?.badge ?? product.providerBadge;
+  const providerName = product.provider?.title ?? product.plan?.provider?.title;
 
   return {
     id: product._id,
     title: product.displayName,
-    badge: product.providerBadge,
-    providerName: product.plan?.provider?.title,
+    badge: providerBadge,
+    providerName,
     description: product.shortDescription,
     href,
     image: {
@@ -64,8 +71,8 @@ export const mapProductToCardData = (product: EsimProductSummary): EsimProductCa
       alt: `${product.displayName} cover`
     },
     price: {
-      amount: product.priceUSD,
-      currency: "USD"
+      amount: priceAmount,
+      currency: priceCurrency
     }
   };
 };
