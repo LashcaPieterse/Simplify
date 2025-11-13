@@ -206,7 +206,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
                   action={purchaseAction}
                   className="flex h-full flex-col justify-between rounded-2xl border border-sand-200 p-4"
                 >
-                  <input type="hidden" name="packageId" value={String(pkg.id)} />
+                  <input type="hidden" name="packageId" value={pkg.localPackageId} />
                   <div className="space-y-1">
                     <p className="text-lg font-semibold text-brand-900">{pkg.name}</p>
                     <p className="text-sm text-sand-600">{pkg.destination_name ?? pkg.destination}</p>
