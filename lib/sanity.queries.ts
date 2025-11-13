@@ -1,5 +1,6 @@
 import { groq } from "next-sanity";
 import { getSanityClient, isSanityConfigured } from "./sanity.client";
+import { getCatalogProductSummaries } from "./catalog/query";
 
 export { prisma } from "./db/client";
 import {
@@ -147,6 +148,37 @@ export type CarrierSummary = {
   logo?: ImageLike;
 };
 
+export type MoneyValue = {
+  amount: number;
+  currency: string;
+  source: "airalo" | "sanity";
+  lastSyncedAt?: string | null;
+};
+
+export type ProviderInfo = {
+  title?: string;
+  slug?: string;
+  badge?: string;
+};
+
+export type ProductSlugSet = {
+  product?: string;
+  plan?: string;
+  country?: string;
+};
+
+export type CatalogPackageInfo = {
+  id: string;
+  externalId: string;
+  currency: string;
+  priceCents: number;
+  dataLimitMb?: number | null;
+  validityDays?: number | null;
+  region?: string | null;
+  lastSyncedAt?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
 export type PlanSummary = {
   _id: string;
   title: string;
@@ -159,6 +191,8 @@ export type PlanSummary = {
   label?: string;
   shortBlurb: string;
   provider?: CarrierSummary;
+  price?: MoneyValue | null;
+  package?: CatalogPackageInfo | null;
 };
 
 export type RegionBundle = {
@@ -191,6 +225,10 @@ export type EsimProductSummary = {
   plan?: PlanSummary;
   country?: CountrySummary;
   keywords?: string[];
+  price?: MoneyValue | null;
+  provider?: ProviderInfo | null;
+  slugs?: ProductSlugSet;
+  package?: CatalogPackageInfo | null;
 };
 
 export type EsimProductDetail = EsimProductSummary & {
@@ -556,6 +594,73 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
   }
 }
 
+async function enrichPlansWithCatalogPricing<T extends PlanSummary>(plans: T[]): Promise<T[]> {
+  if (!plans.length) {
+    return plans;
+  }
+
+  try {
+    const products = await getCatalogProductSummaries();
+    if (!products.length) {
+      return plans;
+    }
+
+    const byPlanSlug = new Map<string, EsimProductSummary>();
+
+    for (const product of products) {
+      const planSlug = product.slugs?.plan ?? product.plan?.slug;
+      if (!planSlug || byPlanSlug.has(planSlug)) {
+        continue;
+      }
+
+      byPlanSlug.set(planSlug, product);
+    }
+
+    return plans.map((plan) => {
+      const product = byPlanSlug.get(plan.slug);
+      if (!product) {
+        return plan;
+      }
+
+      const productPrice: MoneyValue | null = product.price ?? null;
+      const planPrice: MoneyValue | null = plan.price ?? null;
+
+      const resolvedPriceUSD =
+        productPrice && productPrice.currency === "USD"
+          ? productPrice.amount
+          : product.priceUSD ?? plan.priceUSD;
+
+      const fallbackPrice: MoneyValue = {
+        amount: resolvedPriceUSD,
+        currency: (productPrice ?? planPrice)?.currency ?? "USD",
+        source: (productPrice ?? planPrice)?.source ?? "sanity",
+        lastSyncedAt: (productPrice ?? planPrice)?.lastSyncedAt ?? null,
+      };
+
+      const resolvedPrice = productPrice ?? planPrice ?? fallbackPrice;
+
+      return {
+        ...plan,
+        priceUSD: resolvedPriceUSD ?? plan.priceUSD,
+        price: resolvedPrice,
+        package: product.package ?? plan.package ?? null,
+      };
+    });
+  } catch (error) {
+    console.error("Failed to merge catalog pricing with Sanity plans", error);
+    return plans;
+  }
+}
+
+async function enrichPlanWithCatalogPricing<T extends PlanSummary>(plan: T | null): Promise<T | null> {
+  if (!plan) {
+    return plan;
+  }
+
+  const [enriched] = await enrichPlansWithCatalogPricing([plan]);
+  return enriched ?? plan;
+}
+
 export async function getCountryBySlug(slug: string): Promise<CountryDetail | null> {
   if (!isSanityConfigured) {
     const fallback = fallbackCountryDetails.find((country) => country.slug === slug);
@@ -565,7 +670,12 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
   try {
     const client = getSanityClient();
     const country = await client.fetch<CountryDetail | null>(countryBySlugQuery, { slug });
-    return country ?? null;
+    if (!country) {
+      return null;
+    }
+
+    const enrichedPlan = await enrichPlanWithCatalogPricing(country.plan ?? null);
+    return enrichedPlan ? { ...country, plan: enrichedPlan } : country;
   } catch (error) {
     console.error(`Failed to fetch country '${slug}' from Sanity`, error);
     const fallback = fallbackCountryDetails.find((country) => country.slug === slug);
@@ -581,7 +691,8 @@ export async function getPlansForCountry(slug: string): Promise<PlanDetail[]> {
   try {
     const client = getSanityClient();
     const plans = await client.fetch<PlanDetail[]>(plansForCountryQuery, { slug });
-    return plans ?? [];
+    const enriched = await enrichPlansWithCatalogPricing(plans ?? []);
+    return enriched ?? [];
   } catch (error) {
     console.error(`Failed to fetch plans for country '${slug}' from Sanity`, error);
     return clone(getFallbackCountryPlans(slug));
@@ -597,7 +708,12 @@ export async function getPlanBySlug(slug: string): Promise<PlanDetail | null> {
   try {
     const client = getSanityClient();
     const plan = await client.fetch<PlanDetail | null>(planBySlugQuery, { slug });
-    return plan ?? null;
+    if (!plan) {
+      return null;
+    }
+
+    const [enriched] = await enrichPlansWithCatalogPricing([plan]);
+    return enriched ?? plan;
   } catch (error) {
     console.error(`Failed to fetch plan '${slug}' from Sanity`, error);
     const fallback = getFallbackPlanBySlug(slug);
@@ -626,9 +742,8 @@ export async function getEsimProducts(): Promise<EsimProductSummary[]> {
   }
 
   try {
-    const client = getSanityClient();
-    const products = await client.fetch<EsimProductSummary[]>(esimProductsQuery);
-    return products ?? [];
+    const products = await getCatalogProductSummaries();
+    return products;
   } catch (error) {
     console.error("Failed to fetch eSIM products from Sanity", error);
     return clone(fallbackEsimProductSummaries);
@@ -654,7 +769,9 @@ export async function getEsimProductBySlug(slug: string): Promise<EsimProductDet
 
 export async function getEsimProductSlugs(): Promise<string[]> {
   if (!isSanityConfigured) {
-    return fallbackEsimProductSummaries.map((product) => product.slug);
+    return fallbackEsimProductSummaries
+      .map((product) => product.slugs?.product ?? product.slug)
+      .filter((slug): slug is string => Boolean(slug));
   }
 
   try {
@@ -663,7 +780,9 @@ export async function getEsimProductSlugs(): Promise<string[]> {
     return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
   } catch (error) {
     console.error("Failed to fetch eSIM product slugs from Sanity", error);
-    return fallbackEsimProductSummaries.map((product) => product.slug);
+    return fallbackEsimProductSummaries
+      .map((product) => product.slugs?.product ?? product.slug)
+      .filter((slug): slug is string => Boolean(slug));
   }
 }
 
