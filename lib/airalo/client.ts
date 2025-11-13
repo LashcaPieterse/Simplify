@@ -148,6 +148,22 @@ export class AiraloClient {
     return response.data;
   }
 
+  async getOrderResponseById(orderId: string): Promise<OrderResponse> {
+    if (!orderId) {
+      throw new Error("An Airalo order ID is required to fetch order details.");
+    }
+
+    return this.request({
+      path: `/orders/${encodeURIComponent(orderId)}`,
+      schema: OrderResponseSchema,
+    });
+  }
+
+  async getOrderById(orderId: string): Promise<Order> {
+    const response = await this.getOrderResponseById(orderId);
+    return response.data;
+  }
+
   async createOrderResponse(payload: CreateOrderPayload): Promise<OrderResponse> {
     return this.request({
       path: "/orders",
@@ -187,6 +203,38 @@ export class AiraloClient {
 
   async getUsage(options: GetUsageOptions): Promise<Usage> {
     const response = await this.getUsageResponse(options);
+    return response.data;
+  }
+
+  async getSimUsageResponse(iccid: string): Promise<UsageResponse> {
+    if (!iccid) {
+      throw new Error("An ICCID is required to request SIM usage information.");
+    }
+
+    return this.request({
+      path: `/sims/${encodeURIComponent(iccid)}/usage`,
+      schema: UsageResponseSchema,
+    });
+  }
+
+  async getSimUsage(iccid: string): Promise<Usage> {
+    const response = await this.getSimUsageResponse(iccid);
+    return response.data;
+  }
+
+  async getSimPackagesResponse(iccid: string): Promise<PackagesResponse> {
+    if (!iccid) {
+      throw new Error("An ICCID is required to request SIM packages.");
+    }
+
+    return this.request({
+      path: `/sims/${encodeURIComponent(iccid)}/packages`,
+      schema: PackagesResponseSchema,
+    });
+  }
+
+  async getSimPackages(iccid: string): Promise<Package[]> {
+    const response = await this.getSimPackagesResponse(iccid);
     return response.data;
   }
 
