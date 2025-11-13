@@ -622,18 +622,21 @@ async function enrichPlansWithCatalogPricing<T extends PlanSummary>(plans: T[]):
         return plan;
       }
 
+      const productPrice = (product.price ?? null) as MoneyValue | null;
+      const planPrice = (plan.price ?? null) as MoneyValue | null;
+
       const resolvedPriceUSD =
-        product.price && product.price.currency === "USD"
-          ? product.price.amount
+        productPrice && productPrice.currency === "USD"
+          ? productPrice.amount
           : product.priceUSD ?? plan.priceUSD;
 
       const resolvedPrice =
-        product.price ??
-        plan.price ?? {
+        productPrice ??
+        planPrice ?? {
           amount: resolvedPriceUSD,
-          currency: product.price?.currency ?? plan.price?.currency ?? "USD",
-          source: product.price?.source ?? plan.price?.source ?? "sanity",
-          lastSyncedAt: product.price?.lastSyncedAt ?? plan.price?.lastSyncedAt,
+          currency: productPrice?.currency ?? planPrice?.currency ?? "USD",
+          source: productPrice?.source ?? planPrice?.source ?? "sanity",
+          lastSyncedAt: productPrice?.lastSyncedAt ?? planPrice?.lastSyncedAt,
         };
 
       return {
