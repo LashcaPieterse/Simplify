@@ -171,11 +171,11 @@ function buildPackageMaps(packages: AiraloPackage[]): PackageMaps {
       destinationKeys.add(region);
     }
 
-    for (const key of destinationKeys) {
+    destinationKeys.forEach((key) => {
       if (key && !byDestination.has(key)) {
         byDestination.set(key, record);
       }
-    }
+    });
   }
 
   return { bySku, byDestination };
