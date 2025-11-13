@@ -374,7 +374,8 @@ export async function createOrder(
           packageId: pkg.id,
           status: airaloOrder.status,
           customerEmail: customerEmail ?? null,
-          totalCents: pkg.priceCents,
+          quantity: normalisedQuantity,
+          totalCents: pkg.priceCents * normalisedQuantity,
           currency: pkg.currency,
           profiles: airaloOrder.iccid
             ? {
