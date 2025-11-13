@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/db/client";
 import { logOrderError, logOrderInfo } from "@/lib/observability/logging";
 import { recordRateLimit, recordWebhookMetrics } from "@/lib/observability/metrics";
@@ -178,14 +179,26 @@ export async function POST(request: Request) {
         include: { profiles: true },
       });
 
-      const eventRecord = await tx.webhookEvent.create({
-        data: {
-          eventId,
-          eventType: payload.event,
-          orderId: order?.id ?? null,
-          payload: rawBody,
-        },
-      });
+      const eventRecord = await tx.webhookEvent
+        .create({
+          data: {
+            eventId,
+            eventType: payload.event,
+            orderId: order?.id ?? null,
+            payload: rawBody,
+          },
+        })
+        .catch((error: unknown) => {
+          if (isWebhookDuplicateError(error)) {
+            return null;
+          }
+
+          throw error;
+        });
+
+      if (!eventRecord) {
+        return { status: "duplicate" as const };
+      }
 
       let profileId: string | null = null;
 
@@ -276,12 +289,24 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     const duration = Date.now() - processingStartedAt;
 
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      (error as { code?: unknown }).code === "P2034"
-    ) {
+    if (isWebhookDuplicateError(error)) {
+      logOrderInfo("webhook.event.duplicate", {
+        eventId,
+        eventType: payload.event,
+        orderId: payload.data.order_id,
+      });
+
+      recordWebhookMetrics({
+        eventType: payload.event,
+        result: "duplicate",
+        durationMs: duration,
+        reason: "already_processed",
+      });
+
+      return NextResponse.json({ message: "Event already processed." });
+    }
+
+    if (isPrismaRetryableTransactionError(error)) {
       // Prisma transaction aborted due to a retryable failure.
       recordRateLimit("webhooks");
     }
@@ -302,4 +327,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ message: "Failed to process webhook." }, { status: 500 });
   }
+}
+
+function isWebhookDuplicateError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+function isPrismaRetryableTransactionError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
 }
