@@ -1,8 +1,10 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { OrderButton } from "@/components/orders/OrderButton";
 import type { EsimProductSummary } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/components/utils";
 import { getEsimProductHref } from "@/lib/products";
 
@@ -23,7 +25,7 @@ const formatPrice = (amount?: number, currency = "USD") => {
   }
 };
 
-export function ProductCard({ product, className, ctaLabel = "View" }: {
+export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
   product: EsimProductSummary;
   className?: string;
   ctaLabel?: string;
@@ -60,19 +62,22 @@ export function ProductCard({ product, className, ctaLabel = "View" }: {
         {product.plan?.title ? <p className="font-medium text-brand-900">{product.plan.title}</p> : null}
         <p className="text-sm text-brand-600">{product.shortDescription}</p>
       </div>
-      <div className="flex flex-col items-end gap-3">
+      <div className="flex flex-col items-end gap-2 text-right">
         {typeof priceAmount === "number" ? (
           <p className="font-semibold text-brand-900">{formatPrice(priceAmount, priceCurrency)}</p>
         ) : null}
+        <OrderButton
+          packageId={product.package?.id}
+          label={ctaLabel}
+          pendingLabel="Processing…"
+          variant="ghost"
+          size="sm"
+        />
         {href ? (
-          <Button variant="ghost" size="sm" className="text-xs" asChild>
-            <Link href={href}>{ctaLabel}</Link>
-          </Button>
-        ) : (
-          <Button variant="ghost" size="sm" className="text-xs" disabled>
-            {ctaLabel}
-          </Button>
-        )}
+          <Link href={href} className="text-[0.65rem] font-semibold uppercase text-brand-500 hover:text-brand-700">
+            View details
+          </Link>
+        ) : null}
       </div>
     </article>
   );

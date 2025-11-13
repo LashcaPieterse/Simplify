@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Clock3, Gauge, Router, SignalHigh, Star, Wifi } from "lucide-react";
+import { OrderButton } from "@/components/orders/OrderButton";
 import { Button } from "@/components/ui/button";
 import {
   getCountryBySlug,
@@ -132,13 +133,20 @@ function PlanCard({ plan }: { plan: PlanDetail }) {
           {plan.fiveG ? "5G where available" : "4G/LTE coverage"}
         </li>
       </ul>
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-6 space-y-3">
         <p className="text-2xl font-semibold text-brand-900">
           {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
             plan.priceUSD
           )}
         </p>
-        <Button asChild>
+        <OrderButton
+          packageId={plan.package?.id}
+          label="Get this plan"
+          pendingLabel="Processing…"
+          size="sm"
+          fullWidth
+        />
+        <Button asChild variant="ghost" size="sm" className="text-xs font-semibold">
           <Link href={`/plan/${plan.slug}`}>View details</Link>
         </Button>
       </div>
