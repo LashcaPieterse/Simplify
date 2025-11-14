@@ -58,8 +58,10 @@ export class OrderOutOfStockError extends OrderServiceError {
   }
 }
 
+type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
+
 export interface CreateOrderOptions {
-  prisma?: PrismaClient;
+  prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
   metadata?: Record<string, unknown>;
 }
@@ -141,7 +143,7 @@ export async function getOrderWithDetails(
   identifier: string,
   options: { prisma?: PrismaClient } = {},
 ): Promise<OrderWithDetails | null> {
-  const db = options.prisma ?? prismaClient;
+  const db: PrismaDbClient = options.prisma ?? prismaClient;
 
   return db.esimOrder.findFirst({
     where: buildOrderIdentifierWhere(identifier),
