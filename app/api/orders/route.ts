@@ -7,11 +7,6 @@ import {
   createOrder,
 } from "@/lib/orders/service";
 
-const allowedOrigins = (process.env.ORDERS_ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
 function hasValidBearerToken(request: Request): boolean {
   const expected = process.env.ORDERS_API_SECRET;
   if (!expected) {
@@ -25,30 +20,6 @@ function hasValidBearerToken(request: Request): boolean {
 
   const token = header.slice("Bearer ".length).trim();
   return token === expected;
-}
-
-function isAllowedOrigin(request: Request): boolean {
-  if (hasValidBearerToken(request)) {
-    return true;
-  }
-
-  if (allowedOrigins.length === 0) {
-    const originHeader = request.headers.get("origin");
-    if (!originHeader) {
-      return false;
-    }
-
-    const requestUrl = new URL(request.url);
-    const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
-    return originHeader === expectedOrigin;
-  }
-
-  const origin = request.headers.get("origin");
-  if (!origin) {
-    return false;
-  }
-
-  return allowedOrigins.includes(origin);
 }
 
 async function parseBody(request: Request): Promise<unknown> {
@@ -87,8 +58,11 @@ function buildErrorResponse(error: unknown): NextResponse {
 }
 
 export async function POST(request: Request) {
-  if (!isAllowedOrigin(request)) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  if (!hasValidBearerToken(request)) {
+    return NextResponse.json(
+      { message: "Direct order creation is no longer available. Use the checkout flow." },
+      { status: 403 },
+    );
   }
 
   const body = await parseBody(request);

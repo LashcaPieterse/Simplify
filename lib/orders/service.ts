@@ -58,8 +58,14 @@ export class OrderOutOfStockError extends OrderServiceError {
   }
 }
 
+type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
+
+function isPrismaClient(client: PrismaDbClient): client is PrismaClient {
+  return typeof (client as PrismaClient).$transaction === "function";
+}
+
 export interface CreateOrderOptions {
-  prisma?: PrismaClient;
+  prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
   metadata?: Record<string, unknown>;
 }
@@ -124,6 +130,7 @@ const ORDER_DETAILS_INCLUDE = {
     },
   },
   installation: true,
+  payment: true,
 } satisfies Prisma.EsimOrderInclude;
 
 export type OrderWithDetails = Prisma.EsimOrderGetPayload<{
@@ -138,9 +145,9 @@ function buildOrderIdentifierWhere(identifier: string): Prisma.EsimOrderWhereInp
 
 export async function getOrderWithDetails(
   identifier: string,
-  options: { prisma?: PrismaClient } = {},
+  options: { prisma?: PrismaDbClient } = {},
 ): Promise<OrderWithDetails | null> {
-  const db = options.prisma ?? prismaClient;
+  const db: PrismaDbClient = options.prisma ?? prismaClient;
 
   return db.esimOrder.findFirst({
     where: buildOrderIdentifierWhere(identifier),
@@ -150,7 +157,7 @@ export async function getOrderWithDetails(
 
 export async function ensureOrderInstallation(
   identifier: string,
-  options: { prisma?: PrismaClient; airaloClient?: AiraloClient } = {},
+  options: { prisma?: PrismaDbClient; airaloClient?: AiraloClient } = {},
 ): Promise<OrderWithDetails | null> {
   const db = options.prisma ?? prismaClient;
   const existing = await getOrderWithDetails(identifier, { prisma: db });
@@ -174,7 +181,7 @@ export async function ensureOrderInstallation(
   const airaloOrder = await airalo.getOrderById(existing.orderNumber);
   const payload = createInstallationPayload(airaloOrder);
 
-  await db.$transaction(async (tx) => {
+  const performUpdate = async (tx: Prisma.TransactionClient) => {
     await tx.esimOrder.update({
       where: { id: existing.id },
       data: {
@@ -207,7 +214,15 @@ export async function ensureOrderInstallation(
         payload,
       },
     });
-  });
+  };
+
+  if (isPrismaClient(db)) {
+    await db.$transaction(async (tx) => {
+      await performUpdate(tx);
+    });
+  } else {
+    await performUpdate(db);
+  }
 
   return getOrderWithDetails(identifier, { prisma: db });
 }
@@ -367,7 +382,7 @@ export async function createOrder(
   });
 
   try {
-    const result = await db.$transaction(async (tx) => {
+    const createOrderRecords = async (tx: Prisma.TransactionClient) => {
       const orderRecord = await tx.esimOrder.create({
         data: {
           orderNumber: airaloOrder.order_id,
@@ -397,7 +412,11 @@ export async function createOrder(
       });
 
       return orderRecord;
-    });
+    };
+
+    const result = isPrismaClient(db)
+      ? await db.$transaction(async (tx) => createOrderRecords(tx))
+      : await createOrderRecords(db);
 
     const totalDuration = Date.now() - startedAt;
 
