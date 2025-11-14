@@ -322,17 +322,17 @@ export class AiraloClient {
   }
 
   private async requestAccessToken(): Promise<string> {
+    const formData = new FormData();
+    formData.set("client_id", this.clientId);
+    formData.set("client_secret", this.clientSecret);
+    formData.set("grant_type", "client_credentials");
+
     const response = await this.fetchFn(`${this.baseUrl}/token`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        grant_type: "client_credentials",
-      }),
+      body: formData,
     });
 
     if (!response.ok) {
