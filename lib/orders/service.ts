@@ -124,6 +124,7 @@ const ORDER_DETAILS_INCLUDE = {
     },
   },
   installation: true,
+  payment: true,
 } satisfies Prisma.EsimOrderInclude;
 
 export type OrderWithDetails = Prisma.EsimOrderGetPayload<{
