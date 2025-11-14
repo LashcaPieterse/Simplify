@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { CheckoutStatusPoller } from "@/components/checkout/CheckoutStatusPoller";
 import { PaymentStatusBanner } from "@/components/checkout/PaymentStatusBanner";
 
@@ -19,8 +17,10 @@ export default function CheckoutReturnPage({ params }: CheckoutReturnPageProps) 
       <PaymentStatusBanner status="pending" message="This usually takes a few seconds." />
       <CheckoutStatusPoller checkoutId={params.checkoutId} />
       <p className="text-xs text-slate-500">
-        Need help? <Link className="text-slate-900 underline" href="/contact">Contact support</Link> with your
-        payment reference.
+        Need help? <a className="text-slate-900 underline" href="mailto:support@simplify.africa">
+          Contact support
+        </a>{" "}
+        with your payment reference.
       </p>
     </div>
   );
