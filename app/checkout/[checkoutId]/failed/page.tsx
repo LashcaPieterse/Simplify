@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { PaymentErrorActions } from "@/components/checkout/PaymentErrorActions";
 import { PaymentStatusBanner } from "@/components/checkout/PaymentStatusBanner";
 
@@ -19,7 +17,9 @@ export default function CheckoutFailedPage({ params }: CheckoutFailedPageProps) 
       <PaymentStatusBanner status="failed" message="The payment provider marked this attempt as failed." />
       <PaymentErrorActions checkoutId={params.checkoutId} />
       <p className="text-xs text-slate-500">
-        If you believe this is an error, <Link className="text-slate-900 underline" href="/contact">contact support</Link>
+        If you believe this is an error, <a className="text-slate-900 underline" href="mailto:support@simplify.africa">
+          contact support
+        </a>{" "}
         with your checkout reference {params.checkoutId}.
       </p>
     </div>
