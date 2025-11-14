@@ -13,7 +13,7 @@ export const TokenResponseSchema = BaseResponseSchema.extend({
     .object({
       access_token: z.string(),
       expires_in: z.number().positive(),
-      token_type: z.string().optional(),
+      token_type: z.string(),
     })
     .passthrough(),
 });
