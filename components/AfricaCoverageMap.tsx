@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
+import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from "react-simple-maps";
 
 const WORLD_TOPOJSON = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
@@ -85,6 +85,11 @@ export function AfricaCoverageMap() {
 
   const projectionConfig = useMemo(() => ({ center: [20, 0], scale: 350 }), []);
 
+  const zoomableGroupProps = useMemo(
+    () => ({ center: [20, 0] as [number, number], zoom: 1, minZoom: 1, maxZoom: 8 }),
+    []
+  );
+
   return (
     <section className="mx-auto mb-24 mt-16 max-w-6xl px-6 lg:mt-24 lg:px-10">
       <div className="mb-10 max-w-2xl">
@@ -102,16 +107,10 @@ export function AfricaCoverageMap() {
             projectionConfig={projectionConfig}
             style={{ width: "100%", height: "100%" }}
           >
-            <Geographies geography={WORLD_TOPOJSON}>
-              {({ geographies }) =>
-                geographies
-                  .filter((geo) => {
-                    const bbox = (geo as { bbox?: [number, number, number, number] }).bbox;
-                    if (!bbox) return true;
-                    const [x0, y0, x1, y1] = bbox;
-                    return x0 < 60 && x1 > -25 && y0 < 40 && y1 > -40;
-                  })
-                  .map((geo) => (
+            <ZoomableGroup {...zoomableGroupProps}>
+              <Geographies geography={WORLD_TOPOJSON}>
+                {({ geographies }) =>
+                  geographies.map((geo) => (
                     <Geography
                       key={geo.rsmKey}
                       geography={geo}
@@ -124,40 +123,41 @@ export function AfricaCoverageMap() {
                       }}
                     />
                   ))
-              }
-            </Geographies>
+                }
+              </Geographies>
 
-            {COUNTRIES.map((country) => (
-              <Marker
-                key={country.id}
-                coordinates={country.coords}
-                onMouseEnter={() => setHoverId(country.id)}
-                onMouseLeave={() => setHoverId((id) => (id === country.id ? null : id))}
-                onClick={() => setSelected(country)}
-              >
-                <circle
-                  r={selected?.id === country.id ? 6.5 : 5}
-                  fill={selected?.id === country.id ? "#1f8789" : "#2dabac"}
-                  stroke="#153f41"
-                  strokeWidth={1}
-                />
-                {hoverId === country.id && (
-                  <g transform="translate(0,-18)">
-                    <rect x={-48} y={-24} rx={8} ry={8} width={96} height={28} fill="#153f41" opacity={0.95} />
-                    <text
-                      x={0}
-                      y={-6}
-                      textAnchor="middle"
-                      fontSize={11}
-                      fill="#f3fbfb"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {country.name}
-                    </text>
-                  </g>
-                )}
-              </Marker>
-            ))}
+              {COUNTRIES.map((country) => (
+                <Marker
+                  key={country.id}
+                  coordinates={country.coords}
+                  onMouseEnter={() => setHoverId(country.id)}
+                  onMouseLeave={() => setHoverId((id) => (id === country.id ? null : id))}
+                  onClick={() => setSelected(country)}
+                >
+                  <circle
+                    r={selected?.id === country.id ? 6.5 : 5}
+                    fill={selected?.id === country.id ? "#1f8789" : "#2dabac"}
+                    stroke="#153f41"
+                    strokeWidth={1}
+                  />
+                  {hoverId === country.id && (
+                    <g transform="translate(0,-18)">
+                      <rect x={-48} y={-24} rx={8} ry={8} width={96} height={28} fill="#153f41" opacity={0.95} />
+                      <text
+                        x={0}
+                        y={-6}
+                        textAnchor="middle"
+                        fontSize={11}
+                        fill="#f3fbfb"
+                        style={{ pointerEvents: "none" }}
+                      >
+                        {country.name}
+                      </text>
+                    </g>
+                  )}
+                </Marker>
+              ))}
+            </ZoomableGroup>
           </ComposableMap>
         </div>
 
