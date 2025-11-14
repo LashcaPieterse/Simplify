@@ -44,4 +44,23 @@ declare module "react-simple-maps" {
   }
 
   export const Marker: FC<MarkerProps>;
+
+  export interface ZoomPanPosition {
+    coordinates: [number, number];
+    zoom: number;
+  }
+
+  export interface ZoomableGroupProps extends SVGProps<SVGGElement> {
+    center?: [number, number];
+    zoom?: number;
+    minZoom?: number;
+    maxZoom?: number;
+    translateExtent?: [[number, number], [number, number]];
+    filterZoomEvent?: (event: WheelEvent) => boolean;
+    onMoveStart?: (position: ZoomPanPosition) => void;
+    onMove?: (position: ZoomPanPosition) => void;
+    onMoveEnd?: (position: ZoomPanPosition) => void;
+  }
+
+  export const ZoomableGroup: FC<ZoomableGroupProps>;
 }
