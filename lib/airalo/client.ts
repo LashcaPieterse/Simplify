@@ -64,12 +64,19 @@ export interface CreateOrderPayload {
 
 type QueryParamValue = string | number | boolean | null | undefined;
 
+export type PackageTypeFilter = "local" | "global";
+
+export interface GetPackagesFilters {
+  type?: PackageTypeFilter;
+  country?: string;
+}
+
 export interface GetPackagesOptions {
-  destination?: string;
-  region?: string;
-  search?: string;
+  filter?: GetPackagesFilters;
+  includeTopUp?: boolean;
   limit?: number;
-  [key: string]: QueryParamValue;
+  page?: number;
+  extraParams?: Record<string, QueryParamValue>;
 }
 
 export interface GetUsageOptions {
@@ -127,13 +134,29 @@ export class AiraloClient {
     options: GetPackagesOptions = {},
   ): Promise<PackagesResponse> {
     const searchParams = new URLSearchParams();
-    Object.entries(options).forEach(([key, value]) => {
-      if (value === undefined || value === null) {
-        return;
-      }
+    this.applyPackageFilters(searchParams, options.filter);
 
-      searchParams.set(key, String(value));
-    });
+    if (options.includeTopUp) {
+      searchParams.set("include", "topup");
+    }
+
+    if (options.limit !== undefined && options.limit !== null) {
+      searchParams.set("limit", String(options.limit));
+    }
+
+    if (options.page !== undefined && options.page !== null) {
+      searchParams.set("page", String(options.page));
+    }
+
+    if (options.extraParams) {
+      Object.entries(options.extraParams).forEach(([key, value]) => {
+        if (value === undefined || value === null) {
+          return;
+        }
+
+        searchParams.set(key, String(value));
+      });
+    }
 
     const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
 
@@ -141,6 +164,23 @@ export class AiraloClient {
       path,
       schema: PackagesResponseSchema,
     });
+  }
+
+  private applyPackageFilters(
+    searchParams: URLSearchParams,
+    filters: GetPackagesFilters | undefined,
+  ): void {
+    if (!filters) {
+      return;
+    }
+
+    if (filters.type) {
+      searchParams.set("filter[type]", filters.type);
+    }
+
+    if (filters.country) {
+      searchParams.set("filter[country]", filters.country);
+    }
   }
 
   async getPackages(options: GetPackagesOptions = {}): Promise<Package[]> {

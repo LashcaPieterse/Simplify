@@ -36,6 +36,120 @@ interface NormalizedAiraloPackage {
   metadata: Record<string, unknown> | null;
 }
 
+type MultiCurrencyPriceDetails =
+  Package["net_prices"] extends Record<string, infer T> ? T : never;
+
+interface ResolvedPriceDetails {
+  priceCents: number;
+  currency: string;
+}
+
+function coerceNumericValue(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return numeric;
+}
+
+function extractPriceFromDetails(
+  details: MultiCurrencyPriceDetails | undefined,
+): ResolvedPriceDetails | null {
+  if (!details || typeof details !== "object") {
+    return null;
+  }
+
+  const record = details as Record<string, unknown>;
+
+  const amount =
+    coerceNumericValue(record.amount) ??
+    coerceNumericValue(record.value) ??
+    coerceNumericValue(record.price);
+
+  if (amount === null) {
+    return null;
+  }
+
+  const currency = record.currency;
+
+  if (currency && typeof currency === "string") {
+    return {
+      priceCents: Math.round(amount * 100),
+      currency: currency.toUpperCase(),
+    };
+  }
+
+  return {
+    priceCents: Math.round(amount * 100),
+    currency: "",
+  };
+}
+
+function resolvePriceFromMap(
+  prices: Package["net_prices"],
+): ResolvedPriceDetails | null {
+  if (!prices) {
+    return null;
+  }
+
+  const normalizedEntries = Object.entries(prices).filter(
+    (entry): entry is [string, MultiCurrencyPriceDetails] =>
+      entry[1] !== undefined && entry[1] !== null,
+  );
+
+  if (normalizedEntries.length === 0) {
+    return null;
+  }
+
+  const usdEntry = normalizedEntries.find(
+    ([key]) => key.toUpperCase() === "USD",
+  );
+
+  const preferredEntry = usdEntry ?? normalizedEntries[0];
+
+  const resolved = extractPriceFromDetails(preferredEntry[1]);
+  if (!resolved) {
+    return null;
+  }
+
+  if (!resolved.currency) {
+    resolved.currency = preferredEntry[0].toUpperCase();
+  }
+
+  return resolved;
+}
+
+function resolvePackagePrice(pkg: Package): ResolvedPriceDetails {
+  if (pkg.price !== undefined && pkg.price !== null && pkg.currency) {
+    return {
+      priceCents: Math.round(pkg.price * 100),
+      currency: pkg.currency.toUpperCase(),
+    };
+  }
+
+  const multiCurrency =
+    resolvePriceFromMap(pkg.net_prices) ??
+    resolvePriceFromMap(pkg.recommended_retail_prices);
+
+  if (multiCurrency && multiCurrency.currency) {
+    return multiCurrency;
+  }
+
+  if (multiCurrency && !multiCurrency.currency) {
+    return {
+      priceCents: multiCurrency.priceCents,
+      currency: "USD",
+    };
+  }
+
+  throw new Error(`Unable to resolve price information for Airalo package ${pkg.id}`);
+}
+
 export interface SyncAiraloPackagesOptions {
   prisma?: PrismaClient;
   client?: AiraloClient;
@@ -94,6 +208,8 @@ function parseDataAmountToMb(
 }
 
 function normalizePackage(pkg: Package): NormalizedAiraloPackage {
+  const { priceCents, currency } = resolvePackagePrice(pkg);
+
   const metadata = {
     sku: pkg.sku ?? null,
     destination: pkg.destination,
@@ -109,8 +225,8 @@ function normalizePackage(pkg: Package): NormalizedAiraloPackage {
     region: pkg.region ?? null,
     dataLimitMb: parseDataAmountToMb(pkg.data_amount, pkg.is_unlimited ?? undefined),
     validityDays: pkg.validity ?? null,
-    priceCents: Math.round(pkg.price * 100),
-    currency: pkg.currency.toUpperCase(),
+    priceCents,
+    currency,
     metadata,
   };
 }
@@ -164,10 +280,30 @@ export async function syncAiraloPackages(
   const client = options.client ?? resolveAiraloClient();
   const now = options.now ?? new Date();
 
-  const packages = await client.getPackages(options.packagesOptions ?? {});
+  const packageRequestOptions: GetPackagesOptions = {
+    ...options.packagesOptions,
+  };
+
+  if (packageRequestOptions.limit === undefined) {
+    packageRequestOptions.limit = 1000;
+  }
+
+  const packages = await client.getPackages(packageRequestOptions);
   logger.info(`Fetched ${packages.length} packages from Airalo`);
 
-  const normalizedPackages = packages.map(normalizePackage);
+  const normalizedPackages: NormalizedAiraloPackage[] = [];
+
+  for (const pkg of packages) {
+    try {
+      normalizedPackages.push(normalizePackage(pkg));
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown error while normalizing Airalo package";
+      logger.warn(`Skipping Airalo package ${pkg.id}: ${message}`);
+    }
+  }
   const existingPackages = await db.airaloPackage.findMany({
     select: {
       externalId: true,
