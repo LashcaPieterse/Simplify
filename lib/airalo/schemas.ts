@@ -21,6 +21,19 @@ export const TokenResponseSchema = BaseResponseSchema.extend({
 export type TokenResponse = z.infer<typeof TokenResponseSchema>;
 export type TokenPayload = TokenResponse["data"];
 
+const MultiCurrencyPriceSchema = z
+  .object({
+    amount: z.coerce.number().optional(),
+    value: z.coerce.number().optional(),
+    price: z.coerce.number().optional(),
+    currency: z.string().optional(),
+  })
+  .passthrough();
+
+const MultiCurrencyPricesSchema = z
+  .record(MultiCurrencyPriceSchema)
+  .optional();
+
 export const PackageSchema = z
   .object({
     id: z.union([z.string(), z.number()]).transform(String),
@@ -29,11 +42,13 @@ export const PackageSchema = z
     destination: z.string(),
     destination_name: z.string().optional(),
     region: z.string().optional(),
-    currency: z.string(),
-    price: z.coerce.number(),
+    currency: z.string().optional(),
+    price: z.coerce.number().optional(),
     validity: z.number().int().positive().optional(),
     data_amount: z.string().optional(),
     is_unlimited: z.boolean().optional(),
+    net_prices: MultiCurrencyPricesSchema,
+    recommended_retail_prices: MultiCurrencyPricesSchema,
   })
   .passthrough();
 
