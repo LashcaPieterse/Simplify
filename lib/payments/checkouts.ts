@@ -316,14 +316,32 @@ export async function verifyCheckoutPayment(
   });
 
   const normalizedStatus = verification.status?.toLowerCase();
+  let orderId = checkout.orderId ?? null;
 
   if (normalizedStatus === STATUS_APPROVED) {
     await markCheckoutStatus(checkout.id, STATUS_PAID, { prisma: db });
+
+    if (!orderId) {
+      try {
+        const order = await finaliseOrderFromCheckout(checkout.id, {
+          prisma: db,
+          forceStatus: normalizedStatus,
+        });
+        orderId = order.orderId;
+      } catch (error) {
+        logOrderError("payments.checkout.finalize_failed", {
+          checkoutId: checkout.id,
+          paymentId: payment.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    }
   } else if (normalizedStatus === STATUS_FAILED) {
     await markCheckoutStatus(checkout.id, STATUS_FAILED, { prisma: db });
   }
 
-  return { paymentStatus: updated.status, orderId: checkout.orderId };
+  return { paymentStatus: updated.status, orderId };
 }
 
 export async function finaliseOrderFromCheckout(

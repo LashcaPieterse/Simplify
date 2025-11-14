@@ -25,7 +25,7 @@ export async function GET(request: Request, context: { params: Params }) {
     let paymentStatus = summary.paymentStatus;
     let orderId = summary.orderId;
 
-    if (!orderId && paymentStatus !== "approved") {
+    if (!orderId) {
       const verification = await verifyCheckoutPayment(checkoutId);
       paymentStatus = verification.paymentStatus;
       orderId = verification.orderId ?? null;
