@@ -20,6 +20,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# prisma local db
+/prisma/dev.db
+/prisma/dev.db-journal
+/prisma/prisma/
+
 # local env files
 .env*
 !.env.example

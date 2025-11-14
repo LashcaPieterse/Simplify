@@ -23,6 +23,7 @@ model AiraloPackage {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   esimOrders   EsimOrder[]
+  checkoutSessions CheckoutSession[]
 }
 
 model EsimOrder {
@@ -41,6 +42,8 @@ model EsimOrder {
   usageSnapshots UsageSnapshot[]
   webhookEvents  WebhookEvent[]
   installation   EsimInstallationPayload?
+  payment        PaymentTransaction?      @relation(fields: [paymentTransactionId], references: [id])
+  paymentTransactionId String?
 }
 
 model EsimProfile {
@@ -91,4 +94,51 @@ model EsimInstallationPayload {
   payload   String
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+}
+
+model CheckoutSession {
+  id                String               @id @default(cuid())
+  package           AiraloPackage        @relation(fields: [packageId], references: [id])
+  packageId         String
+  customerEmail     String?
+  quantity          Int                  @default(1)
+  totalCents        Int
+  currency          String
+  status            String               @default("pending")
+  intent            String               @default("purchase")
+  topUpForOrderId   String?
+  topUpForIccid     String?
+  orderId           String?
+  metadata          String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  payments          PaymentTransaction[]
+}
+
+model PaymentTransaction {
+  id                String               @id @default(cuid())
+  provider          String
+  providerReference String?
+  transactionToken  String?
+  redirectUrl       String?
+  status            String               @default("pending")
+  amountCents       Int
+  currency          String
+  statusHistory     String?
+  metadata          String?
+  checkout          CheckoutSession?     @relation(fields: [checkoutId], references: [id])
+  checkoutId        String?
+  orders            EsimOrder[]
+  webhookEvents     PaymentTransactionEvent[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+}
+
+model PaymentTransactionEvent {
+  id                 String             @id @default(cuid())
+  transaction        PaymentTransaction @relation(fields: [transactionId], references: [id])
+  transactionId      String
+  eventType          String
+  payload            String
+  receivedAt         DateTime           @default(now())
 }

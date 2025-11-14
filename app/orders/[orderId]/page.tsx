@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import type { Metadata } from "next";
 
-import { createOrder, ensureOrderInstallation, OrderServiceError } from "@/lib/orders/service";
+import { ensureOrderInstallation, OrderServiceError } from "@/lib/orders/service";
 import { pollUsageForProfile } from "@/lib/orders/usage";
 import { getTopUpPackages } from "@/lib/orders/topups";
+import { createCheckout } from "@/lib/payments/checkouts";
+import { redirect } from "next/navigation";
 
 type OrderPageParams = {
   params: {
@@ -53,22 +54,23 @@ async function purchaseTopUp(
     throw new OrderServiceError("A package selection is required to purchase a top-up.", 422);
   }
 
-  await createOrder(
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
+  const checkout = await createCheckout(
     {
       packageId,
       quantity: 1,
       customerEmail: customerEmail ?? undefined,
+      intent: "top-up",
+      topUpForOrderId: orderIdentifier,
+      topUpForIccid: profileIccid ?? undefined,
     },
-    {
-      metadata: {
-        topUpForOrderId: orderIdentifier,
-        topUpForIccid: profileIccid ?? undefined,
-        intent: "top-up",
-      },
-    },
+    { baseUrl },
   );
 
-  revalidatePath(`/orders/${orderIdentifier}`);
+  redirect(`/checkout/${checkout.checkoutId}`);
 }
 
 function parseInstallationPayload(payload: string | null): Record<string, unknown> | null {
@@ -124,6 +126,34 @@ export default async function OrderPage({ params }: OrderPageParams) {
           {order.customerEmail ? <p>Customer email: {order.customerEmail}</p> : null}
         </div>
       </header>
+
+      {order.payment ? (
+        <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-200">
+          <h2 className="text-xl font-semibold text-brand-900">Payment receipt</h2>
+          <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-sm text-sand-500">Provider</dt>
+              <dd className="text-base font-semibold text-brand-900">{order.payment.provider.toUpperCase()}</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-sand-500">Status</dt>
+              <dd className="text-base font-semibold text-brand-900">{order.payment.status}</dd>
+            </div>
+            {order.payment.providerReference ? (
+              <div className="sm:col-span-2">
+                <dt className="text-sm text-sand-500">Transaction reference</dt>
+                <dd className="text-base font-medium text-brand-900">{order.payment.providerReference}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="text-sm text-sand-500">Amount captured</dt>
+              <dd className="text-base font-semibold text-brand-900">
+                {formatCurrency(order.payment.amountCents, order.payment.currency)}
+              </dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
 
       <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-200">
         <h2 className="text-xl font-semibold text-brand-900">eSIM profile</h2>

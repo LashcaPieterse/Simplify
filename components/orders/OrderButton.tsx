@@ -20,14 +20,14 @@ type OrderButtonProps = {
   variant?: ButtonVariant;
   size?: ButtonSize;
   disabled?: boolean;
-  successPath?: (orderId: string) => Route;
-  onSuccess?: (orderId: string) => void;
+  successPath?: (checkoutId: string) => Route;
+  onSuccess?: (checkoutId: string) => void;
   fullWidth?: boolean;
 };
 
-type OrderResponseBody = {
-  orderId?: string;
-  orderNumber?: string;
+type CheckoutResponseBody = {
+  checkoutId?: string;
+  paymentUrl?: string;
   message?: string;
   issues?: { message?: string; path?: (string | number)[] }[];
 };
@@ -59,7 +59,7 @@ export function OrderButton({
     setError(null);
 
     try {
-      const response = await fetch("/api/orders", {
+      const response = await fetch("/api/checkouts", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -67,7 +67,7 @@ export function OrderButton({
         body: JSON.stringify({ packageId }),
       });
 
-      const data = (await response.json().catch(() => ({}))) as OrderResponseBody;
+      const data = (await response.json().catch(() => ({}))) as CheckoutResponseBody;
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -83,17 +83,17 @@ export function OrderButton({
         return;
       }
 
-      if (!data?.orderId) {
+      if (!data?.checkoutId) {
         setError(DEFAULT_ERROR_MESSAGE);
         return;
       }
 
       if (onSuccess) {
-        onSuccess(data.orderId);
+        onSuccess(data.checkoutId);
       } else if (successPath) {
-        router.push(successPath(data.orderId));
+        router.push(successPath(data.checkoutId));
       } else {
-        router.push(`/orders/${data.orderId}` as Route);
+        router.push(`/checkout/${data.checkoutId}` as Route);
       }
     } catch (caughtError) {
       console.error("Failed to submit order", caughtError);
