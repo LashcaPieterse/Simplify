@@ -79,6 +79,16 @@ export interface GetPackagesOptions {
   extraParams?: Record<string, QueryParamValue>;
 }
 
+function normalizePackagesData(
+  data: PackagesResponse["data"],
+): Package[] {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return Object.values(data).flatMap((packages) => packages);
+}
+
 export interface GetUsageOptions {
   iccid?: string;
   orderId?: string;
@@ -185,7 +195,7 @@ export class AiraloClient {
 
   async getPackages(options: GetPackagesOptions = {}): Promise<Package[]> {
     const response = await this.getPackagesResponse(options);
-    return response.data;
+    return normalizePackagesData(response.data);
   }
 
   async getOrderResponseById(orderId: string): Promise<OrderResponse> {

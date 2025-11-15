@@ -54,8 +54,35 @@ export const PackageSchema = z
 
 export type Package = z.infer<typeof PackageSchema>;
 
+const PaginationLinksSchema = z
+  .object({
+    first: z.string().optional(),
+    last: z.string().optional(),
+    prev: z.string().nullable().optional(),
+    next: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const PaginationMetaSchema = z
+  .object({
+    message: z.string().optional(),
+    current_page: z.coerce.number(),
+    from: z.coerce.number().nullable().optional(),
+    last_page: z.coerce.number(),
+    path: z.string(),
+    per_page: z.coerce.number(),
+    to: z.coerce.number().nullable().optional(),
+    total: z.coerce.number(),
+  })
+  .passthrough();
+
+const PackagesArraySchema = z.array(PackageSchema);
+const PackagesIndexSchema = z.record(PackagesArraySchema);
+
 export const PackagesResponseSchema = BaseResponseSchema.extend({
-  data: z.array(PackageSchema),
+  data: z.union([PackagesArraySchema, PackagesIndexSchema]),
+  links: PaginationLinksSchema.optional(),
+  meta: PaginationMetaSchema.optional(),
 });
 
 export type PackagesResponse = z.infer<typeof PackagesResponseSchema>;
