@@ -4,6 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { AiraloClient, type GetPackagesOptions } from "../airalo/client";
 import type { Package } from "../airalo/schemas";
+import { resolvePackagePrice } from "../airalo/pricing";
 import prismaClient from "../db/client";
 
 interface SyncLogger {
@@ -94,6 +95,14 @@ function parseDataAmountToMb(
 }
 
 function normalizePackage(pkg: Package): NormalizedAiraloPackage {
+  const priceDetails = resolvePackagePrice(pkg);
+
+  if (!priceDetails) {
+    throw new Error(`Unable to resolve price information for Airalo package ${pkg.id}`);
+  }
+
+  const { priceCents, currency } = priceDetails;
+
   const metadata = {
     sku: pkg.sku ?? null,
     destination: pkg.destination,
@@ -109,8 +118,8 @@ function normalizePackage(pkg: Package): NormalizedAiraloPackage {
     region: pkg.region ?? null,
     dataLimitMb: parseDataAmountToMb(pkg.data_amount, pkg.is_unlimited ?? undefined),
     validityDays: pkg.validity ?? null,
-    priceCents: Math.round(pkg.price * 100),
-    currency: pkg.currency.toUpperCase(),
+    priceCents,
+    currency,
     metadata,
   };
 }
@@ -164,10 +173,30 @@ export async function syncAiraloPackages(
   const client = options.client ?? resolveAiraloClient();
   const now = options.now ?? new Date();
 
-  const packages = await client.getPackages(options.packagesOptions ?? {});
+  const packageRequestOptions: GetPackagesOptions = {
+    ...options.packagesOptions,
+  };
+
+  if (packageRequestOptions.limit === undefined) {
+    packageRequestOptions.limit = 1000;
+  }
+
+  const packages = await client.getPackages(packageRequestOptions);
   logger.info(`Fetched ${packages.length} packages from Airalo`);
 
-  const normalizedPackages = packages.map(normalizePackage);
+  const normalizedPackages: NormalizedAiraloPackage[] = [];
+
+  for (const pkg of packages) {
+    try {
+      normalizedPackages.push(normalizePackage(pkg));
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unknown error while normalizing Airalo package";
+      logger.warn(`Skipping Airalo package ${pkg.id}: ${message}`);
+    }
+  }
   const existingPackages = await db.airaloPackage.findMany({
     select: {
       externalId: true,
