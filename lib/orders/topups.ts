@@ -1,6 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 
-import type { AiraloClient, Package } from "../airalo/client";
+import type { AiraloClient } from "../airalo/client";
+import type { Package } from "../airalo/schemas";
+import { resolvePackagePrice } from "../airalo/pricing";
 import prismaClient from "../db/client";
 import { resolveAiraloClient } from "./service";
 
@@ -8,6 +10,8 @@ const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
 export type TopUpPackage = Package & {
   localPackageId: string;
+  price: number;
+  currency: string;
 };
 
 type CacheRecord = {
@@ -66,8 +70,16 @@ export async function getTopUpPackages(
         return null;
       }
 
+      const priceDetails = resolvePackagePrice(pkg);
+
+      if (!priceDetails) {
+        return null;
+      }
+
       return {
         ...pkg,
+        price: priceDetails.priceCents / 100,
+        currency: priceDetails.currency,
         localPackageId: localId,
       } satisfies TopUpPackage;
     })

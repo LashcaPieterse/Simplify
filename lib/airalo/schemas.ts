@@ -21,6 +21,19 @@ export const TokenResponseSchema = BaseResponseSchema.extend({
 export type TokenResponse = z.infer<typeof TokenResponseSchema>;
 export type TokenPayload = TokenResponse["data"];
 
+const MultiCurrencyPriceSchema = z
+  .object({
+    amount: z.coerce.number().optional(),
+    value: z.coerce.number().optional(),
+    price: z.coerce.number().optional(),
+    currency: z.string().optional(),
+  })
+  .passthrough();
+
+const MultiCurrencyPricesSchema = z
+  .record(MultiCurrencyPriceSchema)
+  .optional();
+
 export const PackageSchema = z
   .object({
     id: z.union([z.string(), z.number()]).transform(String),
@@ -29,18 +42,47 @@ export const PackageSchema = z
     destination: z.string(),
     destination_name: z.string().optional(),
     region: z.string().optional(),
-    currency: z.string(),
-    price: z.coerce.number(),
+    currency: z.string().optional(),
+    price: z.coerce.number().optional(),
     validity: z.number().int().positive().optional(),
     data_amount: z.string().optional(),
     is_unlimited: z.boolean().optional(),
+    net_prices: MultiCurrencyPricesSchema,
+    recommended_retail_prices: MultiCurrencyPricesSchema,
   })
   .passthrough();
 
 export type Package = z.infer<typeof PackageSchema>;
 
+const PaginationLinksSchema = z
+  .object({
+    first: z.string().optional(),
+    last: z.string().optional(),
+    prev: z.string().nullable().optional(),
+    next: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const PaginationMetaSchema = z
+  .object({
+    message: z.string().optional(),
+    current_page: z.coerce.number(),
+    from: z.coerce.number().nullable().optional(),
+    last_page: z.coerce.number(),
+    path: z.string(),
+    per_page: z.coerce.number(),
+    to: z.coerce.number().nullable().optional(),
+    total: z.coerce.number(),
+  })
+  .passthrough();
+
+const PackagesArraySchema = z.array(PackageSchema);
+const PackagesIndexSchema = z.record(PackagesArraySchema);
+
 export const PackagesResponseSchema = BaseResponseSchema.extend({
-  data: z.array(PackageSchema),
+  data: z.union([PackagesArraySchema, PackagesIndexSchema]),
+  links: PaginationLinksSchema.optional(),
+  meta: PaginationMetaSchema.optional(),
 });
 
 export type PackagesResponse = z.infer<typeof PackagesResponseSchema>;
