@@ -285,7 +285,7 @@ export class AiraloClient {
 
   async getSimPackages(iccid: string): Promise<Package[]> {
     const response = await this.getSimPackagesResponse(iccid);
-    return response.data;
+    return normalizePackagesData(response.data);
   }
 
   async clearCachedToken(): Promise<void> {
