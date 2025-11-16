@@ -35,6 +35,7 @@ let orderRequestDuration: Histogram<string>;
 let webhookCounter: Counter<string>;
 let webhookDuration: Histogram<string>;
 let rateLimitCounter: Counter<string>;
+let tokenRefreshCounter: Counter<string>;
 const orderOtelCounter = meter.createCounter("airalo.order.requests", {
   description: "Number of order creation attempts.",
 });
@@ -51,6 +52,9 @@ const webhookOtelDuration = meter.createHistogram("airalo.webhook.processing.dur
 });
 const rateLimitOtelCounter = meter.createCounter("airalo.rate_limit.events", {
   description: "Rate limit responses observed when communicating with Airalo.",
+});
+const tokenRefreshOtelCounter = meter.createCounter("airalo.token.refreshes", {
+  description: "Number of times the Airalo access token was refreshed.",
 });
 
 function ensureCounters(): void {
@@ -93,6 +97,13 @@ function ensureCounters(): void {
   rateLimitCounter = new Counter({
     name: "airalo_rate_limit_events_total",
     help: "Number of rate limit responses observed when interacting with Airalo.",
+    labelNames: ["source"],
+    registers: [register],
+  });
+
+  tokenRefreshCounter = new Counter({
+    name: "airalo_token_refresh_total",
+    help: "Number of times a new Airalo access token was requested.",
     labelNames: ["source"],
     registers: [register],
   });
@@ -171,6 +182,14 @@ export function recordRateLimit(source: RateLimitSource): void {
   ensureCounters();
   rateLimitCounter.labels(source).inc();
   rateLimitOtelCounter.add(1, { source });
+}
+
+type TokenRefreshSource = "airalo_client";
+
+export function recordTokenRefresh(source: TokenRefreshSource): void {
+  ensureCounters();
+  tokenRefreshCounter.labels(source).inc();
+  tokenRefreshOtelCounter.add(1, { source });
 }
 
 export function getPrometheusRegistry(): Registry {

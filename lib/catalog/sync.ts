@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 
 import { AiraloClient, type GetPackagesOptions } from "../airalo/client";
+import { resolveSharedTokenCache } from "../airalo/token-cache";
 import type { Package } from "../airalo/schemas";
 import { resolvePackagePrice } from "../airalo/pricing";
 import prismaClient from "../db/client";
@@ -217,6 +218,7 @@ function resolveAiraloClient(): AiraloClient {
   return new AiraloClient({
     clientId,
     clientSecret,
+    tokenCache: resolveSharedTokenCache(),
   });
 }
 
