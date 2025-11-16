@@ -56,11 +56,15 @@ function resolveEventId(headers: Headers, payload: WebhookPayload, rawBody: stri
     return headerId;
   }
 
-  if (payload.data.reference) {
-    return payload.data.reference;
-  }
+  const composite = [
+    payload.data.reference,
+    payload.event,
+    payload.data.order_id,
+    payload.timestamp,
+  ]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(":");
 
-  const composite = `${payload.event}:${payload.data.order_id}:${payload.timestamp ?? ""}`;
   if (composite.trim()) {
     return composite;
   }
