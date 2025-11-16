@@ -90,7 +90,7 @@ export async function createCheckout(
     where: { id: input.packageId },
   });
 
-  if (!airaloPackage) {
+  if (!airaloPackage || !airaloPackage.isActive) {
     throw new Error("Selected package is unavailable.");
   }
 
