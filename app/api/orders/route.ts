@@ -77,6 +77,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       orderId: result.orderId,
       orderNumber: result.orderNumber,
+      requestId: result.requestId,
     });
   } catch (error: unknown) {
     console.error("Failed to create order", error);

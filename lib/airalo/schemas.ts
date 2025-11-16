@@ -105,6 +105,23 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
 export type OrderResponse = z.infer<typeof OrderResponseSchema>;
 export type Order = OrderResponse["data"];
 
+export const SubmitOrderAsyncResponseSchema = BaseResponseSchema.extend({
+  data: z
+    .object({
+      request_id: z.string(),
+      accepted_at: z.string(),
+    })
+    .passthrough(),
+  meta: z
+    .object({
+      message: z.string(),
+    })
+    .passthrough(),
+});
+
+export type SubmitOrderAsyncResponse = z.infer<typeof SubmitOrderAsyncResponseSchema>;
+export type SubmitOrderAsyncAck = SubmitOrderAsyncResponse["data"];
+
 const UsageMetricSchema = z
   .object({
     unit: z.string().optional(),
