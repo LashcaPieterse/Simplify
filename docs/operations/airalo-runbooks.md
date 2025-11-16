@@ -1,6 +1,6 @@
 # Airalo Operations Runbooks
 
-This document describes the operational playbooks for the Airalo integration, including webhook processing, order creation, and monitoring/alerting guidance.
+This document describes the operational playbooks for the Airalo integration, including webhook processing, order creation, and monitoring/alerting guidance. For the canonical API contract that our order flow must satisfy, refer to [`airalo-submit-order.md`](./airalo-submit-order.md).
 
 ## Observability Overview
 

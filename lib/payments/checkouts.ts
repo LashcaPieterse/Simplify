@@ -397,12 +397,6 @@ export async function finaliseOrderFromCheckout(
         customerEmail: checkout.customerEmail ?? undefined,
       },
       {
-        metadata: {
-          checkoutId,
-          intent: checkout.intent,
-          topUpForOrderId: checkout.topUpForOrderId,
-          topUpForIccid: checkout.topUpForIccid,
-        },
         ...options.airaloOptions,
         prisma: tx,
       },
