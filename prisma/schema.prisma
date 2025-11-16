@@ -28,10 +28,11 @@ model AiraloPackage {
 
 model EsimOrder {
   id             String                   @id @default(cuid())
-  orderNumber    String                   @unique
+  orderNumber    String?                  @unique
+  requestId      String?                  @unique
   package        AiraloPackage            @relation(fields: [packageId], references: [id])
   packageId      String
-  status         String
+  status         String                   @default("pending")
   customerEmail  String?
   quantity       Int      @default(1)
   totalCents     Int?

@@ -2,6 +2,7 @@ import type { ZodType, ZodTypeDef } from "zod";
 import {
   OrderResponseSchema,
   PackagesResponseSchema,
+  SubmitOrderAsyncResponseSchema,
   TokenResponseSchema,
   UsageResponseSchema,
   WebhookPayloadSchema,
@@ -12,6 +13,8 @@ import type {
   OrderResponse,
   Package,
   PackagesResponse,
+  SubmitOrderAsyncAck,
+  SubmitOrderAsyncResponse,
   Usage,
   UsageResponse,
   WebhookPayload,
@@ -237,6 +240,24 @@ export class AiraloClient {
 
   async createOrder(payload: CreateOrderPayload): Promise<Order> {
     const response = await this.createOrderResponse(payload);
+    return response.data;
+  }
+
+  async createOrderAsyncResponse(payload: CreateOrderPayload): Promise<SubmitOrderAsyncResponse> {
+    const body = this.buildMultipartPayload(payload);
+
+    return this.request({
+      path: "/orders-async",
+      schema: SubmitOrderAsyncResponseSchema,
+      init: {
+        method: "POST",
+        body,
+      },
+    });
+  }
+
+  async createOrderAsync(payload: CreateOrderPayload): Promise<SubmitOrderAsyncAck> {
+    const response = await this.createOrderAsyncResponse(payload);
     return response.data;
   }
 
@@ -504,6 +525,8 @@ export type {
   OrderResponse,
   Package,
   PackagesResponse,
+  SubmitOrderAsyncAck,
+  SubmitOrderAsyncResponse,
   TokenPayload,
   TokenResponse,
   Usage,
