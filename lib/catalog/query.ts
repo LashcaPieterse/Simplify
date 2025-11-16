@@ -301,13 +301,27 @@ function applyPackageToProduct(
   };
 }
 
-export async function getCatalogProductSummaries(): Promise<EsimProductSummary[]> {
-  const client = getSanityClient();
+export interface CatalogProductSummaryOptions {
+  fetchProducts?: () => Promise<SanityCatalogProduct[]>;
+  fetchPackages?: () => Promise<AiraloPackage[]>;
+}
 
-  const [products, packages] = await Promise.all([
-    client.fetch<SanityCatalogProduct[]>(CATALOG_PRODUCTS_QUERY),
-    prisma.airaloPackage.findMany({ orderBy: { updatedAt: "desc" } }),
-  ]);
+export async function getCatalogProductSummaries(
+  options: CatalogProductSummaryOptions = {},
+): Promise<EsimProductSummary[]> {
+  const fetchProducts =
+    options.fetchProducts ??
+    (() => getSanityClient().fetch<SanityCatalogProduct[]>(CATALOG_PRODUCTS_QUERY));
+
+  const fetchPackages =
+    options.fetchPackages ??
+    (() =>
+      prisma.airaloPackage.findMany({
+        where: { isActive: true },
+        orderBy: { updatedAt: "desc" },
+      }));
+
+  const [products, packages] = await Promise.all([fetchProducts(), fetchPackages()]);
 
   if (!products?.length) {
     return [];

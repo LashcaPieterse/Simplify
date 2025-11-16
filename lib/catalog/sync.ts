@@ -53,6 +53,7 @@ export interface SyncAiraloPackagesResult {
   created: number;
   updated: number;
   unchanged: number;
+  deactivated: number;
 }
 
 const DATA_AMOUNT_REGEX = /([\d.,]+)\s*(KB|MB|GB|TB)/i;
@@ -242,6 +243,7 @@ export async function syncAiraloPackages(
     select: {
       externalId: true,
       sourceHash: true,
+      isActive: true,
     },
   });
 
@@ -252,7 +254,9 @@ export async function syncAiraloPackages(
   let created = 0;
   let updated = 0;
   let unchanged = 0;
+  let deactivated = 0;
   let total = 0;
+  const seenExternalIds = new Set<string>();
 
   await paginateAiraloPackages({
     client,
@@ -273,6 +277,7 @@ export async function syncAiraloPackages(
         }
 
         total += 1;
+        seenExternalIds.add(normalized.externalId);
         const metadataJson = getMetadataJson(normalized.metadata);
         const sourceHash = getSourceHash(normalized);
         const existing = existingByExternalId.get(normalized.externalId);
@@ -291,11 +296,14 @@ export async function syncAiraloPackages(
               metadata: metadataJson,
               sourceHash,
               lastSyncedAt: now,
+              isActive: true,
+              deactivatedAt: null,
             },
           });
           existingByExternalId.set(normalized.externalId, {
             externalId: normalized.externalId,
             sourceHash,
+            isActive: true,
           });
           created += 1;
           continue;
@@ -306,7 +314,14 @@ export async function syncAiraloPackages(
             where: { externalId: normalized.externalId },
             data: {
               lastSyncedAt: now,
+              isActive: true,
+              deactivatedAt: null,
             },
+          });
+          existingByExternalId.set(normalized.externalId, {
+            externalId: normalized.externalId,
+            sourceHash,
+            isActive: true,
           });
           unchanged += 1;
           continue;
@@ -325,21 +340,42 @@ export async function syncAiraloPackages(
             metadata: metadataJson,
             sourceHash,
             lastSyncedAt: now,
+            isActive: true,
+            deactivatedAt: null,
           },
         });
         existingByExternalId.set(normalized.externalId, {
           externalId: normalized.externalId,
           sourceHash,
+          isActive: true,
         });
         updated += 1;
       }
     },
   });
 
+  const staleExternalIds = existingPackages
+    .filter((pkg) => pkg.isActive && !seenExternalIds.has(pkg.externalId))
+    .map((pkg) => pkg.externalId);
+
+  if (staleExternalIds.length > 0) {
+    const { count } = await db.airaloPackage.updateMany({
+      where: { externalId: { in: staleExternalIds } },
+      data: {
+        isActive: false,
+        deactivatedAt: now,
+        lastSyncedAt: now,
+      },
+    });
+    deactivated = count;
+    logger.info(`Marked ${count} Airalo packages as inactive`);
+  }
+
   return {
     total,
     created,
     updated,
     unchanged,
+    deactivated,
   };
 }
