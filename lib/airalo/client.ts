@@ -7,6 +7,12 @@ import {
   UsageResponseSchema,
   WebhookPayloadSchema,
 } from "./schemas";
+import {
+  MemoryTokenCache,
+  type TokenCache,
+  type TokenCacheRecord,
+} from "./token-cache";
+import { recordTokenRefresh } from "../observability/metrics";
 
 import type {
   Order,
@@ -19,33 +25,6 @@ import type {
   UsageResponse,
   WebhookPayload,
 } from "./schemas";
-
-export interface TokenCacheRecord {
-  token: string;
-  expiresAt: number;
-}
-
-export interface TokenCache {
-  get(): Promise<TokenCacheRecord | null>;
-  set(record: TokenCacheRecord): Promise<void>;
-  clear(): Promise<void>;
-}
-
-export class MemoryTokenCache implements TokenCache {
-  private record: TokenCacheRecord | null = null;
-
-  async get(): Promise<TokenCacheRecord | null> {
-    return this.record;
-  }
-
-  async set(record: TokenCacheRecord): Promise<void> {
-    this.record = record;
-  }
-
-  async clear(): Promise<void> {
-    this.record = null;
-  }
-}
 
 export interface AiraloClientOptions {
   clientId: string;
@@ -481,6 +460,7 @@ export class AiraloClient {
     };
 
     await this.tokenCache.set(record);
+    recordTokenRefresh("airalo_client");
 
     return record.token;
   }
@@ -513,6 +493,9 @@ export class AiraloClient {
 }
 
 export const defaultTokenCache = new MemoryTokenCache();
+
+export { MemoryTokenCache } from "./token-cache";
+export type { TokenCache, TokenCacheRecord } from "./token-cache";
 
 export const defaultAiraloClientFactory = (options: AiraloClientOptions): AiraloClient =>
   new AiraloClient(options);

@@ -1,0 +1,8 @@
+-- CreateTable
+CREATE TABLE "AiraloAccessToken" (
+    "key" TEXT NOT NULL PRIMARY KEY,
+    "token" TEXT NOT NULL,
+    "expiresAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
