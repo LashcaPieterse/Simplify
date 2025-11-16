@@ -296,7 +296,7 @@ export async function createOrder(
   const airalo = options.airaloClient ?? resolveAiraloClient();
   const pkg = await db.airaloPackage.findUnique({ where: { id: packageId } });
 
-  if (!pkg) {
+  if (!pkg || !pkg.isActive) {
     logOrderError("order.package.unavailable", {
       packageId,
     });
