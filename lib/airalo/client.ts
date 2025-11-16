@@ -33,6 +33,7 @@ export interface AiraloClientOptions {
   fetchImplementation?: typeof fetch;
   tokenCache?: TokenCache;
   tokenExpiryBufferSeconds?: number;
+  rateLimitRetry?: Partial<RateLimitRetryPolicy>;
 }
 
 type FormValue = string | number | boolean | null | undefined;
@@ -110,6 +111,17 @@ export class AiraloError extends Error {
 
 const DEFAULT_BASE_URL = "https://partners.airalo.com/api/v2";
 const DEFAULT_TOKEN_BUFFER_SECONDS = 30;
+const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
+  maxRetries: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 10_000,
+};
+
+interface RateLimitRetryPolicy {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+}
 
 export class AiraloClient {
   private readonly clientId: string;
@@ -118,6 +130,7 @@ export class AiraloClient {
   private readonly fetchFn: typeof fetch;
   private readonly tokenCache: TokenCache;
   private readonly tokenExpiryBufferSeconds: number;
+  private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
 
   private inFlightTokenRequest: Promise<string> | null = null;
 
@@ -129,6 +142,10 @@ export class AiraloClient {
     this.tokenCache = options.tokenCache ?? new MemoryTokenCache();
     this.tokenExpiryBufferSeconds =
       options.tokenExpiryBufferSeconds ?? DEFAULT_TOKEN_BUFFER_SECONDS;
+    this.rateLimitRetryPolicy = {
+      ...DEFAULT_RATE_LIMIT_RETRY_POLICY,
+      ...options.rateLimitRetry,
+    };
   }
 
   async getPackagesResponse(
@@ -343,14 +360,16 @@ export class AiraloClient {
     requiresAuth = true,
   }: AiraloRequestOptions<T>): Promise<T> {
     const url = this.resolveUrl(path);
-    const headers = await this.buildHeaders(init?.headers, requiresAuth);
-    const initWithDefaults: RequestInit = {
-      method: "GET",
-      ...init,
-      headers,
-    };
+    const response = await this.executeWithRateLimitRetry(async () => {
+      const headers = await this.buildHeaders(init?.headers, requiresAuth);
+      const initWithDefaults: RequestInit = {
+        method: "GET",
+        ...init,
+        headers,
+      };
 
-    const response = await this.fetchFn(url, initWithDefaults);
+      return this.fetchFn(url, initWithDefaults);
+    });
 
     if (!response.ok) {
       const bodyText = await response.text();
@@ -417,13 +436,15 @@ export class AiraloClient {
     formData.set("client_secret", this.clientSecret);
     formData.set("grant_type", "client_credentials");
 
-    const response = await this.fetchFn(`${this.baseUrl}/token`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-      },
-      body: formData,
-    });
+    const response = await this.executeWithRateLimitRetry(() =>
+      this.fetchFn(`${this.baseUrl}/token`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+        },
+        body: formData,
+      }),
+    );
 
     if (!response.ok) {
       const bodyText = await response.text();
@@ -489,6 +510,69 @@ export class AiraloClient {
         body: text,
       });
     }
+  }
+
+  private async executeWithRateLimitRetry(
+    makeRequest: () => Promise<Response>,
+  ): Promise<Response> {
+    const maxAttempts = this.rateLimitRetryPolicy.maxRetries + 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const response = await makeRequest();
+
+      if (response.status !== 429) {
+        return response;
+      }
+
+      if (attempt === maxAttempts) {
+        return response;
+      }
+
+      const delayMs = this.calculateRetryDelay(attempt, response.headers);
+      await this.delay(delayMs);
+    }
+
+    // Fallback, though loop should always return.
+    return makeRequest();
+  }
+
+  private calculateRetryDelay(attempt: number, headers: Headers): number {
+    const backoffDelay = Math.min(
+      this.rateLimitRetryPolicy.baseDelayMs * 2 ** (attempt - 1),
+      this.rateLimitRetryPolicy.maxDelayMs,
+    );
+
+    const retryAfterMs = this.parseRetryAfter(headers.get("Retry-After"));
+    const requiredDelay = retryAfterMs ?? 0;
+
+    return Math.max(backoffDelay, requiredDelay);
+  }
+
+  private parseRetryAfter(value: string | null): number | null {
+    if (!value) {
+      return null;
+    }
+
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) {
+      return Math.max(0, asNumber) * 1000;
+    }
+
+    const asDate = Date.parse(value);
+    if (!Number.isNaN(asDate)) {
+      const delayMs = asDate - Date.now();
+      return delayMs > 0 ? delayMs : 0;
+    }
+
+    return null;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    if (ms <= 0) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
