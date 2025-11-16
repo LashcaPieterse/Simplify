@@ -8,6 +8,7 @@ import {
   type Order as AiraloOrder,
   type SubmitOrderAsyncAck,
 } from "../airalo/client";
+import { resolveSharedTokenCache } from "../airalo/token-cache";
 import prismaClient from "../db/client";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { recordOrderMetrics, recordRateLimit } from "../observability/metrics";
@@ -95,6 +96,7 @@ export function resolveAiraloClient(): AiraloClient {
   cachedAiraloClient = new AiraloClient({
     clientId,
     clientSecret,
+    tokenCache: resolveSharedTokenCache(),
   });
 
   return cachedAiraloClient;
