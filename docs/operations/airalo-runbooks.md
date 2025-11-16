@@ -119,6 +119,24 @@ Logs are emitted as JSON with the `service` field set to `order-service`. Key ev
 3. **Database verification**: Confirm `EsimOrder` status and `UsageSnapshot` records match the payload data.
 4. **Close incident**: Update documentation with remediation steps and payload anomalies if any.
 
+### Pending Order Recovery Worker
+
+Orders that remain in `pending` without an `orderNumber` or associated `EsimProfile` for more than ten minutes are automatically
+re-queried via the scheduled recovery worker. The worker uses `AiraloClient.getOrderById` to pull the latest installation payload,
+status, metadata, and usage readings; it then applies the same persistence logic as the webhook handler.
+
+- **Command**: `npm run airalo:recover-orders`
+- **Schedule**: run every 5 minutes via cron or your scheduler of choice. Ensure `AIRALO_CLIENT_ID`/`AIRALO_CLIENT_SECRET` are
+  available in the worker environment.
+- **Signals**:
+  - Logs prefixed with `airalo.order.recovery.*` describe the attempt lifecycle (started/completed/failed/alert).
+  - The `EsimOrderRecoveryAttempt` table keeps a durable audit trail of success/failure/skip results, including reasons.
+- **Alerts**: when Airalo cannot confirm an order for 45 minutes the worker emits `airalo.order.recovery.alert` logs so support
+  can follow up with Airalo or issue refunds.
+
+For manual investigations, query `EsimOrderRecoveryAttempt` joined with `EsimOrder` metadata to confirm how many times a record
+has been retried and the last observed error message.
+
 ## Maintenance Checklist
 
 - Rotate `AIRALO_WEBHOOK_SECRET` regularly and update both the Airalo dashboard and environment variables.

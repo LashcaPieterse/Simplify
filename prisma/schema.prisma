@@ -47,6 +47,7 @@ model EsimOrder {
   installation   EsimInstallationPayload?
   payment        PaymentTransaction?      @relation(fields: [paymentTransactionId], references: [id])
   paymentTransactionId String?
+  recoveryAttempts EsimOrderRecoveryAttempt[]
 }
 
 model EsimProfile {
@@ -88,6 +89,16 @@ model WebhookEvent {
   payload     String
   createdAt   DateTime   @default(now())
   processedAt DateTime?
+}
+
+model EsimOrderRecoveryAttempt {
+  id         String    @id @default(cuid())
+  order      EsimOrder @relation(fields: [orderId], references: [id])
+  orderId    String
+  identifier String
+  result     String
+  reason     String?
+  createdAt  DateTime  @default(now())
 }
 
 model EsimInstallationPayload {
