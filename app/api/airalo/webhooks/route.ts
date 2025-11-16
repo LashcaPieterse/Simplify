@@ -174,8 +174,16 @@ export async function POST(request: Request) {
         return { status: "duplicate" as const };
       }
 
-      const order = await tx.esimOrder.findUnique({
-        where: { orderNumber: payload.data.order_id },
+      const orderClauses: Prisma.EsimOrderWhereInput[] = [
+        { orderNumber: payload.data.order_id },
+      ];
+
+      if (payload.data.reference) {
+        orderClauses.push({ requestId: payload.data.reference });
+      }
+
+      const order = await tx.esimOrder.findFirst({
+        where: { OR: orderClauses },
         include: { profiles: true },
       });
 
@@ -203,9 +211,21 @@ export async function POST(request: Request) {
       let profileId: string | null = null;
 
       if (order) {
+        const updateData: Prisma.EsimOrderUpdateInput = {
+          status: payload.data.status,
+        };
+
+        if (!order.orderNumber) {
+          updateData.orderNumber = payload.data.order_id;
+        }
+
+        if (!order.requestId && payload.data.reference) {
+          updateData.requestId = payload.data.reference;
+        }
+
         await tx.esimOrder.update({
           where: { id: order.id },
-          data: { status: payload.data.status },
+          data: updateData,
         });
 
         const activationCode = extractActivationCode(payload.data.metadata);

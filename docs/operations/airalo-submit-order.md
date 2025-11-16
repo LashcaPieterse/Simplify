@@ -1,13 +1,13 @@
 # Airalo Submit Order contract
 
-This document evaluates the upstream "Submit order" OpenAPI contract (`POST /v2/orders`) and captures the expectations Simplify must meet to stay compliant with the Airalo Partner API.
+This document evaluates the upstream "Submit order async" OpenAPI contract (`POST /v2/orders-async`) and captures the expectations Simplify must meet to stay compliant with the Airalo Partner API.
 
 ## Endpoint summary
 
 | Property | Requirement |
 | --- | --- |
 | Method | `POST` |
-| Path | `/v2/orders` |
+| Path | `/v2/orders-async` |
 | Protocol | HTTPS only |
 | Headers | `Accept: application/json`, `Authorization: Bearer <token>` |
 | Request body | `multipart/form-data` |
@@ -27,20 +27,25 @@ Airalo treats the payload as multipart form fields, so every value (even numeric
 | `to_email` | string | ⚠️ | Provide when Airalo should email the subscriber. Requires `sharing_option[]`. |
 | `sharing_option[]` | array (string) | ⚠️ | Required if `to_email` is set. Valid values: `link`, `pdf`. Send as repeated form keys (e.g., `sharing_option[]=link`). |
 | `copy_address[]` | array (string) | ⚠️ | Additional recipients for the white-label email. Optional but only valid alongside `to_email`. |
+| `webhook_url` | string | ⚠️ | Optional override for the async callback target. Required per request if the partner isn’t globally opted in. |
 
 > Implementation detail: keep our schema flexible enough to append new optional fields without breaking form encoding. Upstream occasionally adds eSIM-sharing knobs via additional form keys.
 
-## Response model (`200`)
+## Response model (`202`)
 
-Successful submissions return JSON with the shape:
+`/v2/orders-async` immediately responds with an acknowledgement envelope rather than the full SIM payload:
 
-- `data`
-  - Order details: `id`, `code`, `package_id`, `quantity`, `type`, `description`, `esim_type`, `validity`, `package`, `data`, `price`, `currency`, `created_at`, `brand_settings_name`.
-  - Installation artifacts: `manual_installation`, `qrcode_installation`, `installation_guides.{lang}`, `direct_apple_installation_url` per SIM (iOS 17.4+ universal link).
-  - `sims[]`: array of provisioned SIMs. Each item contains identifiers (`id`, `iccid`, `lpa`, `matching_id`), QR code payload/URL, `apn_type`/`apn_value`, roaming flag, optional `apn` per platform, and `msisdn` for voice/text plans.
-- `meta.message`: human-readable success string.
+- `data.request_id`: NanoID that uniquely identifies the async job. Store this on every order record—it is echoed back as `data.reference` in the webhook payload.
+- `data.accepted_at`: Timestamp string showing when Airalo queued the request.
+- `meta.message`: Usually `"success"`, useful for observability dashboards.
 
-Voice & data packages add optional `text`, `voice`, `net_price`, and may include platform-specific `apn` instructions per SIM. Our Prisma schema already stores these nullable fields; ensure serializers keep them when present to avoid data loss.
+No SIM metadata is returned at submission time. Once Airalo finishes provisioning, it sends a webhook that includes both `order_id` (the value we previously stored in `orderNumber`) and the original `request_id` reference. At that point Simplify must:
+
+1. Match the webhook via `reference -> requestId` to update the pending order status.
+2. Persist the newly revealed `order_id` so that follow-up operations (`GET /v2/orders/{id}` or `/usage`) work.
+3. Fetch the full order document via `GET /v2/orders/{order_id}` to hydrate installation payloads (`manual_installation`, `qrcode_installation`, `direct_apple_installation_url`, etc.) when the customer next views the dashboard.
+
+Voice & data plans still include optional `text`, `voice`, `net_price`, and per-platform APN hints when retrieved via the follow-up `GET /v2/orders/{id}` call—keep serializers flexible to store everything the webhook/lookup provides.
 
 ## Error responses (`422`)
 
@@ -59,8 +64,9 @@ Whenever the API returns a 422, log `order.validation.failed` with the returned 
 
 1. **Authentication** – Ensure tokens used for catalog sync are also scoped for `/v2/orders`. Rotate credentials in step with Airalo expectations.
 2. **Form encoding** – Use a multipart-capable HTTP client; do not send JSON. Arrays must repeat the field name with `[]` suffix.
-3. **Email sharing** – Only send `to_email` when the customer opted in. Always include at least one `sharing_option[]` (`link` is the safest default). Optionally set `copy_address[]` for internal notifications.
-4. **Observability** – Continue emitting `airalo_order_requests_total` counters tagged with `result`=`success`/`error` and `reason` (`validation`, `http_error`, etc.) so deviations from this spec trigger alerts described in `airalo-runbooks.md`.
-5. **Schema drift watch** – Monitor release notes for new properties (e.g., the recently added `direct_apple_installation_url`). When a field appears in the response, persist it even if we do not expose it yet.
+3. **Async correlation** – Persist `request_id` from the `202 Accepted` response and map it to `payload.data.reference` from the webhook before fetching the final order payload.
+4. **Email sharing** – Only send `to_email` when the customer opted in. Always include at least one `sharing_option[]` (`link` is the safest default). Optionally set `copy_address[]` for internal notifications.
+5. **Observability** – Continue emitting `airalo_order_requests_total` counters tagged with `result`=`success`/`error` and `reason` (`validation`, `http_error`, etc.) so deviations from this spec trigger alerts described in `airalo-runbooks.md`.
+6. **Schema drift watch** – Monitor release notes for new properties (e.g., the recently added `direct_apple_installation_url`). When a field appears in the response, persist it even if we do not expose it yet.
 
 Keeping these guardrails in place keeps Simplify "on Standard" with the Airalo Submit Order specification and reduces the chance of regressions when Airalo evolves the endpoint.

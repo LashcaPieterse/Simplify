@@ -118,7 +118,15 @@ export default async function OrderPage({ params }: OrderPageParams) {
           {order.package?.name ?? "eSIM order"}
         </h1>
         <div className="text-sm text-sand-600">
-          <p>Order reference: {order.orderNumber}</p>
+          <p>
+            Order reference:{" "}
+            {order.orderNumber ? (
+              <span>{order.orderNumber}</span>
+            ) : (
+              <span className="text-sand-500">Awaiting Airalo confirmation</span>
+            )}
+          </p>
+          {order.requestId ? <p>Airalo request ID: {order.requestId}</p> : null}
           <p>Status: {order.status}</p>
           {order.totalCents !== null && order.currency ? (
             <p>Total paid: {formatCurrency(order.totalCents, order.currency)}</p>
