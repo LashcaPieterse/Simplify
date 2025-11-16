@@ -51,6 +51,7 @@ export async function getTopUpPackages(
       externalId: {
         in: packages.map((pkg) => pkg.id),
       },
+      isActive: true,
     },
     select: {
       id: true,

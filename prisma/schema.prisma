@@ -20,6 +20,8 @@ model AiraloPackage {
   metadata     String?
   lastSyncedAt DateTime?
   sourceHash   String?
+  isActive     Boolean     @default(true)
+  deactivatedAt DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   esimOrders   EsimOrder[]
