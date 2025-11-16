@@ -4,7 +4,7 @@ import { z } from "zod";
 import prismaClient from "../db/client";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { createOrder } from "../orders/service";
-import type { CreateOrderOptions } from "../orders/service";
+import type { CreateOrderOptions, CreateOrderResult } from "../orders/service";
 import { resolveDpoClient } from "./dpo";
 
 const checkoutInputSchema = z.object({
@@ -347,7 +347,7 @@ export async function verifyCheckoutPayment(
 export async function finaliseOrderFromCheckout(
   checkoutId: string,
   options: FinaliseOptions = {},
-): Promise<{ orderId: string; orderNumber: string }> {
+): Promise<CreateOrderResult> {
   const db = options.prisma ?? prismaClient;
 
   return db.$transaction(async (tx) => {
@@ -374,7 +374,11 @@ export async function finaliseOrderFromCheckout(
         throw new Error("Checkout references a missing order.");
       }
 
-      return { orderId: existingOrder.id, orderNumber: existingOrder.orderNumber };
+      return {
+        orderId: existingOrder.id,
+        orderNumber: existingOrder.orderNumber ?? null,
+        requestId: existingOrder.requestId ?? existingOrder.orderNumber ?? existingOrder.id,
+      };
     }
 
     const payment = checkout.payments[0];
