@@ -5,13 +5,13 @@ import {
   AiraloClient,
   AiraloError,
   type CreateOrderPayload,
-  type Order as AiraloOrder,
   type SubmitOrderAsyncAck,
 } from "../airalo/client";
 import { resolveSharedTokenCache } from "../airalo/token-cache";
 import prismaClient from "../db/client";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { recordOrderMetrics, recordRateLimit } from "../observability/metrics";
+import { createInstallationPayload } from "./airalo-metadata";
 
 const createOrderInputSchema = z.object({
   packageId: z.string().min(1, "A package selection is required."),
@@ -108,19 +108,6 @@ function normaliseQuantity(quantity?: number): number {
   }
 
   return Math.min(Math.max(quantity, DEFAULT_QUANTITY), MAX_QUANTITY);
-}
-
-function createInstallationPayload(order: AiraloOrder): string {
-  const payload = {
-    orderId: order.order_id,
-    orderReference: order.order_reference ?? null,
-    iccid: order.iccid ?? null,
-    activationCode: order.activation_code ?? null,
-    qrCode: order.qr_code ?? null,
-    esim: order.esim ?? null,
-  };
-
-  return JSON.stringify(payload);
 }
 
 const ORDER_DETAILS_INCLUDE = {
