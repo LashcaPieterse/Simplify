@@ -53,13 +53,22 @@ export interface AiraloClientOptions {
   tokenExpiryBufferSeconds?: number;
 }
 
-export interface CreateOrderPayload {
+type FormValue = string | number | boolean | null | undefined;
+type FormValueOrArray = FormValue | FormValue[];
+
+interface AdditionalOrderFields {
+  [key: string]: FormValueOrArray;
+}
+
+export interface CreateOrderPayload extends AdditionalOrderFields {
   package_id: string;
-  quantity?: number;
-  customer_reference?: string;
-  traveler?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-  [key: string]: unknown;
+  quantity?: FormValue;
+  type?: FormValue;
+  description?: FormValue;
+  brand_settings_name?: FormValue;
+  to_email?: FormValue;
+  "sharing_option[]"?: FormValue[];
+  "copy_address[]"?: FormValue[];
 }
 
 type QueryParamValue = string | number | boolean | null | undefined;
@@ -215,15 +224,13 @@ export class AiraloClient {
   }
 
   async createOrderResponse(payload: CreateOrderPayload): Promise<OrderResponse> {
+    const body = this.buildMultipartPayload(payload);
     return this.request({
       path: "/orders",
       schema: OrderResponseSchema,
       init: {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+        body,
       },
     });
   }
@@ -294,6 +301,39 @@ export class AiraloClient {
 
   parseWebhookPayload(payload: unknown): WebhookPayload {
     return WebhookPayloadSchema.parse(payload);
+  }
+
+  private buildMultipartPayload(payload: CreateOrderPayload): FormData {
+    const form = new FormData();
+
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+
+      if (Array.isArray(value)) {
+        value.forEach((entry) => {
+          if (entry === undefined || entry === null) {
+            return;
+          }
+
+          form.append(key, this.stringifyFormValue(entry));
+        });
+        return;
+      }
+
+      form.set(key, this.stringifyFormValue(value));
+    });
+
+    return form;
+  }
+
+  private stringifyFormValue(value: FormValue): string {
+    if (typeof value === "boolean") {
+      return value ? "true" : "false";
+    }
+
+    return String(value);
   }
 
   private async request<T>({

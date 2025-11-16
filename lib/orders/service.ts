@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   AiraloClient,
   AiraloError,
+  type CreateOrderPayload,
   type Order as AiraloOrder,
 } from "../airalo/client";
 import prismaClient from "../db/client";
@@ -67,7 +68,6 @@ function isPrismaClient(client: PrismaDbClient): client is PrismaClient {
 export interface CreateOrderOptions {
   prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
-  metadata?: Record<string, unknown>;
 }
 
 const DEFAULT_QUANTITY = 1;
@@ -305,22 +305,24 @@ export async function createOrder(
   }
 
   const normalisedQuantity = normaliseQuantity(quantity);
+  const description = `${normalisedQuantity} x ${pkg.name}`;
+  const orderPayload: CreateOrderPayload = {
+    package_id: pkg.externalId,
+    quantity: String(normalisedQuantity),
+    type: "sim",
+    description,
+  };
+
+  if (customerEmail) {
+    orderPayload.to_email = customerEmail;
+    orderPayload["sharing_option[]"] = ["link"];
+  }
   const airaloCallStartedAt = Date.now();
   let airaloOrder: AiraloOrder;
   let airaloLatencyMs = 0;
 
   try {
-    airaloOrder = await airalo.createOrder({
-      package_id: pkg.externalId,
-      quantity: normalisedQuantity,
-      customer_reference: `web-${Date.now()}`,
-      metadata: {
-        packageId: pkg.id,
-        packageExternalId: pkg.externalId,
-        source: "simplify-web",
-        ...(options.metadata ?? {}),
-      },
-    });
+    airaloOrder = await airalo.createOrder(orderPayload);
   } catch (error: unknown) {
     airaloLatencyMs = Date.now() - airaloCallStartedAt;
 
