@@ -13,6 +13,9 @@ interface SyncLogger {
   error?: (message: string) => void;
 }
 
+const AIRALO_REQUESTS_PER_MINUTE_LIMIT = 40;
+const AIRALO_RATE_LIMIT_DELAY_MS = Math.ceil(60000 / AIRALO_REQUESTS_PER_MINUTE_LIMIT);
+
 const DEFAULT_LOGGER: Required<SyncLogger> = {
   info: () => {
     // no-op
@@ -53,6 +56,16 @@ export interface SyncAiraloPackagesResult {
 }
 
 const DATA_AMOUNT_REGEX = /([\d.,]+)\s*(KB|MB|GB|TB)/i;
+
+function delay(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 function parseDataAmountToMb(
   amount: string | null | undefined,
@@ -148,6 +161,50 @@ function getMetadataJson(metadata: Record<string, unknown> | null): string | nul
   return JSON.stringify(metadata);
 }
 
+interface PaginateAiraloPackagesOptions {
+  client: Pick<AiraloClient, "getPackages">;
+  logger: Required<SyncLogger>;
+  packagesOptions: GetPackagesOptions;
+  delayMs?: number;
+  onPage: (packages: Package[], page: number) => Promise<void> | void;
+}
+
+export async function paginateAiraloPackages({
+  client,
+  logger,
+  packagesOptions,
+  onPage,
+  delayMs = AIRALO_RATE_LIMIT_DELAY_MS,
+}: PaginateAiraloPackagesOptions): Promise<number> {
+  const baseOptions: GetPackagesOptions = {
+    ...packagesOptions,
+  };
+  const limit = baseOptions.limit ?? 1000;
+  let page = baseOptions.page ?? 1;
+  let totalFetched = 0;
+
+  while (true) {
+    const requestOptions: GetPackagesOptions = {
+      ...baseOptions,
+      page,
+      limit,
+    };
+    const packages = await client.getPackages(requestOptions);
+    logger.info(`Fetched ${packages.length} packages from Airalo (page ${page})`);
+    await onPage(packages, page);
+    totalFetched += packages.length;
+
+    if (packages.length < limit) {
+      break;
+    }
+
+    page += 1;
+    await delay(delayMs);
+  }
+
+  return totalFetched;
+}
+
 function resolveAiraloClient(): AiraloClient {
   const clientId = process.env.AIRALO_CLIENT_ID;
   const clientSecret = process.env.AIRALO_CLIENT_SECRET;
@@ -181,22 +238,6 @@ export async function syncAiraloPackages(
     packageRequestOptions.limit = 1000;
   }
 
-  const packages = await client.getPackages(packageRequestOptions);
-  logger.info(`Fetched ${packages.length} packages from Airalo`);
-
-  const normalizedPackages: NormalizedAiraloPackage[] = [];
-
-  for (const pkg of packages) {
-    try {
-      normalizedPackages.push(normalizePackage(pkg));
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unknown error while normalizing Airalo package";
-      logger.warn(`Skipping Airalo package ${pkg.id}: ${message}`);
-    }
-  }
   const existingPackages = await db.airaloPackage.findMany({
     select: {
       externalId: true,
@@ -211,63 +252,92 @@ export async function syncAiraloPackages(
   let created = 0;
   let updated = 0;
   let unchanged = 0;
+  let total = 0;
 
-  for (const pkg of normalizedPackages) {
-    const metadataJson = getMetadataJson(pkg.metadata);
-    const sourceHash = getSourceHash(pkg);
-    const existing = existingByExternalId.get(pkg.externalId);
+  await paginateAiraloPackages({
+    client,
+    logger,
+    packagesOptions: packageRequestOptions,
+    async onPage(packages) {
+      for (const pkg of packages) {
+        let normalized: NormalizedAiraloPackage;
+        try {
+          normalized = normalizePackage(pkg);
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Unknown error while normalizing Airalo package";
+          logger.warn(`Skipping Airalo package ${pkg.id}: ${message}`);
+          continue;
+        }
 
-    if (!existing) {
-      await db.airaloPackage.create({
-        data: {
-          externalId: pkg.externalId,
-          name: pkg.name,
-          description: pkg.description,
-          region: pkg.region,
-          dataLimitMb: pkg.dataLimitMb,
-          validityDays: pkg.validityDays,
-          priceCents: pkg.priceCents,
-          currency: pkg.currency,
-          metadata: metadataJson,
+        total += 1;
+        const metadataJson = getMetadataJson(normalized.metadata);
+        const sourceHash = getSourceHash(normalized);
+        const existing = existingByExternalId.get(normalized.externalId);
+
+        if (!existing) {
+          await db.airaloPackage.create({
+            data: {
+              externalId: normalized.externalId,
+              name: normalized.name,
+              description: normalized.description,
+              region: normalized.region,
+              dataLimitMb: normalized.dataLimitMb,
+              validityDays: normalized.validityDays,
+              priceCents: normalized.priceCents,
+              currency: normalized.currency,
+              metadata: metadataJson,
+              sourceHash,
+              lastSyncedAt: now,
+            },
+          });
+          existingByExternalId.set(normalized.externalId, {
+            externalId: normalized.externalId,
+            sourceHash,
+          });
+          created += 1;
+          continue;
+        }
+
+        if (existing.sourceHash === sourceHash) {
+          await db.airaloPackage.update({
+            where: { externalId: normalized.externalId },
+            data: {
+              lastSyncedAt: now,
+            },
+          });
+          unchanged += 1;
+          continue;
+        }
+
+        await db.airaloPackage.update({
+          where: { externalId: normalized.externalId },
+          data: {
+            name: normalized.name,
+            description: normalized.description,
+            region: normalized.region,
+            dataLimitMb: normalized.dataLimitMb,
+            validityDays: normalized.validityDays,
+            priceCents: normalized.priceCents,
+            currency: normalized.currency,
+            metadata: metadataJson,
+            sourceHash,
+            lastSyncedAt: now,
+          },
+        });
+        existingByExternalId.set(normalized.externalId, {
+          externalId: normalized.externalId,
           sourceHash,
-          lastSyncedAt: now,
-        },
-      });
-      created += 1;
-      continue;
-    }
-
-    if (existing.sourceHash === sourceHash) {
-      await db.airaloPackage.update({
-        where: { externalId: pkg.externalId },
-        data: {
-          lastSyncedAt: now,
-        },
-      });
-      unchanged += 1;
-      continue;
-    }
-
-    await db.airaloPackage.update({
-      where: { externalId: pkg.externalId },
-      data: {
-        name: pkg.name,
-        description: pkg.description,
-        region: pkg.region,
-        dataLimitMb: pkg.dataLimitMb,
-        validityDays: pkg.validityDays,
-        priceCents: pkg.priceCents,
-        currency: pkg.currency,
-        metadata: metadataJson,
-        sourceHash,
-        lastSyncedAt: now,
-      },
-    });
-    updated += 1;
-  }
+        });
+        updated += 1;
+      }
+    },
+  });
 
   return {
-    total: normalizedPackages.length,
+    total,
     created,
     updated,
     unchanged,
