@@ -85,3 +85,12 @@ Maintaining these mappings keeps the integration “on standard” with Airalo�
 6. **Schema drift watch** – Monitor release notes for new properties (e.g., the recently added `direct_apple_installation_url`). When a field appears in the response, persist it even if we do not expose it yet.
 
 Keeping these guardrails in place keeps Simplify "on Standard" with the Airalo Submit Order specification and reduces the chance of regressions when Airalo evolves the endpoint.
+
+## Choosing synchronous vs async submissions
+
+Simplify now supports both Airalo order flows through the shared `createOrder` service (`lib/orders/service.ts`). Use the `submissionMode` option to decide whether the request should hit `/v2/orders-async` (default) or the synchronous `/v2/orders` endpoint. Our application uses the two modes in different contexts:
+
+- **Async (`submissionMode: "async"`)** – This is the default for public checkouts and any background jobs that provision after a payment. The Next.js checkout API (`lib/payments/checkouts.ts`) persists the Airalo `request_id`, waits for the webhook to hydrate ICCID/installation data, and keeps API routes responsive even when Airalo takes a few seconds to fulfill the SIMs.
+- **Sync (`submissionMode: "sync"`)** – The protected `app/api/orders/route.ts` now forces synchronous submissions so that internal agents immediately receive the ICCID, Apple install link, and QR data in the response. The order is stored with `orderNumber`, installation payload, and profile rows populated in the same transaction, so the dashboard or support tooling can display everything without waiting for a webhook.
+
+**Rule of thumb:** keep async submissions for any user-facing or high-volume workflow (they reduce timeouts and rely on the webhook state machine), and reserve synchronous submissions for trusted, low-volume tools that must show installation details before the request completes.
