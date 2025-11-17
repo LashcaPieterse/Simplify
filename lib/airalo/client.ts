@@ -66,6 +66,7 @@ export interface GetPackagesFilters {
 export interface GetPackagesOptions {
   filter?: GetPackagesFilters;
   includeTopUp?: boolean;
+  include?: string | string[];
   limit?: number;
   page?: number;
   extraParams?: Record<string, QueryParamValue>;
@@ -154,8 +155,9 @@ export class AiraloClient {
     const searchParams = new URLSearchParams();
     this.applyPackageFilters(searchParams, options.filter);
 
-    if (options.includeTopUp) {
-      searchParams.set("include", "top-up");
+    const includeParam = this.resolvePackageIncludes(options);
+    if (includeParam) {
+      searchParams.set("include", includeParam);
     }
 
     if (options.limit !== undefined && options.limit !== null) {
@@ -199,6 +201,36 @@ export class AiraloClient {
     if (filters.country) {
       searchParams.set("filter[country]", filters.country);
     }
+  }
+
+  private resolvePackageIncludes(options: GetPackagesOptions): string | null {
+    const includes: string[] = [];
+    const addInclude = (value: string | undefined | null): void => {
+      const normalized = value?.trim();
+      if (!normalized) {
+        return;
+      }
+
+      if (!includes.includes(normalized)) {
+        includes.push(normalized);
+      }
+    };
+
+    if (Array.isArray(options.include)) {
+      options.include.forEach(addInclude);
+    } else if (typeof options.include === "string") {
+      addInclude(options.include);
+    }
+
+    if (options.includeTopUp) {
+      addInclude("top-up");
+    }
+
+    if (includes.length === 0) {
+      return null;
+    }
+
+    return includes.join(",");
   }
 
   async getPackages(options: GetPackagesOptions = {}): Promise<Package[]> {
