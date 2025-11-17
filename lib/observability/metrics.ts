@@ -8,7 +8,12 @@ type OrderReason =
   | "airalo_error"
   | "rate_limited"
   | "persistence_failed"
-  | "unexpected";
+  | "unexpected"
+  | "airalo_out_of_stock"
+  | "insufficient_credit"
+  | "operator_maintenance"
+  | "iccid_recycled"
+  | "checksum_failed";
 
 type WebhookResult = "processed" | "duplicate" | "rejected" | "error";
 
