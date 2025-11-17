@@ -1,4 +1,4 @@
-import { Counter, Histogram, Registry, collectDefaultMetrics } from "prom-client";
+import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
 import { metrics } from "@opentelemetry/api";
 
 type OrderResult = "success" | "error";
@@ -41,6 +41,7 @@ let webhookCounter: Counter<string>;
 let webhookDuration: Histogram<string>;
 let rateLimitCounter: Counter<string>;
 let tokenRefreshCounter: Counter<string>;
+let packageSyncGauge: Gauge<string>;
 const orderOtelCounter = meter.createCounter("airalo.order.requests", {
   description: "Number of order creation attempts.",
 });
@@ -60,6 +61,18 @@ const rateLimitOtelCounter = meter.createCounter("airalo.rate_limit.events", {
 });
 const tokenRefreshOtelCounter = meter.createCounter("airalo.token.refreshes", {
   description: "Number of times the Airalo access token was refreshed.",
+});
+const packageSyncOtelGauge = meter.createObservableGauge(
+  "airalo.package_sync.last_success_timestamp",
+  {
+    description: "Unix timestamp of the last successful Airalo package sync.",
+    unit: "s",
+  },
+);
+let packageSyncLastSuccessTimestamp = 0;
+
+packageSyncOtelGauge.addCallback((observableResult) => {
+  observableResult.observe(packageSyncLastSuccessTimestamp);
 });
 
 function ensureCounters(): void {
@@ -110,6 +123,12 @@ function ensureCounters(): void {
     name: "airalo_token_refresh_total",
     help: "Number of times a new Airalo access token was requested.",
     labelNames: ["source"],
+    registers: [register],
+  });
+
+  packageSyncGauge = new Gauge({
+    name: "airalo_package_sync_last_success_timestamp",
+    help: "Unix timestamp of the last successful Airalo package sync.",
     registers: [register],
   });
 
@@ -195,6 +214,12 @@ export function recordTokenRefresh(source: TokenRefreshSource): void {
   ensureCounters();
   tokenRefreshCounter.labels(source).inc();
   tokenRefreshOtelCounter.add(1, { source });
+}
+
+export function recordPackageSyncSuccess(date: Date = new Date()): void {
+  ensureCounters();
+  packageSyncLastSuccessTimestamp = Math.floor(date.getTime() / 1000);
+  packageSyncGauge.set(packageSyncLastSuccessTimestamp);
 }
 
 export function getPrometheusRegistry(): Registry {
