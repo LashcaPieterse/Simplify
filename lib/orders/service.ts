@@ -223,6 +223,39 @@ export async function ensureOrderInstallation(
   return getOrderWithDetails(identifier, { prisma: db });
 }
 
+type AiraloValidationErrors = Record<string, string[]>;
+
+function extractAiraloValidationErrors(body: unknown): AiraloValidationErrors | null {
+  if (typeof body !== "object" || body === null) {
+    return null;
+  }
+
+  const data = (body as { data?: unknown }).data;
+
+  if (typeof data !== "object" || data === null) {
+    return null;
+  }
+
+  const entries = Object.entries(data as Record<string, unknown>);
+  const validationErrors: AiraloValidationErrors = {};
+
+  for (const [field, value] of entries) {
+    if (typeof value === "string" && value.trim()) {
+      validationErrors[field] = [value];
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      const messages = value.filter((item): item is string => typeof item === "string" && item.trim());
+      if (messages.length > 0) {
+        validationErrors[field] = messages;
+      }
+    }
+  }
+
+  return Object.keys(validationErrors).length > 0 ? validationErrors : null;
+}
+
 function mapAiraloError(error: AiraloError): OrderServiceError {
   const status = error.details.status;
   const body = error.details.body;
@@ -337,11 +370,28 @@ export async function createOrder(
         message: error.message,
       });
 
+      if (error.details.status === 422) {
+        const fieldErrors = extractAiraloValidationErrors(error.details.body);
+        logOrderError("order.validation.failed", {
+          packageId: pkg.id,
+          packageExternalId: pkg.externalId,
+          airaloStatus: error.details.status,
+          airaloRequestId: requestId,
+          latencyMs: airaloLatencyMs,
+          fieldErrors,
+        });
+      }
+
       const mapped = mapAiraloError(error);
 
       recordOrderMetrics({
         result: "error",
-        reason: error.details.status === 429 ? "rate_limited" : "airalo_error",
+        reason:
+          error.details.status === 422
+            ? "validation_failed"
+            : error.details.status === 429
+              ? "rate_limited"
+              : "airalo_error",
         durationMs: Date.now() - startedAt,
         airaloStatus: error.details.status,
       });
