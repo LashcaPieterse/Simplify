@@ -7,6 +7,7 @@ import {
   type CreateOrderPayload,
   type SubmitOrderAsyncAck,
 } from "../airalo/client";
+import type { Order as AiraloOrder } from "../airalo/schemas";
 import { resolveSharedTokenCache } from "../airalo/token-cache";
 import prismaClient from "../db/client";
 import { logOrderError, logOrderInfo } from "../observability/logging";
@@ -34,7 +35,7 @@ export type CreateOrderInput = z.infer<typeof createOrderInputSchema>;
 export type CreateOrderResult = {
   orderId: string;
   orderNumber: string | null;
-  requestId: string;
+  requestId: string | null;
 };
 
 export class OrderServiceError extends Error {
@@ -75,6 +76,7 @@ function isPrismaClient(client: PrismaDbClient): client is PrismaClient {
 export interface CreateOrderOptions {
   prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
+  submissionMode?: "async" | "sync";
 }
 
 const DEFAULT_QUANTITY = 1;
@@ -544,6 +546,8 @@ export async function createOrder(
   const { packageId, quantity, customerEmail } = parsedInput.data;
   const db = options.prisma ?? prismaClient;
   const airalo = options.airaloClient ?? resolveAiraloClient();
+  const submissionMode = options.submissionMode ?? "async";
+  const isAsyncSubmission = submissionMode !== "sync";
   const pkg = await db.airaloPackage.findUnique({ where: { id: packageId } });
 
   if (!pkg || !pkg.isActive) {
@@ -575,11 +579,16 @@ export async function createOrder(
     orderPayload["sharing_option[]"] = ["link"];
   }
   const airaloCallStartedAt = Date.now();
-  let airaloAck: SubmitOrderAsyncAck;
+  let airaloAck: SubmitOrderAsyncAck | null = null;
+  let airaloOrder: AiraloOrder | null = null;
   let airaloLatencyMs = 0;
 
   try {
-    airaloAck = await airalo.createOrderAsync(orderPayload);
+    if (isAsyncSubmission) {
+      airaloAck = await airalo.createOrderAsync(orderPayload);
+    } else {
+      airaloOrder = await airalo.createOrder(orderPayload);
+    }
   } catch (error: unknown) {
     airaloLatencyMs = Date.now() - airaloCallStartedAt;
 
@@ -662,28 +671,65 @@ export async function createOrder(
 
   airaloLatencyMs = Date.now() - airaloCallStartedAt;
 
-  logOrderInfo("airalo.order.async.accepted", {
-    packageId: pkg.id,
-    packageExternalId: pkg.externalId,
-    airaloRequestId: airaloAck.request_id,
-    acceptedAt: airaloAck.accepted_at,
-    latencyMs: airaloLatencyMs,
-  });
+  if (isAsyncSubmission && airaloAck) {
+    logOrderInfo("airalo.order.async.accepted", {
+      packageId: pkg.id,
+      packageExternalId: pkg.externalId,
+      airaloRequestId: airaloAck.request_id,
+      acceptedAt: airaloAck.accepted_at,
+      latencyMs: airaloLatencyMs,
+    });
+  } else if (airaloOrder) {
+    logOrderInfo("airalo.order.sync.completed", {
+      packageId: pkg.id,
+      packageExternalId: pkg.externalId,
+      airaloOrderId: airaloOrder.order_id,
+      airaloRequestId: airaloOrder.order_reference ?? null,
+      status: airaloOrder.status,
+      latencyMs: airaloLatencyMs,
+    });
+  }
 
   try {
     const createOrderRecords = async (tx: Prisma.TransactionClient) => {
       const orderRecord = await tx.esimOrder.create({
         data: {
-          orderNumber: null,
-          requestId: airaloAck.request_id,
+          orderNumber: airaloOrder?.order_id ?? null,
+          requestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? null,
           packageId: pkg.id,
-          status: "pending",
+          status: airaloOrder?.status ?? "pending",
           customerEmail: customerEmail ?? null,
           quantity: normalisedQuantity,
           totalCents: pkg.priceCents * normalisedQuantity,
           currency: pkg.currency,
         },
       });
+
+      if (airaloOrder) {
+        if (airaloOrder.iccid) {
+          await tx.esimProfile.upsert({
+            where: { iccid: airaloOrder.iccid },
+            create: {
+              iccid: airaloOrder.iccid,
+              status: airaloOrder.status,
+              activationCode: airaloOrder.activation_code ?? null,
+              orderId: orderRecord.id,
+            },
+            update: {
+              status: airaloOrder.status,
+              activationCode: airaloOrder.activation_code ?? null,
+              orderId: orderRecord.id,
+            },
+          });
+        }
+
+        const installationPayload = createInstallationPayload(airaloOrder);
+        await tx.esimInstallationPayload.upsert({
+          where: { orderId: orderRecord.id },
+          create: { orderId: orderRecord.id, payload: installationPayload },
+          update: { payload: installationPayload },
+        });
+      }
 
       return orderRecord;
     };
@@ -698,8 +744,9 @@ export async function createOrder(
       orderId: result.id,
       orderNumber: result.orderNumber ?? null,
       packageId: pkg.id,
-      airaloRequestId: airaloAck.request_id,
-      airaloAcceptedAt: airaloAck.accepted_at,
+      airaloRequestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? null,
+      airaloAcceptedAt: airaloAck?.accepted_at ?? null,
+      submissionMode,
       airaloLatencyMs,
       totalDurationMs: totalDuration,
     });
@@ -708,18 +755,18 @@ export async function createOrder(
       result: "success",
       reason: "ok",
       durationMs: totalDuration,
-      airaloStatus: "accepted",
+      airaloStatus: isAsyncSubmission ? "accepted" : airaloOrder?.status ?? "completed",
     });
 
     return {
       orderId: result.id,
       orderNumber: result.orderNumber ?? null,
-      requestId: airaloAck.request_id,
+      requestId: result.requestId ?? result.orderNumber ?? null,
     };
   } catch (error: unknown) {
     logOrderError("order.persistence.failed", {
       packageId: pkg.id,
-      airaloRequestId: airaloAck.request_id,
+      airaloRequestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? null,
       message: error instanceof Error ? error.message : "Unknown error",
     });
 
@@ -727,7 +774,7 @@ export async function createOrder(
       result: "error",
       reason: "persistence_failed",
       durationMs: Date.now() - startedAt,
-      airaloStatus: "accepted",
+      airaloStatus: isAsyncSubmission ? "accepted" : airaloOrder?.status ?? "completed",
     });
 
     if (error instanceof OrderServiceError) {
