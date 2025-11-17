@@ -155,7 +155,7 @@ export class AiraloClient {
     this.applyPackageFilters(searchParams, options.filter);
 
     if (options.includeTopUp) {
-      searchParams.set("include", "topup");
+      searchParams.set("include", "top-up");
     }
 
     if (options.limit !== undefined && options.limit !== null) {
