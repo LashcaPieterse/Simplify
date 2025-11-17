@@ -591,6 +591,8 @@ export async function createOrder(
         recordRateLimit("orders");
       }
 
+      const isAiraloValidationError = error.details.status === 422;
+
       logOrderError("airalo.order.create.failed", {
         packageId: pkg.id,
         packageExternalId: pkg.externalId,
@@ -602,8 +604,9 @@ export async function createOrder(
         message: error.message,
       });
 
-      if (error.details.status === 422) {
+      if (isAiraloValidationError) {
         const fieldErrors = extractAiraloValidationErrors(error.details.body);
+        const validationFields = fieldErrors ? Object.keys(fieldErrors) : null;
         logOrderError("order.validation.failed", {
           packageId: pkg.id,
           packageExternalId: pkg.externalId,
@@ -613,6 +616,7 @@ export async function createOrder(
           airaloErrorReason: businessError?.reason ?? null,
           latencyMs: airaloLatencyMs,
           fieldErrors,
+          validationFields,
         });
       }
 
@@ -623,15 +627,13 @@ export async function createOrder(
         error.details.status,
       );
 
+      const metricsReason = isAiraloValidationError
+        ? "validation_failed"
+        : classification ?? (error.details.status === 429 ? "rate_limited" : "airalo_error");
+
       recordOrderMetrics({
         result: "error",
-        reason:
-          classification ??
-          (error.details.status === 422
-            ? "validation_failed"
-            : error.details.status === 429
-              ? "rate_limited"
-              : "airalo_error"),
+        reason: metricsReason,
         durationMs: Date.now() - startedAt,
         airaloStatus: error.details.status,
       });
