@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await createOrder(body);
+    const result = await createOrder(body, { submissionMode: "sync" });
 
     return NextResponse.json({
       orderId: result.orderId,
