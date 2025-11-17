@@ -47,3 +47,14 @@ groups:
           description: |
             Investigate /api/orders and /api/airalo/webhooks endpoints for errors.
             Refer to the Airalo runbook for mitigation guidance.
+
+      - alert: AiraloPackageSyncStale
+        expr: time() - airalo_package_sync_last_success_timestamp > 3600
+        for: 10m
+        labels:
+          severity: high
+        annotations:
+          summary: "Airalo packages have not been synced in the last hour"
+          description: |
+            The syncAiraloPackages job has not reported a successful run within 60 minutes.
+            Ensure the hourly sync is scheduled and inspect the worker logs for failures.

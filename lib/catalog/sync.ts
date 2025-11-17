@@ -7,6 +7,7 @@ import { resolveSharedTokenCache } from "../airalo/token-cache";
 import type { Package } from "../airalo/schemas";
 import { resolvePackagePrice } from "../airalo/pricing";
 import prismaClient from "../db/client";
+import { recordPackageSyncSuccess } from "../observability/metrics";
 
 interface SyncLogger {
   info?: (message: string) => void;
@@ -374,6 +375,8 @@ export async function syncAiraloPackages(
     deactivated = count;
     logger.info(`Marked ${count} Airalo packages as inactive`);
   }
+
+  recordPackageSyncSuccess(now);
 
   return {
     total,
