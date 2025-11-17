@@ -60,6 +60,21 @@ Airalo surfaces validation errors through the `data` object with field-specific 
 
 Whenever the API returns a 422, log `order.validation.failed` with the returned field map so support can compare with this table.
 
+## Business rule error codes
+
+Beyond field-level validation, the Partner API responds with structured `code`/`reason` pairs (e.g., `{"code":73,"reason":"The eSIM with iccid … has been recycled"}`) whenever the upstream catalog, wallet, or operator status blocks fulfillment. Simplify must surface these signals directly so support can take the right mitigation:
+
+| Code/Reason | Upstream meaning | Simplify response |
+| --- | --- | --- |
+| `11` – “Insufficient Airalo Credit” | Wallet lacks funds to fulfill the order. | Raise an actionable error and pause retries until credits are topped up. Emit a distinct metric so on-call can trigger the top-up runbook. |
+| `33` – “Insufficient stock” / `reason` contains “out of stock” | Partner inventory for the requested plan is exhausted. | Throw `OrderOutOfStockError`, stop retries, and mark the catalog entry as unavailable until the next sync. |
+| `34` – “Package invalid” | Plan has been withdrawn or the package ID is stale. | Treat as validation failure and force a catalog refresh before allowing checkout. |
+| `73` – reason references “recycled” ICCIDs | ICCID has been recycled and cannot be topped up or re-used. | Surface a `410 Gone` style error so the UI can prompt the user to purchase a fresh plan. |
+| Reason contains “maintenance” | Operator is under scheduled maintenance. | Return a 503-style error and flag the SKU so merchandising can pause it temporarily. |
+| Reason contains “checksum” | Payload/ICCID failed checksum validation. | Bubble up a validation error instructing support to reissue the SIM. |
+
+Maintaining these mappings keeps the integration “on standard” with Airalo’s error reference and allows downstream automation (catalog pausing, wallet top-ups, etc.) to react instantly instead of treating every 4xx as a generic failure.
+
 ## Integration checklist
 
 1. **Authentication** – Ensure tokens used for catalog sync are also scoped for `/v2/orders`. Rotate credentials in step with Airalo expectations.
