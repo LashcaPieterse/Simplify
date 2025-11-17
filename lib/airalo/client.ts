@@ -360,38 +360,37 @@ export class AiraloClient {
     requiresAuth = true,
   }: AiraloRequestOptions<T>): Promise<T> {
     const url = this.resolveUrl(path);
-    const response = await this.executeWithRateLimitRetry(async () => {
-      const headers = await this.buildHeaders(init?.headers, requiresAuth);
-      const initWithDefaults: RequestInit = {
-        method: "GET",
-        ...init,
-        headers,
-      };
+    const maxAuthAttempts = requiresAuth ? 2 : 1;
 
-      return this.fetchFn(url, initWithDefaults);
-    });
+    for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
+      const response = await this.executeWithRateLimitRetry(async () => {
+        const headers = await this.buildHeaders(init?.headers, requiresAuth);
+        const initWithDefaults: RequestInit = {
+          method: "GET",
+          ...init,
+          headers,
+        };
 
-    if (!response.ok) {
-      const bodyText = await response.text();
-      let body: unknown = bodyText;
-      try {
-        body = JSON.parse(bodyText);
-      } catch {
-        // keep the raw text when JSON parsing fails
+        return this.fetchFn(url, initWithDefaults);
+      });
+
+      if (response.ok) {
+        const parsedBody = await this.parseJson(response);
+        return schema.parse(parsedBody);
       }
 
-      throw new AiraloError(
-        `Request to ${url} failed with status ${response.status}`,
-        {
-          status: response.status,
-          statusText: response.statusText,
-          body,
-        },
-      );
+      const isUnauthorized = requiresAuth && response.status === 401;
+      const shouldRetry = isUnauthorized && attempt < maxAuthAttempts;
+
+      if (shouldRetry) {
+        await this.clearCachedToken();
+        continue;
+      }
+
+      throw await this.buildAiraloError(url, response);
     }
 
-    const parsedBody = await this.parseJson(response);
-    return schema.parse(parsedBody);
+    throw new Error(`Failed to complete request to ${url}`);
   }
 
   private async buildHeaders(
@@ -410,6 +409,22 @@ export class AiraloClient {
     }
 
     return resolvedHeaders;
+  }
+
+  private async buildAiraloError(url: string, response: Response): Promise<AiraloError> {
+    const bodyText = await response.text();
+    let body: unknown = bodyText;
+    try {
+      body = JSON.parse(bodyText);
+    } catch {
+      // keep the raw text when JSON parsing fails
+    }
+
+    return new AiraloError(`Request to ${url} failed with status ${response.status}`, {
+      status: response.status,
+      statusText: response.statusText,
+      body,
+    });
   }
 
   private async getAccessToken(): Promise<string> {
