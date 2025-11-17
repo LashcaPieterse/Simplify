@@ -140,3 +140,49 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
   assert.equal(packageCalls, 2, "should stop after a single retry");
   assert.equal(tokenCache.clearCount, 1, "should only purge the cached token once");
 });
+
+test("AiraloClient merges include parameters for package requests", async () => {
+  const tokenCache = new MockTokenCache();
+  let requestedUrl: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      requestedUrl = target;
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await client.getPackages({
+    includeTopUp: true,
+    include: ["voice", "sms", "voice", ""],
+  });
+
+  assert(requestedUrl, "packages request should have been issued");
+  const url = new URL(requestedUrl!);
+  assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
+});
