@@ -399,16 +399,18 @@ function classifyAiraloBusinessReason(
     return "airalo_out_of_stock";
   }
 
-  if (info?.code !== null) {
-    if (OUT_OF_STOCK_ERROR_CODES.has(info.code)) {
+  const code = info?.code ?? null;
+
+  if (code !== null) {
+    if (OUT_OF_STOCK_ERROR_CODES.has(code)) {
       return "airalo_out_of_stock";
     }
 
-    if (INSUFFICIENT_CREDIT_ERROR_CODES.has(info.code)) {
+    if (INSUFFICIENT_CREDIT_ERROR_CODES.has(code)) {
       return "insufficient_credit";
     }
 
-    if (RECYCLED_SIM_ERROR_CODES.has(info.code)) {
+    if (RECYCLED_SIM_ERROR_CODES.has(code)) {
       return "iccid_recycled";
     }
   }
@@ -441,34 +443,35 @@ function mapAiraloError(
   const detailedMessage = businessError?.reason ?? businessError?.message ?? error.message;
   const candidateMessage = businessError?.message ?? error.message;
 
+  const businessCode = businessError?.code ?? null;
+
   const hasOutOfStockSignal =
     status === 409 ||
-    (businessError?.code !== null && OUT_OF_STOCK_ERROR_CODES.has(businessError.code)) ||
+    (businessCode !== null && OUT_OF_STOCK_ERROR_CODES.has(businessCode)) ||
     hasPatternMatch(businessError, candidateMessage, OUT_OF_STOCK_PATTERNS);
 
   if (hasOutOfStockSignal) {
     return new OrderOutOfStockError(businessError?.reason ?? businessError?.message ?? undefined);
   }
 
-  if (businessError?.code !== null && INSUFFICIENT_CREDIT_ERROR_CODES.has(businessError.code)) {
+  if (businessCode !== null && INSUFFICIENT_CREDIT_ERROR_CODES.has(businessCode)) {
     return new OrderServiceError(
-      businessError.reason ??
+      businessError?.reason ??
         "Airalo rejected the order because the partner credit balance is insufficient. Top up the Airalo wallet and retry.",
       402,
       error,
     );
   }
 
-  if (businessError?.code !== null && INVALID_PACKAGE_ERROR_CODES.has(businessError.code)) {
+  if (businessCode !== null && INVALID_PACKAGE_ERROR_CODES.has(businessCode)) {
     return new OrderValidationError(
-      businessError.reason ?? "Selected plan is no longer valid. Refresh the catalog and try a different plan.",
+      businessError?.reason ?? "Selected plan is no longer valid. Refresh the catalog and try a different plan.",
     );
   }
 
   if (
-    businessError?.code !== null && RECYCLED_SIM_ERROR_CODES.has(businessError.code)
-      ? true
-      : hasPatternMatch(businessError, candidateMessage, RECYCLED_PATTERNS)
+    (businessCode !== null && RECYCLED_SIM_ERROR_CODES.has(businessCode)) ||
+    hasPatternMatch(businessError, candidateMessage, RECYCLED_PATTERNS)
   ) {
     return new OrderServiceError(
       businessError?.reason ??
