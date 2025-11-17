@@ -246,7 +246,9 @@ function extractAiraloValidationErrors(body: unknown): AiraloValidationErrors | 
     }
 
     if (Array.isArray(value)) {
-      const messages = value.filter((item): item is string => typeof item === "string" && item.trim());
+      const messages = value.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      );
       if (messages.length > 0) {
         validationErrors[field] = messages;
       }
