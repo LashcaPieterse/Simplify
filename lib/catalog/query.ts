@@ -13,6 +13,7 @@ import type {
   ProviderInfo,
 } from "../sanity.queries";
 import type { ImageLike } from "../image";
+import type { Package } from "../airalo/schemas";
 
 const CARRIER_SUMMARY_FIELDS = `
   _id,
@@ -94,10 +95,14 @@ type SanityCatalogProduct = {
   package?: CatalogPackageInfo | null;
 };
 
+type MultiCurrencyPriceMap = NonNullable<Package["net_prices"]>;
+
 type PackageMetadata = {
   sku?: string | null;
   destination?: string | null;
   destinationName?: string | null;
+  netPrices?: MultiCurrencyPriceMap | null;
+  recommendedRetailPrices?: MultiCurrencyPriceMap | null;
   [key: string]: unknown;
 };
 

@@ -124,6 +124,8 @@ function normalizePackage(pkg: Package): NormalizedAiraloPackage {
     destinationName: pkg.destination_name ?? null,
     allowance: pkg.data_amount ?? null,
     isUnlimited: Boolean(pkg.is_unlimited),
+    netPrices: pkg.net_prices ?? null,
+    recommendedRetailPrices: pkg.recommended_retail_prices ?? null,
   } satisfies Record<string, unknown>;
 
   return {
