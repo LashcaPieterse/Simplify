@@ -3,6 +3,7 @@ import {
   OrderResponseSchema,
   PackagesResponseSchema,
   SubmitOrderAsyncResponseSchema,
+  SimInstallationInstructionsResponseSchema,
   TokenResponseSchema,
   UsageResponseSchema,
   WebhookPayloadSchema,
@@ -15,10 +16,12 @@ import {
 import { recordTokenRefresh } from "../observability/metrics";
 
 import type {
+  InstallationInstructions,
   Order,
   OrderResponse,
   Package,
   PackagesResponse,
+  SimInstallationInstructionsResponse,
   SubmitOrderAsyncAck,
   SubmitOrderAsyncResponse,
   Usage,
@@ -342,6 +345,36 @@ export class AiraloClient {
   async getSimPackages(iccid: string): Promise<Package[]> {
     const response = await this.getSimPackagesResponse(iccid);
     return normalizePackagesData(response.data);
+  }
+
+  async getSimInstallationInstructionsResponse(
+    iccid: string,
+    options: { acceptLanguage?: string } = {},
+  ): Promise<SimInstallationInstructionsResponse> {
+    if (!iccid) {
+      throw new Error("An ICCID is required to request installation instructions.");
+    }
+
+    const languageHint = options.acceptLanguage?.trim();
+    const headers: Record<string, string> = {
+      "Accept-Language": languageHint && languageHint.length > 0 ? languageHint : "en",
+    };
+
+    return this.request({
+      path: `/sims/${encodeURIComponent(iccid)}/instructions`,
+      schema: SimInstallationInstructionsResponseSchema,
+      init: {
+        headers,
+      },
+    });
+  }
+
+  async getSimInstallationInstructions(
+    iccid: string,
+    options: { acceptLanguage?: string } = {},
+  ): Promise<InstallationInstructions> {
+    const response = await this.getSimInstallationInstructionsResponse(iccid, options);
+    return response.data.instructions;
   }
 
   async clearCachedToken(): Promise<void> {
