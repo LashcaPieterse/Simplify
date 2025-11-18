@@ -4,6 +4,7 @@ import {
   PackagesResponseSchema,
   SubmitOrderAsyncResponseSchema,
   SimInstallationInstructionsResponseSchema,
+  SimResponseSchema,
   TokenResponseSchema,
   UsageResponseSchema,
   WebhookPayloadSchema,
@@ -21,6 +22,8 @@ import type {
   OrderResponse,
   Package,
   PackagesResponse,
+  Sim,
+  SimResponse,
   SimInstallationInstructionsResponse,
   SubmitOrderAsyncAck,
   SubmitOrderAsyncResponse,
@@ -88,6 +91,10 @@ function normalizePackagesData(
 export interface GetUsageOptions {
   iccid?: string;
   orderId?: string;
+}
+
+export interface GetSimOptions {
+  include?: string | string[];
 }
 
 interface AiraloRequestOptions<T> {
@@ -236,6 +243,36 @@ export class AiraloClient {
     return includes.join(",");
   }
 
+  private formatIncludeParam(include?: string | string[] | null): string | null {
+    if (!include) {
+      return null;
+    }
+
+    const includes: string[] = [];
+    const addInclude = (value: string | undefined | null): void => {
+      const normalized = value?.trim();
+      if (!normalized) {
+        return;
+      }
+
+      if (!includes.includes(normalized)) {
+        includes.push(normalized);
+      }
+    };
+
+    if (Array.isArray(include)) {
+      include.forEach(addInclude);
+    } else if (typeof include === "string") {
+      include.split(",").forEach((segment) => addInclude(segment));
+    }
+
+    if (includes.length === 0) {
+      return null;
+    }
+
+    return includes.join(",");
+  }
+
   async getPackages(options: GetPackagesOptions = {}): Promise<Package[]> {
     const response = await this.getPackagesResponse(options);
     return normalizePackagesData(response.data);
@@ -375,6 +412,31 @@ export class AiraloClient {
   ): Promise<InstallationInstructions> {
     const response = await this.getSimInstallationInstructionsResponse(iccid, options);
     return response.data.instructions;
+  }
+
+  async getSimResponse(iccid: string, options: GetSimOptions = {}): Promise<SimResponse> {
+    if (!iccid) {
+      throw new Error("A SIM ICCID is required to fetch SIM details.");
+    }
+
+    const searchParams = new URLSearchParams();
+    const includeParam = this.formatIncludeParam(options.include);
+    if (includeParam) {
+      searchParams.set("include", includeParam);
+    }
+
+    const query = searchParams.toString();
+    const path = `/sims/${encodeURIComponent(iccid)}${query ? `?${query}` : ""}`;
+
+    return this.request({
+      path,
+      schema: SimResponseSchema,
+    });
+  }
+
+  async getSim(iccid: string, options: GetSimOptions = {}): Promise<Sim> {
+    const response = await this.getSimResponse(iccid, options);
+    return response.data;
   }
 
   async clearCachedToken(): Promise<void> {
