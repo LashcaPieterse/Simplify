@@ -7,7 +7,7 @@ import {
 } from "@/lib/airalo/installInstructions";
 import { isValidIccid, normalizeIccid } from "@/lib/esim/iccid";
 
-const CACHE_TAG = ["airalo", "sims", "instructions"] as const;
+const CACHE_TAG: string[] = ["airalo", "sims", "instructions"];
 const CACHE_REVALIDATE_SECONDS = 60 * 30;
 
 const getCachedInstructions = unstable_cache(
