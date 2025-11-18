@@ -225,3 +225,93 @@ export type SimInstallationInstructionsResponse = z.infer<
   typeof SimInstallationInstructionsResponseSchema
 >;
 export type InstallationStepDictionary = z.infer<typeof InstallationStepsSchema>;
+
+const SimStatusSchema = z
+  .object({
+    name: z.string().nullable().optional(),
+    slug: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const SimUserSchema = z
+  .object({
+    id: z.coerce.number().nullable().optional(),
+    created_at: z.string().nullable().optional(),
+    name: z.string().nullable().optional(),
+    email: z.string().nullable().optional(),
+    mobile: z.string().nullable().optional(),
+    address: z.string().nullable().optional(),
+    state: z.string().nullable().optional(),
+    city: z.string().nullable().optional(),
+    postal_code: z.string().nullable().optional(),
+    country_id: z.coerce.number().nullable().optional(),
+    company: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const SimSharingSchema = z
+  .object({
+    link: z.string().nullable().optional(),
+    access_code: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const InstallationGuidesSchema = z.record(z.string()).optional();
+
+const SimSimableSchema = z
+  .object({
+    id: z.coerce.number(),
+    created_at: z.string().nullable().optional(),
+    code: z.string().nullable().optional(),
+    description: z.string().nullable().optional(),
+    type: z.string().nullable().optional(),
+    package_id: z.string().nullable().optional(),
+    quantity: z.coerce.number().nullable().optional(),
+    package: z.string().nullable().optional(),
+    esim_type: z.string().nullable().optional(),
+    validity: z.string().nullable().optional(),
+    price: z.string().nullable().optional(),
+    data: z.string().nullable().optional(),
+    currency: z.string().nullable().optional(),
+    manual_installation: z.string().nullable().optional(),
+    qrcode_installation: z.string().nullable().optional(),
+    installation_guides: InstallationGuidesSchema.nullable().optional(),
+    status: SimStatusSchema.nullable().optional(),
+    user: SimUserSchema.nullable().optional(),
+    sharing: SimSharingSchema.nullable().optional(),
+  })
+  .passthrough();
+
+const SimDataSchema = z
+  .object({
+    id: z.coerce.number(),
+    created_at: z.string(),
+    iccid: z.string(),
+    lpa: z.string().nullable().optional(),
+    imsis: z.union([z.array(z.string()), z.string(), z.null()]).optional(),
+    matching_id: z.string().nullable().optional(),
+    qrcode: z.string().nullable().optional(),
+    qrcode_url: z.string().nullable().optional(),
+    direct_apple_installation_url: z.string().nullable().optional(),
+    voucher_code: z.string().nullable().optional(),
+    airalo_code: z.string().nullable().optional(),
+    apn_type: z.string().nullable().optional(),
+    apn_value: z.string().nullable().optional(),
+    is_roaming: z.boolean().nullable().optional(),
+    confirmation_code: z.string().nullable().optional(),
+    order: z.unknown().nullable().optional(),
+    brand_settings_name: z.string().nullable().optional(),
+    recycled: z.boolean().optional(),
+    recycled_at: z.string().nullable().optional(),
+    simable: SimSimableSchema.nullable().optional(),
+  })
+  .passthrough();
+
+export const SimResponseSchema = BaseResponseSchema.extend({
+  data: SimDataSchema,
+  meta: z.object({ message: z.string().optional() }).passthrough().optional(),
+});
+
+export type SimResponse = z.infer<typeof SimResponseSchema>;
+export type Sim = z.infer<typeof SimDataSchema>;
+export type Simable = z.infer<typeof SimSimableSchema>;
