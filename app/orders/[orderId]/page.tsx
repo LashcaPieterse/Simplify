@@ -6,6 +6,7 @@ import { pollUsageForProfile } from "@/lib/orders/usage";
 import { getTopUpPackages } from "@/lib/orders/topups";
 import { createCheckout } from "@/lib/payments/checkouts";
 import { redirect } from "next/navigation";
+import InstallationInstructions from "@/components/esim/InstallationInstructions";
 
 type OrderPageParams = {
   params: {
@@ -200,6 +201,11 @@ export default async function OrderPage({ params }: OrderPageParams) {
             We&apos;re preparing your eSIM profile. Check back soon for installation details.
           </p>
         )}
+      </section>
+
+      <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-200">
+        <h2 className="text-xl font-semibold text-brand-900">Installation instructions</h2>
+        <InstallationInstructions iccid={profile?.iccid ?? null} className="mt-4" />
       </section>
 
       <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-200">
