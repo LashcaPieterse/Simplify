@@ -165,3 +165,63 @@ export const WebhookPayloadSchema = z
   .passthrough();
 
 export type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
+
+const InstallationStepsSchema = z.record(z.string(), z.string()).catch({});
+
+const InstallationViaQrCodeSchema = z
+  .object({
+    steps: InstallationStepsSchema.optional(),
+    qr_code_data: z.string().nullable().optional(),
+    qr_code_url: z.string().nullable().optional(),
+    direct_apple_installation_url: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const InstallationManualSchema = z
+  .object({
+    steps: InstallationStepsSchema.optional(),
+    smdp_address_and_activation_code: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const NetworkSetupSchema = z
+  .object({
+    steps: InstallationStepsSchema.optional(),
+    apn_type: z.string().nullable().optional(),
+    apn_value: z.string().nullable().optional(),
+    is_roaming: z.boolean().nullable().optional(),
+  })
+  .passthrough();
+
+export const PlatformInstallationInstructionsSchema = z
+  .object({
+    model: z.string().nullable().optional(),
+    version: z.string().nullable().optional(),
+    installation_via_qr_code: InstallationViaQrCodeSchema.nullable().optional(),
+    installation_manual: InstallationManualSchema.nullable().optional(),
+    network_setup: NetworkSetupSchema.nullable().optional(),
+  })
+  .passthrough();
+
+export const InstallationInstructionsSchema = z
+  .object({
+    language: z.string(),
+    ios: z.array(PlatformInstallationInstructionsSchema).default([]),
+    android: z.array(PlatformInstallationInstructionsSchema).default([]),
+  })
+  .passthrough();
+
+export const SimInstallationInstructionsResponseSchema = BaseResponseSchema.extend({
+  data: z.object({
+    instructions: InstallationInstructionsSchema,
+  }),
+});
+
+export type PlatformInstallationInstructions = z.infer<
+  typeof PlatformInstallationInstructionsSchema
+>;
+export type InstallationInstructions = z.infer<typeof InstallationInstructionsSchema>;
+export type SimInstallationInstructionsResponse = z.infer<
+  typeof SimInstallationInstructionsResponseSchema
+>;
+export type InstallationStepDictionary = z.infer<typeof InstallationStepsSchema>;
