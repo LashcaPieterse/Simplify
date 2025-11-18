@@ -10,12 +10,17 @@ import { isValidIccid, normalizeIccid } from "@/lib/esim/iccid";
 const CACHE_TAG: string[] = ["airalo", "sims", "instructions"];
 const CACHE_REVALIDATE_SECONDS = 60 * 30;
 
-const getCachedInstructions = unstable_cache(
-  async (iccid: string, language: string) =>
-    getInstallationInstructions(iccid, { acceptLanguage: language }),
-  CACHE_TAG,
-  { revalidate: CACHE_REVALIDATE_SECONDS },
-);
+function getCachedInstructions(iccid: string, language: string) {
+  const cacheKey = [...CACHE_TAG, iccid, language];
+
+  const loadInstructions = unstable_cache(
+    async () => getInstallationInstructions(iccid, { acceptLanguage: language }),
+    cacheKey,
+    { revalidate: CACHE_REVALIDATE_SECONDS },
+  );
+
+  return loadInstructions();
+}
 
 function extractPreferredLanguage(headerValue: string | null): string {
   if (!headerValue) {
