@@ -5,7 +5,9 @@ import {
   getInstallationInstructions,
   InstallationInstructionsError,
 } from "@/lib/airalo/installInstructions";
+import { getSimDetails } from "@/lib/airalo";
 import { isValidIccid, normalizeIccid } from "@/lib/esim/iccid";
+import type { InstallationInstructionsPayload } from "@/lib/esim/instructionsPayload";
 
 const CACHE_TAG: string[] = ["airalo", "sims", "instructions"];
 const CACHE_REVALIDATE_SECONDS = 60 * 30;
@@ -55,9 +57,26 @@ export async function GET(
     request.headers.get("accept-language"),
   );
 
+  const simDetailsPromise = getSimDetails(iccid, { include: ["simable"] }).catch(
+    (error) => {
+      console.error("Failed to load SIM status while fetching instructions", error);
+      return null;
+    },
+  );
+
   try {
     const instructions = await getCachedInstructions(iccid, preferredLanguage);
-    return NextResponse.json(instructions);
+    const simDetails = await simDetailsPromise;
+
+    const payload: InstallationInstructionsPayload = {
+      instructions,
+      simStatus: simDetails?.simable?.status ?? null,
+      recycled: Boolean(simDetails?.recycled),
+      recycledAt: simDetails?.recycledAt ?? null,
+      share: (instructions.share ?? simDetails?.simable?.sharing) ?? null,
+    };
+
+    return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof InstallationInstructionsError) {
       return NextResponse.json(
