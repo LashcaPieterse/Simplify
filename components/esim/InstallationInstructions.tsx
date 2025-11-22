@@ -6,23 +6,18 @@ import type { ReactNode } from "react";
 
 import type {
   InstallationInstructionStep,
-  InstallationInstructionsResult,
   InstallationPlatformInstructions,
   InstallationPlatformName,
 } from "@/lib/airalo/installInstructions";
+import type { InstallationInstructionsPayload } from "@/lib/esim/instructionsPayload";
 import { isValidIccid, normalizeIccid } from "@/lib/esim/iccid";
+import { useSimpleSWR } from "@/lib/hooks/useSimpleSWR";
 import { cn } from "@/components/utils";
 
 interface InstallationInstructionsProps {
   iccid: string | null | undefined;
   className?: string;
 }
-
-type FetchState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; data: InstallationInstructionsResult };
 
 const PLATFORM_LABELS: Record<InstallationPlatformName, string> = {
   ios: "iOS",
@@ -95,11 +90,52 @@ function SectionShell({
 }
 
 export function InstallationInstructions({ iccid, className }: InstallationInstructionsProps) {
-  const [state, setState] = useState<FetchState>({ status: iccid ? "loading" : "idle" });
-  const [reloadToken, setReloadToken] = useState(0);
+  const normalizedIccid = iccid ? normalizeIccid(iccid) : null;
+  const isIccidValid = normalizedIccid ? isValidIccid(normalizedIccid) : false;
+  const validationError =
+    normalizedIccid && !isIccidValid
+      ? "We couldn't validate the ICCID. Confirm the digits and try again."
+      : null;
   const [activePlatform, setActivePlatform] = useState<InstallationPlatformName>("ios");
   const [isIos174Plus, setIsIos174Plus] = useState(false);
   const [isIosDevice, setIsIosDevice] = useState(false);
+
+  const fetcher = async ([, normalized]: readonly [string, string]): Promise<InstallationInstructionsPayload> => {
+    const response = await fetch(`/api/sims/${encodeURIComponent(normalized)}/instructions`);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const message =
+        typeof body?.message === "string"
+          ? body.message
+          : "We couldn't load the installation instructions.";
+      throw new Error(message);
+    }
+
+    return (await response.json()) as InstallationInstructionsPayload;
+  };
+
+  const swrKey =
+    normalizedIccid && isIccidValid ? (["installation-instructions", normalizedIccid] as const) : null;
+
+  const { data, error, isValidating, mutate } = useSimpleSWR(
+    swrKey,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      revalidateIfStale: true,
+      revalidateOnReconnect: true,
+      dedupingInterval: 5 * 60 * 1000,
+    },
+  );
+
+  const fetchState: "idle" | "loading" | "error" | "ready" = !normalizedIccid
+    ? "idle"
+    : validationError || error
+      ? "error"
+      : data
+        ? "ready"
+        : "loading";
 
   useEffect(() => {
     if (typeof navigator === "undefined") {
@@ -125,63 +161,11 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
     }
   }, []);
 
-  useEffect(() => {
-    if (!iccid) {
-      setState({ status: "idle" });
-      return;
-    }
+  const instructions = data?.instructions ?? null;
+  const share = data?.share ?? instructions?.share ?? null;
 
-    const normalized = normalizeIccid(iccid);
-
-    if (!isValidIccid(normalized)) {
-      setState({
-        status: "error",
-        message: "We couldn't validate the ICCID. Confirm the digits and try again.",
-      });
-      return;
-    }
-
-    const controller = new AbortController();
-    setState({ status: "loading" });
-
-    fetch(`/api/sims/${encodeURIComponent(normalized)}/instructions`, {
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          const body = await response.json().catch(() => null);
-          const message =
-            typeof body?.message === "string"
-              ? body.message
-              : "We couldn't load the installation instructions.";
-          throw new Error(message);
-        }
-
-        return (await response.json()) as InstallationInstructionsResult;
-      })
-      .then((data) => {
-        setState({ status: "ready", data });
-      })
-      .catch((error) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setState({
-          status: "error",
-          message:
-            error instanceof Error && error.message
-              ? error.message
-              : "We couldn't load the installation instructions.",
-        });
-      });
-
-    return () => controller.abort();
-  }, [iccid, reloadToken]);
-
-  const hasIos = state.status === "ready" && state.data.platforms.some((p) => p.platform === "ios");
-  const hasAndroid =
-    state.status === "ready" && state.data.platforms.some((p) => p.platform === "android");
+  const hasIos = instructions?.platforms.some((p) => p.platform === "ios") ?? false;
+  const hasAndroid = instructions?.platforms.some((p) => p.platform === "android") ?? false;
 
   useEffect(() => {
     if (activePlatform === "ios" && !hasIos && hasAndroid) {
@@ -199,22 +183,31 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
       android: [],
     };
 
-    if (state.status === "ready") {
-      state.data.platforms.forEach((platform) => {
+    if (instructions) {
+      instructions.platforms.forEach((platform) => {
         groups[platform.platform].push(platform);
       });
     }
 
     return groups;
-  }, [state]);
+  }, [instructions]);
 
   const selectedPlatforms =
     platformsByType[activePlatform]?.length > 0
       ? platformsByType[activePlatform]
       : [];
 
+  const errorMessage =
+    validationError ??
+    (error instanceof Error && error.message
+      ? error.message
+      : error
+        ? "We couldn't load the installation instructions."
+        : null);
+  const fallbackErrorMessage = errorMessage ?? "We couldn't load the installation instructions.";
+
   const renderInstructions = () => {
-    if (state.status === "idle") {
+    if (fetchState === "idle") {
       return (
         <p className="text-sm text-sand-500">
           We&apos;ll surface the full instructions once the ICCID is available.
@@ -222,19 +215,25 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
       );
     }
 
-    if (state.status === "loading") {
+    if (fetchState === "loading") {
       return <p className="text-sm text-sand-500">Loading installation guide…</p>;
     }
 
-    if (state.status === "error") {
+    if (fetchState === "error" || !instructions) {
       return (
         <div className="space-y-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
-          <p>{state.message}</p>
+          <p>{fallbackErrorMessage}</p>
           <div className="flex flex-wrap gap-3 text-xs">
             <button
               type="button"
-              onClick={() => setReloadToken((token) => token + 1)}
-              className="rounded-full bg-white px-3 py-1 font-semibold text-rose-900 shadow-sm ring-1 ring-rose-200 hover:bg-rose-100"
+              onClick={() => mutate()}
+              disabled={isValidating || Boolean(validationError)}
+              className={cn(
+                "rounded-full bg-white px-3 py-1 font-semibold text-rose-900 shadow-sm ring-1 ring-rose-200",
+                isValidating
+                  ? "cursor-not-allowed opacity-60"
+                  : "hover:bg-rose-100",
+              )}
             >
               Retry
             </button>
@@ -261,10 +260,10 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
 
     return (
       <div className="space-y-6">
-        {!state.data.isRequestedLanguageAvailable && state.data.requestedLanguage ? (
+        {!instructions.isRequestedLanguageAvailable && instructions.requestedLanguage ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            We couldn&apos;t find instructions in {state.data.requestedLanguage.toUpperCase()}.
-            Showing {state.data.language} instead.
+            We couldn&apos;t find instructions in {instructions.requestedLanguage.toUpperCase()}.
+            Showing {instructions.language} instead.
           </div>
         ) : null}
         {selectedPlatforms.map((platform) => (
@@ -393,26 +392,36 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
             </div>
           </div>
         ))}
-        {state.data.share ? (
+        {share ? (
           <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4">
             <h4 className="text-base font-semibold text-brand-900">Share from another device</h4>
             <div className="mt-2 space-y-2 text-sm text-brand-900">
-              {state.data.share.link ? (
-                <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-sand-200">
-                  <div className="min-w-0">
+              {share.link ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-sand-200">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs uppercase tracking-wide text-sand-500">Shareable link</p>
-                    <p className="truncate font-medium">{state.data.share.link}</p>
+                    <p className="truncate font-medium">{share.link}</p>
                   </div>
-                  <CopyButton value={state.data.share.link} />
+                  <div className="flex gap-2">
+                    <CopyButton value={share.link} />
+                    <a
+                      href={share.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full px-3 py-1 text-xs font-semibold text-teal-700 underline-offset-2 hover:underline"
+                    >
+                      Open
+                    </a>
+                  </div>
                 </div>
               ) : null}
-              {state.data.share.accessCode ? (
+              {share.accessCode ? (
                 <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-sand-200">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-sand-500">Access code</p>
-                    <p className="font-medium">{state.data.share.accessCode}</p>
+                    <p className="font-medium">{share.accessCode}</p>
                   </div>
-                  <CopyButton value={state.data.share.accessCode} />
+                  <CopyButton value={share.accessCode} />
                 </div>
               ) : null}
               <p className="text-xs text-sand-500">
@@ -424,7 +433,7 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
         <p className="text-xs text-sand-500">
           Need more help?{" "}
           <a
-            href={state.data.faqUrl}
+            href={instructions.faqUrl}
             target="_blank"
             rel="noreferrer"
             className="font-semibold text-teal-700 underline-offset-2 hover:underline"
@@ -437,8 +446,48 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
     );
   };
 
+  const renderStatusSummary = () => {
+    if (fetchState !== "ready" || !data) {
+      return null;
+    }
+
+    const statusLabel = data.simStatus?.name || data.simStatus?.slug || "Unknown";
+    const recycledMessage = data.recycled
+      ? `Marked recycled${data.recycledAt ? ` on ${new Date(data.recycledAt).toLocaleString()}` : ""}. Issue a new plan before reuse.`
+      : "SIM is reusable. Confirm the status before sharing install steps with customers.";
+
+    return (
+      <div className="space-y-2 rounded-2xl border border-sand-200 bg-sand-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-brand-900">Provisioning status</p>
+            <p className="text-base font-semibold text-brand-900">{statusLabel}</p>
+            <p className={cn("text-sm", data.recycled ? "text-rose-700" : "text-sand-600")}>{recycledMessage}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => mutate()}
+            disabled={isValidating || Boolean(validationError)}
+            className={cn(
+              "rounded-full px-3 py-1 text-xs font-semibold text-teal-700 ring-1 ring-sand-200",
+              isValidating ? "cursor-not-allowed opacity-60" : "hover:bg-sand-100",
+            )}
+          >
+            {isValidating ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+        {data.recycled && data.recycledAt ? (
+          <p className="text-xs text-sand-500">
+            Recycling timestamp is provided by Airalo. Provision a new ICCID if customers still need service.
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className={cn("space-y-4", className)}>
+      {renderStatusSummary()}
       <div className="flex gap-3 rounded-full bg-sand-100 p-1">
         {(Object.keys(PLATFORM_LABELS) as InstallationPlatformName[]).map((platform) => {
           const isActive = platform === activePlatform;
