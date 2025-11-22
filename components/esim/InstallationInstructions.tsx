@@ -67,7 +67,11 @@ function StepsList({ steps }: { steps: InstallationInstructionStep[] | null }) {
   return (
     <ol className="ml-5 list-decimal space-y-2 text-sm text-brand-900">
       {steps.map((step) => (
-        <li key={`${step.order}-${step.text.slice(0, 8)}`}>{step.text}</li>
+        <li key={`${step.order}-${step.text.slice(0, 8)}`}>
+          <span className={cn("text-sm text-brand-900", step.emphasis ? "font-semibold" : undefined)}>
+            {step.text}
+          </span>
+        </li>
       ))}
     </ol>
   );
@@ -94,6 +98,32 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
   const [state, setState] = useState<FetchState>({ status: iccid ? "loading" : "idle" });
   const [reloadToken, setReloadToken] = useState(0);
   const [activePlatform, setActivePlatform] = useState<InstallationPlatformName>("ios");
+  const [isIos174Plus, setIsIos174Plus] = useState(false);
+  const [isIosDevice, setIsIosDevice] = useState(false);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") {
+      return;
+    }
+
+    const userAgent = navigator.userAgent ?? "";
+    const isIos = /iPhone|iPad|iPod/.test(userAgent);
+
+    setIsIosDevice(isIos);
+
+    if (!isIos) {
+      setIsIos174Plus(false);
+      return;
+    }
+
+    const match = userAgent.match(/OS (\d+)_?(\d+)?/);
+    const major = Number(match?.[1] ?? Number.NaN);
+    const minor = Number(match?.[2] ?? 0);
+
+    if (Number.isFinite(major) && (major > 17 || (major === 17 && minor >= 4))) {
+      setIsIos174Plus(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!iccid) {
@@ -272,16 +302,31 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
                     ) : null}
                     {platform.qr.directAppleInstallationUrl ? (
                       <div className="space-y-1">
-                        <a
-                          href={platform.qr.directAppleInstallationUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!platform.qr?.directAppleInstallationUrl) return;
+                            window.open(platform.qr.directAppleInstallationUrl, "_blank", "noopener,noreferrer");
+                          }}
+                          disabled={!isIos174Plus || !isIosDevice}
+                          title={
+                            isIos174Plus && isIosDevice
+                              ? "Open the direct install link in Safari."
+                              : "Send to an iPhone running iOS 17.4+ to use direct install."
+                          }
+                          className={cn(
+                            "inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-sm font-semibold shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500",
+                            isIos174Plus && isIosDevice
+                              ? "bg-teal-600 text-white hover:bg-teal-500"
+                              : "cursor-not-allowed bg-sand-200 text-sand-500",
+                          )}
                         >
                           Install with Apple (iOS 17.4+)
-                        </a>
+                        </button>
                         <p className="text-xs text-sand-500">
-                          Requires iOS 17.4 or newer.
+                          {isIos174Plus && isIosDevice
+                            ? "Opens the universal link in Safari on supported iPhones."
+                            : "Available on iPhones running iOS 17.4 or later."}
                         </p>
                       </div>
                     ) : null}
@@ -316,31 +361,66 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
                   </p>
                 )}
               </SectionShell>
-              <SectionShell title="Network setup">
-                {platform.network ? (
-                  <div className="space-y-3">
-                    <StepsList steps={platform.network.steps} />
-                    <div className="space-y-1 text-sm text-sand-600">
-                      {platform.network.apnValue ? (
-                        <p>
-                          APN: <span className="font-semibold">{platform.network.apnValue}</span>
-                          {platform.network.apnType ? ` (${platform.network.apnType})` : null}
-                        </p>
-                      ) : null}
-                      {platform.network.isRoaming !== null ? (
-                        <p>Data roaming: {platform.network.isRoaming ? "On" : "Off"}</p>
-                      ) : null}
-                    </div>
+              <div className="space-y-3 rounded-2xl border border-sand-200 p-4">
+                <details className="group" open>
+                  <summary className="flex cursor-pointer items-center justify-between text-base font-semibold text-brand-900">
+                    After installation
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    {platform.network ? (
+                      <>
+                        <StepsList steps={platform.network.steps} />
+                        <div className="space-y-1 text-sm text-sand-600">
+                          {platform.network.apnValue ? (
+                            <p>
+                              APN: <span className="font-semibold">{platform.network.apnValue}</span>
+                              {platform.network.apnType ? ` (${platform.network.apnType})` : null}
+                            </p>
+                          ) : null}
+                          {platform.network.isRoaming !== null ? (
+                            <p>Data roaming: {platform.network.isRoaming ? "On" : "Off"}</p>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-sand-500">
+                        We&apos;ll surface the network configuration when it&apos;s ready.
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-sm text-sand-500">
-                    We&apos;ll surface the network configuration when it&apos;s ready.
-                  </p>
-                )}
-              </SectionShell>
+                </details>
+              </div>
             </div>
           </div>
         ))}
+        {state.data.share ? (
+          <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4">
+            <h4 className="text-base font-semibold text-brand-900">Share from another device</h4>
+            <div className="mt-2 space-y-2 text-sm text-brand-900">
+              {state.data.share.link ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-sand-200">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-wide text-sand-500">Shareable link</p>
+                    <p className="truncate font-medium">{state.data.share.link}</p>
+                  </div>
+                  <CopyButton value={state.data.share.link} />
+                </div>
+              ) : null}
+              {state.data.share.accessCode ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-sand-200">
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-sand-500">Access code</p>
+                    <p className="font-medium">{state.data.share.accessCode}</p>
+                  </div>
+                  <CopyButton value={state.data.share.accessCode} />
+                </div>
+              ) : null}
+              <p className="text-xs text-sand-500">
+                Open the link and enter the access code on another device to start installation.
+              </p>
+            </div>
+          </div>
+        ) : null}
         <p className="text-xs text-sand-500">
           Need more help?{" "}
           <a

@@ -17,12 +17,12 @@ import {
 import { recordTokenRefresh } from "../observability/metrics";
 
 import type {
-  InstallationInstructions,
   Order,
   OrderResponse,
   Package,
   PackagesResponse,
   Sim,
+  SimInstallationInstructionsPayload,
   SimResponse,
   SimInstallationInstructionsResponse,
   SubmitOrderAsyncAck,
@@ -397,8 +397,11 @@ export class AiraloClient {
       "Accept-Language": languageHint && languageHint.length > 0 ? languageHint : "en",
     };
 
+    const searchParams = new URLSearchParams({ include: "share" });
+    const path = `/sims/${encodeURIComponent(iccid)}/instructions?${searchParams.toString()}`;
+
     return this.request({
-      path: `/sims/${encodeURIComponent(iccid)}/instructions`,
+      path,
       schema: SimInstallationInstructionsResponseSchema,
       init: {
         headers,
@@ -409,9 +412,9 @@ export class AiraloClient {
   async getSimInstallationInstructions(
     iccid: string,
     options: { acceptLanguage?: string } = {},
-  ): Promise<InstallationInstructions> {
+  ): Promise<SimInstallationInstructionsPayload> {
     const response = await this.getSimInstallationInstructionsResponse(iccid, options);
-    return response.data.instructions;
+    return response.data;
   }
 
   async getSimResponse(iccid: string, options: GetSimOptions = {}): Promise<SimResponse> {
