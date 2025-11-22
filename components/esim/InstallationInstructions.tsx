@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import useSWR from "swr";
 import type { ReactNode } from "react";
 
 import type {
@@ -12,6 +11,7 @@ import type {
 } from "@/lib/airalo/installInstructions";
 import type { InstallationInstructionsPayload } from "@/lib/esim/instructionsPayload";
 import { isValidIccid, normalizeIccid } from "@/lib/esim/iccid";
+import { useSimpleSWR } from "@/lib/hooks/useSimpleSWR";
 import { cn } from "@/components/utils";
 
 interface InstallationInstructionsProps {
@@ -100,7 +100,7 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
   const [isIos174Plus, setIsIos174Plus] = useState(false);
   const [isIosDevice, setIsIosDevice] = useState(false);
 
-  const fetcher = async ([, normalized]: [string, string]): Promise<InstallationInstructionsPayload> => {
+  const fetcher = async ([, normalized]: readonly [string, string]): Promise<InstallationInstructionsPayload> => {
     const response = await fetch(`/api/sims/${encodeURIComponent(normalized)}/instructions`);
 
     if (!response.ok) {
@@ -115,9 +115,10 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
     return (await response.json()) as InstallationInstructionsPayload;
   };
 
-  const swrKey = normalizedIccid && isIccidValid ? ["installation-instructions", normalizedIccid] : null;
+  const swrKey =
+    normalizedIccid && isIccidValid ? (["installation-instructions", normalizedIccid] as const) : null;
 
-  const { data, error, isValidating, mutate } = useSWR(
+  const { data, error, isValidating, mutate } = useSimpleSWR(
     swrKey,
     fetcher,
     {
@@ -226,7 +227,7 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
             <button
               type="button"
               onClick={() => mutate()}
-              disabled={isValidating || fetchState === "loading" || Boolean(validationError)}
+              disabled={isValidating || Boolean(validationError)}
               className={cn(
                 "rounded-full bg-white px-3 py-1 font-semibold text-rose-900 shadow-sm ring-1 ring-rose-200",
                 isValidating
@@ -466,7 +467,7 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
           <button
             type="button"
             onClick={() => mutate()}
-            disabled={isValidating || fetchState === "loading" || Boolean(validationError)}
+            disabled={isValidating || Boolean(validationError)}
             className={cn(
               "rounded-full px-3 py-1 text-xs font-semibold text-teal-700 ring-1 ring-sand-200",
               isValidating ? "cursor-not-allowed opacity-60" : "hover:bg-sand-100",
