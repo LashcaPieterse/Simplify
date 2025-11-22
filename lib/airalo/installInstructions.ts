@@ -3,6 +3,7 @@ import type {
   InstallationInstructions as RawInstallationInstructions,
   InstallationStepDictionary,
   PlatformInstallationInstructions,
+  SimInstallationInstructionsPayload,
 } from "./schemas";
 import { resolveSharedTokenCache } from "./token-cache";
 
@@ -14,6 +15,12 @@ export type InstallationPlatformName = "ios" | "android";
 export interface InstallationInstructionStep {
   order: number;
   text: string;
+  emphasis: boolean;
+}
+
+export interface InstallationShareInfo {
+  link: string | null;
+  accessCode: string | null;
 }
 
 export interface InstallationQrInstructions {
@@ -51,6 +58,7 @@ export interface InstallationInstructionsResult {
   isRequestedLanguageAvailable: boolean;
   faqUrl: string;
   platforms: InstallationPlatformInstructions[];
+  share: InstallationShareInfo | null;
 }
 
 export interface InstallationInstructionsOptions {
@@ -94,6 +102,56 @@ function resolveAiraloClient(): AiraloClient {
   return cachedClient;
 }
 
+function sanitizeInstructionHtml(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const withoutScriptsAndStyles = value
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, " ");
+
+  const onlyAllowedTags = withoutScriptsAndStyles
+    .replace(/<(?!\/?(?:p|br|b|strong)\b)[^>]+>/gi, "")
+    .replace(/<(p|br|b|strong)([^>]*)>/gi, "<$1>");
+
+  const sanitized = onlyAllowedTags.trim();
+  return sanitized.length > 0 ? sanitized : null;
+}
+
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function extractParagraphs(html: string): Array<{ text: string; emphasis: boolean }> {
+  const normalizedHtml = html.replace(/<br\s*\/?>(?=\s|$)/gi, " ");
+
+  const paragraphCandidates = normalizedHtml
+    .split(/<\/p>/i)
+    .map((segment) => segment.replace(/<p[^>]*>/gi, "").trim())
+    .filter((segment) => segment.length > 0);
+
+  const segments = paragraphCandidates.length > 0 ? paragraphCandidates : [normalizedHtml];
+
+  return segments
+    .map((segment) => {
+      const emphasis = /<(?:b|strong)\b[^>]*>/i.test(segment);
+      const text = collapseWhitespace(
+        segment
+          .replace(/<\/?p>/gi, " ")
+          .replace(/<br\s*\/?/gi, " ")
+          .replace(/<\/?(?:b|strong)>/gi, ""),
+      );
+
+      if (!text) {
+        return null;
+      }
+
+      return { text, emphasis };
+    })
+    .filter((paragraph): paragraph is { text: string; emphasis: boolean } => Boolean(paragraph));
+}
+
 function normalizeSteps(
   steps: InstallationStepDictionary | undefined | null,
 ): InstallationInstructionStep[] {
@@ -101,13 +159,28 @@ function normalizeSteps(
     return [];
   }
 
-  return Object.entries(steps)
-    .map(([order, text]) => ({
-      order: Number(order),
-      text: (text ?? "").trim(),
-    }))
-    .filter((entry) => entry.text.length > 0 && Number.isFinite(entry.order))
-    .sort((a, b) => a.order - b.order);
+  const normalized: InstallationInstructionStep[] = [];
+
+  Object.entries(steps).forEach(([order, text]) => {
+    const baseOrder = Number(order);
+    const sanitized = sanitizeInstructionHtml(text);
+
+    if (!Number.isFinite(baseOrder) || !sanitized) {
+      return;
+    }
+
+    const paragraphs = extractParagraphs(sanitized);
+
+    paragraphs.forEach((paragraph, index) => {
+      normalized.push({
+        order: baseOrder + index * 0.01,
+        text: paragraph.text,
+        emphasis: paragraph.emphasis,
+      });
+    });
+  });
+
+  return normalized.sort((a, b) => a.order - b.order);
 }
 
 function normalizePlatform(
@@ -190,10 +263,33 @@ function instructionsMatchRequestedLanguage(
   return normalizedInstructions.startsWith(normalizedRequested);
 }
 
+function normalizeShareInfo(
+  share: SimInstallationInstructionsPayload["share"],
+): InstallationShareInfo | null {
+  if (!share) {
+    return null;
+  }
+
+  const link = typeof share.link === "string" ? share.link.trim() : "";
+  const accessCode =
+    typeof share.access_code === "string" ? share.access_code.trim() : "";
+
+  if (!link && !accessCode) {
+    return null;
+  }
+
+  return {
+    link: link || null,
+    accessCode: accessCode || null,
+  };
+}
+
 function normalizeInstructions(
-  instructions: RawInstallationInstructions,
+  payload: SimInstallationInstructionsPayload,
   requestedLanguage: string | null,
 ): InstallationInstructionsResult {
+  const instructions = payload.instructions as RawInstallationInstructions;
+
   const iosPlatforms = instructions.ios.map((platform, index) =>
     normalizePlatform(platform, "ios", index),
   );
@@ -210,6 +306,7 @@ function normalizeInstructions(
     ),
     faqUrl: FAQ_URL,
     platforms: [...iosPlatforms, ...androidPlatforms],
+    share: normalizeShareInfo(payload.share ?? null),
   };
 }
 

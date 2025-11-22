@@ -168,6 +168,13 @@ export type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
 
 const InstallationStepsSchema = z.record(z.string(), z.string()).catch({});
 
+const InstallationShareSchema = z
+  .object({
+    link: z.string().nullable().optional(),
+    access_code: z.string().nullable().optional(),
+  })
+  .passthrough();
+
 const InstallationViaQrCodeSchema = z
   .object({
     steps: InstallationStepsSchema.optional(),
@@ -214,6 +221,7 @@ export const InstallationInstructionsSchema = z
 export const SimInstallationInstructionsResponseSchema = BaseResponseSchema.extend({
   data: z.object({
     instructions: InstallationInstructionsSchema,
+    share: InstallationShareSchema.nullable().optional(),
   }),
 });
 
@@ -224,6 +232,8 @@ export type InstallationInstructions = z.infer<typeof InstallationInstructionsSc
 export type SimInstallationInstructionsResponse = z.infer<
   typeof SimInstallationInstructionsResponseSchema
 >;
+export type SimInstallationInstructionsPayload =
+  SimInstallationInstructionsResponse["data"];
 export type InstallationStepDictionary = z.infer<typeof InstallationStepsSchema>;
 
 const SimStatusSchema = z
