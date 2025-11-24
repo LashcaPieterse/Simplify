@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "airalo:recover-orders": "tsx scripts/recover-airalo-orders.ts"
+    "airalo:recover-orders": "tsx scripts/recover-airalo-orders.ts",
+    "airalo:sync:loop": "tsx scripts/airalo-sync-worker.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.1",

@@ -26,26 +26,17 @@ export type EsimProductCardData = {
 export const getEsimProductHref = (product: EsimProductSummary): LinkHref | undefined => {
   const planSlug = product.slugs?.plan ?? product.plan?.slug;
   if (planSlug) {
-    return {
-      pathname: "/plan/[slug]",
-      query: { slug: planSlug }
-    } as const;
+    return `/plan/${planSlug}`;
   }
 
   const productSlug = product.slugs?.product ?? product.slug;
   if (productSlug) {
-    return {
-      pathname: "/product/[slug]",
-      query: { slug: productSlug }
-    } as const;
+    return `/product/${productSlug}`;
   }
 
   const countrySlug = product.slugs?.country ?? product.country?.slug;
   if (countrySlug) {
-    return {
-      pathname: "/country/[slug]",
-      query: { slug: countrySlug }
-    } as const;
+    return `/country/${countrySlug}`;
   }
 
   return undefined;

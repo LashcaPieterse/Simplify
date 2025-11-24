@@ -55,6 +55,7 @@ export function OrderButton({
       return;
     }
 
+    console.log("OrderButton click", { packageId, successPath: Boolean(successPath), hasOnSuccess: Boolean(onSuccess) });
     setIsPending(true);
     setError(null);
 

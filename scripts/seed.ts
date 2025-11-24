@@ -16,7 +16,9 @@ const client = createClient({ projectId, dataset, token, apiVersion, useCdn: fal
 async function uploadImage(url: string, filename: string) {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Failed to download image ${url}`);
+    throw new Error(
+      `Failed to download image ${url} (${response.status} ${response.statusText})`
+    );
   }
   const arrayBuffer = await response.arrayBuffer();
   const asset = await client.assets.upload("image", Buffer.from(arrayBuffer), { filename });
@@ -42,15 +44,42 @@ async function seed() {
     productSouthAfricaCover,
     productKenyaCover
   ] = await Promise.all([
-    uploadImage("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee", "namibia.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1526481280695-3c469928b67b", "south-africa.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1500534623283-312aade485b7", "kenya.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1582719478250-c89cae4dc85b", "botswana.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1526498460520-4c246339dccb", "zambia.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1", "blog-cover.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1523419409543-0c1df022bdd1", "product-namibia.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1544986581-efac024faf62", "product-south-africa.jpg"),
-    uploadImage("https://images.unsplash.com/photo-1523800503107-5bc3ba2a6f81", "product-kenya.jpg")
+    uploadImage(
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
+      "namibia.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1501594907352-04cda38ebc29?auto=format&fit=crop&w=1600&q=80",
+      "south-africa.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=1600&q=80",
+      "kenya.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80",
+      "botswana.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1526498460520-4c246339dccb?auto=format&fit=crop&w=1600&q=80",
+      "zambia.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1600&q=80",
+      "blog-cover.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1600&q=80",
+      "product-namibia.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1544986581-efac024faf62?auto=format&fit=crop&w=1600&q=80",
+      "product-south-africa.jpg"
+    ),
+    uploadImage(
+      "https://images.unsplash.com/photo-1523800503107-5bc3ba2a6f81?auto=format&fit=crop&w=1600&q=80",
+      "product-kenya.jpg"
+    )
   ]);
 
   console.info("Creating core documents...");
@@ -447,9 +476,12 @@ async function seed() {
     }
   ];
 
+  // Create all docs in one transaction so circular references (plans ↔ carriers ↔ countries) validate together.
+  const tx = client.transaction();
   for (const doc of docs) {
-    await client.createOrReplace(doc);
+    tx.createOrReplace(doc);
   }
+  await tx.commit();
 
   console.info("Creating home page sections...");
 

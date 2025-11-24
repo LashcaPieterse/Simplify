@@ -9,18 +9,5 @@ CREATE TABLE "EsimOrderRecoveryAttempt" (
     CONSTRAINT "EsimOrderRecoveryAttempt_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "EsimOrder" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
--- RedefineTables
-PRAGMA defer_foreign_keys=ON;
-PRAGMA foreign_keys=OFF;
-CREATE TABLE "new_AiraloAccessToken" (
-    "key" TEXT NOT NULL PRIMARY KEY,
-    "token" TEXT NOT NULL,
-    "expiresAt" DATETIME NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
-);
-INSERT INTO "new_AiraloAccessToken" ("createdAt", "expiresAt", "key", "token", "updatedAt") SELECT "createdAt", "expiresAt", "key", "token", "updatedAt" FROM "AiraloAccessToken";
-DROP TABLE "AiraloAccessToken";
-ALTER TABLE "new_AiraloAccessToken" RENAME TO "AiraloAccessToken";
-PRAGMA foreign_keys=ON;
-PRAGMA defer_foreign_keys=OFF;
+-- Note: AiraloAccessToken is created in migration 20251118120000_add_airalo_token_cache.
+-- This migration no longer redefines that table to keep the sequence bootstrap-friendly on fresh DBs.
