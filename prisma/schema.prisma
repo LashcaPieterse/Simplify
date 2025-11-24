@@ -8,53 +8,53 @@ datasource db {
 }
 
 model AiraloPackage {
-  id           String      @id @default(cuid())
-  externalId   String      @unique
-  name         String
-  description  String?
-  country      String?
-  countryCode  String?
-  region       String?
-  dataLimitMb  Int?
-  validityDays Int?
-  priceCents   Int
-  currency     String
+  id                String             @id @default(cuid())
+  externalId        String             @unique
+  name              String
+  description       String?
+  country           String?
+  countryCode       String?
+  region            String?
+  dataLimitMb       Int?
+  validityDays      Int?
+  priceCents        Int
+  currency          String
   sellingPriceCents Int?
-  metadata     String?
-  lastSyncedAt DateTime?
-  sourceHash   String?
-  isActive     Boolean     @default(true)
-  deactivatedAt DateTime?
-  lastSyncJob   SyncJob?    @relation(fields: [lastSyncJobId], references: [id])
-  lastSyncJobId String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  esimOrders   EsimOrder[]
-  checkoutSessions CheckoutSession[]
-  tags         AiraloPackageTag[]
-  notes        PackageNote[]
+  metadata          String?
+  lastSyncedAt      DateTime?
+  sourceHash        String?
+  isActive          Boolean            @default(true)
+  deactivatedAt     DateTime?
+  lastSyncJob       SyncJob?           @relation(fields: [lastSyncJobId], references: [id])
+  lastSyncJobId     String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  esimOrders        EsimOrder[]
+  checkoutSessions  CheckoutSession[]
+  tags              AiraloPackageTag[]
+  notes             PackageNote[]
 }
 
 model EsimOrder {
-  id             String                   @id @default(cuid())
-  orderNumber    String?                  @unique
-  requestId      String?                  @unique
-  package        AiraloPackage            @relation(fields: [packageId], references: [id])
-  packageId      String
-  status         String                   @default("pending")
-  customerEmail  String?
-  quantity       Int      @default(1)
-  totalCents     Int?
-  currency       String?
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
-  profiles       EsimProfile[]
-  usageSnapshots UsageSnapshot[]
-  webhookEvents  WebhookEvent[]
-  installation   EsimInstallationPayload?
-  payment        PaymentTransaction?      @relation(fields: [paymentTransactionId], references: [id])
+  id                   String                     @id @default(cuid())
+  orderNumber          String?                    @unique
+  requestId            String?                    @unique
+  package              AiraloPackage              @relation(fields: [packageId], references: [id])
+  packageId            String
+  status               String                     @default("pending")
+  customerEmail        String?
+  quantity             Int                        @default(1)
+  totalCents           Int?
+  currency             String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  profiles             EsimProfile[]
+  usageSnapshots       UsageSnapshot[]
+  webhookEvents        WebhookEvent[]
+  installation         EsimInstallationPayload?
+  payment              PaymentTransaction?        @relation(fields: [paymentTransactionId], references: [id])
   paymentTransactionId String?
-  recoveryAttempts EsimOrderRecoveryAttempt[]
+  recoveryAttempts     EsimOrderRecoveryAttempt[]
 }
 
 model EsimProfile {
@@ -118,50 +118,50 @@ model EsimInstallationPayload {
 }
 
 model CheckoutSession {
-  id                String               @id @default(cuid())
-  package           AiraloPackage        @relation(fields: [packageId], references: [id])
-  packageId         String
-  customerEmail     String?
-  quantity          Int                  @default(1)
-  totalCents        Int
-  currency          String
-  status            String               @default("pending")
-  intent            String               @default("purchase")
-  topUpForOrderId   String?
-  topUpForIccid     String?
-  orderId           String?
-  metadata          String?
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  payments          PaymentTransaction[]
+  id              String               @id @default(cuid())
+  package         AiraloPackage        @relation(fields: [packageId], references: [id])
+  packageId       String
+  customerEmail   String?
+  quantity        Int                  @default(1)
+  totalCents      Int
+  currency        String
+  status          String               @default("pending")
+  intent          String               @default("purchase")
+  topUpForOrderId String?
+  topUpForIccid   String?
+  orderId         String?
+  metadata        String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  payments        PaymentTransaction[]
 }
 
 model PaymentTransaction {
-  id                String               @id @default(cuid())
+  id                String                    @id @default(cuid())
   provider          String
   providerReference String?
   transactionToken  String?
   redirectUrl       String?
-  status            String               @default("pending")
+  status            String                    @default("pending")
   amountCents       Int
   currency          String
   statusHistory     String?
   metadata          String?
-  checkout          CheckoutSession?     @relation(fields: [checkoutId], references: [id])
+  checkout          CheckoutSession?          @relation(fields: [checkoutId], references: [id])
   checkoutId        String?
   orders            EsimOrder[]
   webhookEvents     PaymentTransactionEvent[]
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
 }
 
 model PaymentTransactionEvent {
-  id                 String             @id @default(cuid())
-  transaction        PaymentTransaction @relation(fields: [transactionId], references: [id])
-  transactionId      String
-  eventType          String
-  payload            String
-  receivedAt         DateTime           @default(now())
+  id            String             @id @default(cuid())
+  transaction   PaymentTransaction @relation(fields: [transactionId], references: [id])
+  transactionId String
+  eventType     String
+  payload       String
+  receivedAt    DateTime           @default(now())
 }
 
 model AiraloAccessToken {
@@ -173,35 +173,36 @@ model AiraloAccessToken {
 }
 
 model AdminUser {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id           String        @id @default(cuid())
+  email        String        @unique
   passwordHash String
   name         String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   auditLogs    AuditLog[]
+  notes        PackageNote[]
 }
 
 model SyncJob {
-  id               String         @id @default(cuid())
-  status           String         @default("pending")
-  startedAt        DateTime       @default(now())
+  id               String          @id @default(cuid())
+  status           String          @default("pending")
+  startedAt        DateTime        @default(now())
   finishedAt       DateTime?
-  itemsCreated     Int            @default(0)
-  itemsUpdated     Int            @default(0)
-  itemsDeactivated Int            @default(0)
+  itemsCreated     Int             @default(0)
+  itemsUpdated     Int             @default(0)
+  itemsDeactivated Int             @default(0)
   diffPreview      String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   packages         AiraloPackage[]
 }
 
 model PackageTag {
-  id        String              @id @default(cuid())
-  name      String              @unique
+  id        String             @id @default(cuid())
+  name      String             @unique
   color     String?
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
   packages  AiraloPackageTag[]
 }
 
@@ -225,12 +226,12 @@ model PackageNote {
 }
 
 model AuditLog {
-  id          String     @id @default(cuid())
-  actor       AdminUser? @relation(fields: [actorId], references: [id])
-  actorId     String?
-  action      String
-  entityType  String
-  entityId    String
-  details     String?
-  createdAt   DateTime   @default(now())
+  id         String     @id @default(cuid())
+  actor      AdminUser? @relation(fields: [actorId], references: [id])
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  details    String?
+  createdAt  DateTime   @default(now())
 }
