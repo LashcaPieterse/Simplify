@@ -12,20 +12,27 @@ model AiraloPackage {
   externalId   String      @unique
   name         String
   description  String?
+  country      String?
+  countryCode  String?
   region       String?
   dataLimitMb  Int?
   validityDays Int?
   priceCents   Int
   currency     String
+  sellingPriceCents Int?
   metadata     String?
   lastSyncedAt DateTime?
   sourceHash   String?
   isActive     Boolean     @default(true)
   deactivatedAt DateTime?
+  lastSyncJob   SyncJob?    @relation(fields: [lastSyncJobId], references: [id])
+  lastSyncJobId String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   esimOrders   EsimOrder[]
   checkoutSessions CheckoutSession[]
+  tags         AiraloPackageTag[]
+  notes        PackageNote[]
 }
 
 model EsimOrder {
@@ -163,4 +170,67 @@ model AiraloAccessToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model SyncJob {
+  id               String         @id @default(cuid())
+  status           String         @default("pending")
+  startedAt        DateTime       @default(now())
+  finishedAt       DateTime?
+  itemsCreated     Int            @default(0)
+  itemsUpdated     Int            @default(0)
+  itemsDeactivated Int            @default(0)
+  diffPreview      String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  packages         AiraloPackage[]
+}
+
+model PackageTag {
+  id        String              @id @default(cuid())
+  name      String              @unique
+  color     String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  packages  AiraloPackageTag[]
+}
+
+model AiraloPackageTag {
+  package   AiraloPackage @relation(fields: [packageId], references: [id])
+  packageId String
+  tag       PackageTag    @relation(fields: [tagId], references: [id])
+  tagId     String
+
+  @@id([packageId, tagId])
+}
+
+model PackageNote {
+  id        String        @id @default(cuid())
+  package   AiraloPackage @relation(fields: [packageId], references: [id])
+  packageId String
+  author    AdminUser?    @relation(fields: [authorId], references: [id])
+  authorId  String?
+  body      String
+  createdAt DateTime      @default(now())
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  actor       AdminUser? @relation(fields: [actorId], references: [id])
+  actorId     String?
+  action      String
+  entityType  String
+  entityId    String
+  details     String?
+  createdAt   DateTime   @default(now())
 }
