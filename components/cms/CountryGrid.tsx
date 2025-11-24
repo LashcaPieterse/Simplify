@@ -13,10 +13,7 @@ const mapCountryToProductCard = (country: CountryGridSection["countries"][number
     badge: country.badge,
     providerName: plan?.provider?.title,
     description: plan?.shortBlurb ?? country.summary,
-    href: {
-      pathname: "/country/[slug]",
-      query: { slug: country.slug }
-    },
+    href: `/country/${country.slug}`,
     ctaLabel: "View plans",
     image: {
       url: imageUrl,
