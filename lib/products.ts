@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import type { LinkProps } from "next/link";
 import { urlForImage } from "./image";
 import type { EsimProductSummary } from "./sanity.queries";
@@ -26,17 +27,17 @@ export type EsimProductCardData = {
 export const getEsimProductHref = (product: EsimProductSummary): LinkHref | undefined => {
   const planSlug = product.slugs?.plan ?? product.plan?.slug;
   if (planSlug) {
-    return `/plan/${planSlug}`;
+    return `/plan/${planSlug}` as Route;
   }
 
   const productSlug = product.slugs?.product ?? product.slug;
   if (productSlug) {
-    return `/product/${productSlug}`;
+    return `/product/${productSlug}` as Route;
   }
 
   const countrySlug = product.slugs?.country ?? product.country?.slug;
   if (countrySlug) {
-    return `/country/${countrySlug}`;
+    return `/country/${countrySlug}` as Route;
   }
 
   return undefined;

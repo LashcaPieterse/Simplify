@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import type { CountryGridSection } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { EsimProductCard } from "@/components/ui/EsimProductCard";
@@ -13,7 +14,7 @@ const mapCountryToProductCard = (country: CountryGridSection["countries"][number
     badge: country.badge,
     providerName: plan?.provider?.title,
     description: plan?.shortBlurb ?? country.summary,
-    href: `/country/${country.slug}`,
+    href: `/country/${country.slug}` as Route,
     ctaLabel: "View plans",
     image: {
       url: imageUrl,
