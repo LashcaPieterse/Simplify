@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
+    "airalo:sync": "AIRALO_SYNC_RUN_ONCE=true tsx scripts/airalo-sync-worker.ts",
     "airalo:recover-orders": "tsx scripts/recover-airalo-orders.ts",
     "airalo:sync:loop": "tsx scripts/airalo-sync-worker.ts"
   },

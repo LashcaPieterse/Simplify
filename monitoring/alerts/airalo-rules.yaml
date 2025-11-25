@@ -48,6 +48,17 @@ groups:
             Investigate /api/orders and /api/airalo/webhooks endpoints for errors.
             Refer to the Airalo runbook for mitigation guidance.
 
+      - alert: AiraloPackageSyncFailures
+        expr: increase(airalo_package_sync_runs_total{result="failure"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: high
+        annotations:
+          summary: "Airalo package sync job is failing"
+          description: |
+            The scheduled package sync has reported failures in the last 15 minutes.
+            Check the airalo-package-sync CronJob logs and restart the job if needed.
+
       - alert: AiraloPackageSyncStale
         expr: (time() - airalo_package_sync_last_success_timestamp > 3600)
           and airalo_package_sync_last_success_timestamp > 0
