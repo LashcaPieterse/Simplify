@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { syncAiraloPackages } from "@/lib/catalog/sync";
 import prisma from "@/lib/db/client";
@@ -7,6 +7,17 @@ import { sendEmail } from "@/lib/notifications/email";
 const ALERT_RECIPIENT = process.env.AIRALO_SYNC_ALERT_EMAIL ?? "pieterselashca@gmail.com";
 
 export const dynamic = "force-dynamic";
+
+function isAuthorized(request: NextRequest) {
+  const cronToken = process.env.AIRALO_SYNC_CRON_TOKEN;
+
+  if (!cronToken) return true;
+
+  const headerToken = request.headers.get("x-airalo-sync-key");
+  const queryToken = request.nextUrl.searchParams.get("key");
+
+  return headerToken === cronToken || queryToken === cronToken;
+}
 
 async function notifyFailure(error: unknown) {
   const failureReason = error instanceof Error ? `${error.message}\n\n${error.stack ?? ""}` : String(error);
@@ -19,8 +30,12 @@ async function notifyFailure(error: unknown) {
   });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const startedAt = new Date();
+
+  if (!isAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const result = await syncAiraloPackages({ logger: console });
