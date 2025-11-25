@@ -50,6 +50,12 @@ npx sanity dev --single --studio-config ./sanity.config.ts
 
 Alternatively, run the Next.js app (`npm run dev`) and browse to `http://localhost:3000/studio`.
 
+## Database (SQLite locally, Supabase/Postgres in production)
+
+- **Local development:** uses SQLite by default via `prisma/schema.prisma` and the migrations in `prisma/migrations`. Point `DATABASE_URL` at a SQLite file (e.g., `file:./dev.db`) in `.env.local`, then run `npx prisma migrate dev` to stay in sync.
+- **Production (Supabase/Postgres):** use the Postgres-specific schema at `prisma/supabase/schema.prisma` and migrations in `prisma/supabase/migrations`. Set `DATABASE_URL` to your Supabase connection string (with `sslmode=require`) and deploy with `npx prisma migrate deploy --schema prisma/supabase/schema.prisma`.
+- Keep the two environments separate: the default schema/migrations remain SQLite-friendly for quick local iteration, while the Supabase schema/migrations target Postgres for deployment.
+
 ## ISR revalidation webhook
 
 Configure a Vercel deploy hook or generic HTTP request webhook in Sanity that POSTs to `/api/revalidate` with the following JSON body:
