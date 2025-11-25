@@ -1,6 +1,6 @@
 # Airalo package sync scheduler
 
-Vercel Cron is convenient but limited on the free plan. You can keep the `/api/airalo-sync` route and drive it with an external ping-based scheduler such as:
+Vercel Cron is limited on the free plan, so the project now expects an **external ping-based scheduler** to trigger the `/api/airalo-sync` route (the `vercel.json` cron config has been removed to avoid deployment failures). Recommended options:
 
 - [cron-job.org](https://cron-job.org)
 - [Healthchecks.io / Dead Man's Snitch style checks](https://healthchecks.io)
@@ -21,5 +21,4 @@ Vercel Cron is convenient but limited on the free plan. You can keep the `/api/a
 4. **Alerting**: failures already trigger an email to `pieterselashca@gmail.com` (override with `AIRALO_SYNC_ALERT_EMAIL`). Your cron provider can also notify you if the endpoint returns a non-2xx status.
 
 ## Notes
-- Remove or disable the `crons` section in `vercel.json` if you prefer to rely solely on the external scheduler to avoid double-running the sync.
 - The route disconnects Prisma on completion to keep cold-start invocations lightweight.
