@@ -13,7 +13,7 @@ export async function loginAdmin(formData: FormData) {
     return { success: false, error: "Invalid credentials" } as const;
   }
 
-  createAdminSession(email);
+  await createAdminSession(email);
   await prisma.auditLog.create({
     data: {
       action: "admin.login",

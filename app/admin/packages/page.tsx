@@ -10,10 +10,10 @@ function buildWhere(searchParams: Record<string, string | string[] | undefined>)
 
   if (typeof q === "string" && q.length > 0) {
     where.OR = [
-      { name: { contains: q, mode: "insensitive" } },
-      { externalId: { contains: q, mode: "insensitive" } },
-      { country: { contains: q, mode: "insensitive" } },
-      { region: { contains: q, mode: "insensitive" } },
+      { name: { contains: q } },
+      { externalId: { contains: q } },
+      { country: { contains: q } },
+      { region: { contains: q } },
     ];
   }
 

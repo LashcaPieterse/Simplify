@@ -50,7 +50,6 @@ export async function saveTags(packageId: string, tags: string[]) {
   await prisma.airaloPackageTag.deleteMany({ where: { packageId } });
   await prisma.airaloPackageTag.createMany({
     data: tagRecords.map((tag) => ({ packageId, tagId: tag.id })),
-    skipDuplicates: true,
   });
   await prisma.auditLog.create({
     data: {

@@ -6,8 +6,8 @@ export const metadata = {
   title: "Simplify Admin",
 };
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
-  const session = requireAdminSession();
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const session = await requireAdminSession();
 
   return <AdminShell adminEmail={session.email}>{children}</AdminShell>;
 }
