@@ -1,0 +1,74 @@
+[
+  {
+    "externalId": "afr-001",
+    "name": "Kenya 3GB / 7 Days",
+    "country": "Kenya",
+    "countryCode": "KE",
+    "region": "Africa",
+    "dataLimitMb": 3000,
+    "validityDays": 7,
+    "priceCents": 850,
+    "currency": "USD",
+    "isActive": true
+  },
+  {
+    "externalId": "afr-002",
+    "name": "Ghana 5GB / 15 Days",
+    "country": "Ghana",
+    "countryCode": "GH",
+    "region": "Africa",
+    "dataLimitMb": 5000,
+    "validityDays": 15,
+    "priceCents": 1299,
+    "currency": "USD",
+    "isActive": true
+  },
+  {
+    "externalId": "eur-001",
+    "name": "France 10GB / 30 Days",
+    "country": "France",
+    "countryCode": "FR",
+    "region": "Europe",
+    "dataLimitMb": 10000,
+    "validityDays": 30,
+    "priceCents": 1899,
+    "currency": "EUR",
+    "isActive": true
+  },
+  {
+    "externalId": "eur-002",
+    "name": "Spain 3GB / 10 Days",
+    "country": "Spain",
+    "countryCode": "ES",
+    "region": "Europe",
+    "dataLimitMb": 3000,
+    "validityDays": 10,
+    "priceCents": 999,
+    "currency": "EUR",
+    "isActive": true
+  },
+  {
+    "externalId": "asia-001",
+    "name": "Singapore 2GB / 7 Days",
+    "country": "Singapore",
+    "countryCode": "SG",
+    "region": "Asia",
+    "dataLimitMb": 2000,
+    "validityDays": 7,
+    "priceCents": 599,
+    "currency": "USD",
+    "isActive": true
+  },
+  {
+    "externalId": "amer-001",
+    "name": "USA 5GB / 10 Days",
+    "country": "United States",
+    "countryCode": "US",
+    "region": "North America",
+    "dataLimitMb": 5000,
+    "validityDays": 10,
+    "priceCents": 1499,
+    "currency": "USD",
+    "isActive": true
+  }
+]
