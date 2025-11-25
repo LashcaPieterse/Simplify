@@ -50,11 +50,11 @@ npx sanity dev --single --studio-config ./sanity.config.ts
 
 Alternatively, run the Next.js app (`npm run dev`) and browse to `http://localhost:3000/studio`.
 
-## Database (SQLite locally, Supabase/Postgres in production)
+## Database (Supabase/Postgres across environments)
 
-- **Local development:** uses SQLite by default via `prisma/schema.prisma` and the migrations in `prisma/migrations`. Point `DATABASE_URL` at a SQLite file (e.g., `file:./dev.db`) in `.env.local`, then run `npx prisma migrate dev` to stay in sync.
-- **Production (Supabase/Postgres):** use the Postgres-specific schema at `prisma/supabase/schema.prisma` and migrations in `prisma/supabase/migrations`. Set `DATABASE_URL` to your Supabase connection string (with `sslmode=require`) and deploy with `npx prisma migrate deploy --schema prisma/supabase/schema.prisma`.
-- Keep the two environments separate: the default schema/migrations remain SQLite-friendly for quick local iteration, while the Supabase schema/migrations target Postgres for deployment.
+- **Single Prisma schema:** `prisma/schema.prisma` now targets Postgres/Supabase everywhere, backed by the migrations in `prisma/migrations`.
+- **Local + production workflow:** point `DATABASE_URL` at your Supabase Postgres URL (include `?sslmode=require`) and run `npx prisma migrate dev` locally to evolve the schema. Deploy the same migrations to Supabase with `npx prisma migrate deploy` once you’re ready.
+- **Safety while shipping the MVP:** until you spin up a separate dev Supabase project, be careful not to point your local environment at the production database. As soon as the MVP stabilizes, create a dedicated dev Supabase project (or schema) so you can iterate without touching production data.
 
 ## ISR revalidation webhook
 
