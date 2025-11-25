@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextRequest } from "next/server";
@@ -17,23 +16,45 @@ function envCredentials() {
   };
 }
 
-function signPayload(payload: string) {
-  return crypto.createHmac("sha256", secretKey()).update(payload).digest("hex");
+let cachedKey: CryptoKey | null = null;
+let cachedSecret: string | null = null;
+
+async function hmacHex(payload: string) {
+  const secret = secretKey();
+  if (!cachedKey || cachedSecret !== secret) {
+    cachedSecret = secret;
+    cachedKey = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+  }
+
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    cachedKey,
+    new TextEncoder().encode(payload)
+  );
+  return Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-function buildToken(email: string, issuedAt: number) {
+async function buildToken(email: string, issuedAt: number) {
   const payload = `${email}|${issuedAt}`;
-  const signature = signPayload(payload);
+  const signature = await hmacHex(payload);
   return `${payload}|${signature}`;
 }
 
-export function verifySessionToken(token?: string | null) {
+export async function verifySessionToken(token?: string | null) {
   if (!token) return null;
   const parts = token.split("|");
   if (parts.length !== 3) return null;
   const [email, issuedAtRaw, signature] = parts;
   const payload = `${email}|${issuedAtRaw}`;
-  if (signPayload(payload) !== signature) return null;
+  if ((await hmacHex(payload)) !== signature) return null;
 
   const issuedAt = Number(issuedAtRaw);
   if (Number.isNaN(issuedAt)) return null;
@@ -43,9 +64,9 @@ export function verifySessionToken(token?: string | null) {
   return { email, issuedAt: new Date(issuedAt), expiresAt: new Date(expiresAt) };
 }
 
-export function requireAdminSession() {
+export async function requireAdminSession() {
   const token = cookies().get(ADMIN_SESSION_COOKIE)?.value;
-  const session = verifySessionToken(token);
+  const session = await verifySessionToken(token);
 
   if (!session) {
     redirect("/admin/login");
@@ -54,8 +75,8 @@ export function requireAdminSession() {
   return session;
 }
 
-export function createAdminSession(email: string) {
-  const token = buildToken(email, Date.now());
+export async function createAdminSession(email: string) {
+  const token = await buildToken(email, Date.now());
   cookies().set(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -74,7 +95,8 @@ export function validateAdminCredentials(email: string, password: string) {
   return email === expectedEmail && password === expectedPassword;
 }
 
-export function requestHasValidSession(request: NextRequest) {
+export async function requestHasValidSession(request: NextRequest) {
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-  return Boolean(verifySessionToken(token));
+  const session = await verifySessionToken(token);
+  return Boolean(session);
 }

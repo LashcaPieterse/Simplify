@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Route } from "next";
 import { ReactNode } from "react";
 import { LogoutButton } from "./LogoutButton";
 
 const navItems = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/packages", label: "Packages" },
-  { href: "/admin/sync", label: "Sync Center" },
-  { href: "/admin/operations", label: "Operations" },
-];
+  { href: "/admin" as Route, label: "Overview" },
+  { href: "/admin/packages" as Route, label: "Packages" },
+  { href: "/admin/sync" as Route, label: "Sync Center" },
+  { href: "/admin/operations" as Route, label: "Operations" },
+] satisfies { href: Route; label: string }[];
 
 export function AdminShell({ children, adminEmail }: { children: ReactNode; adminEmail: string }) {
   const pathname = usePathname();
