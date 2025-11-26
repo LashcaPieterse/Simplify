@@ -7,6 +7,64 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Country {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  countryCode String     @unique @map("country_code")
+  name        String
+  slug        String     @unique
+  imageUrl    String?    @map("image_url")
+  metadata    Json?      @default(dbgenerated("'{}'::jsonb"))
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at")
+  operators   Operator[]
+  packages    Package[]
+
+  @@map("countries")
+}
+
+model Operator {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  country       Country   @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  countryId     String    @map("country_id") @db.Uuid
+  name          String
+  apiOperatorId Int?      @map("api_operator_id")
+  operatorCode  String?   @map("operator_code")
+  metadata      Json?     @default(dbgenerated("'{}'::jsonb"))
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  packages      Package[]
+
+  @@index([countryId])
+  @@map("operators")
+}
+
+model Package {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  country            Country  @relation(fields: [countryId], references: [id], onDelete: Restrict)
+  countryId          String   @map("country_id") @db.Uuid
+  operator           Operator @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  operatorId         String   @map("operator_id") @db.Uuid
+  externalId         String   @map("external_id")
+  name               String
+  dataAmountMb       Int?     @map("data_amount_mb")
+  validityDays       Int?     @map("validity_days")
+  isUnlimited        Boolean  @default(false) @map("is_unlimited")
+  price              Decimal  @db.Decimal(10, 2)
+  currencyCode       String?  @default("USD") @map("currency_code")
+  shortInfo          String?  @map("short_info")
+  qrInstallation     String?  @map("qr_installation")
+  manualInstallation String?  @map("manual_installation")
+  isFairUsagePolicy  Boolean? @map("is_fair_usage_policy")
+  fairUsagePolicy    String?  @map("fair_usage_policy")
+  metadata           Json?    @default(dbgenerated("'{}'::jsonb"))
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([countryId])
+  @@index([operatorId])
+  @@map("packages")
+}
+
 model AiraloPackage {
   id                String             @id @default(cuid())
   externalId        String             @unique
