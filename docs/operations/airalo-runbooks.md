@@ -86,6 +86,30 @@ Logs are emitted as JSON with the `service` field set to `order-service`. Key ev
 
 ## Runbooks
 
+### Airalo Package Sync (hourly)
+
+The package catalog is refreshed every hour by the `airalo-package-sync` CronJob. The job runs `npm run airalo:sync` in the
+application container with `NODE_ENV=production` and reports success/failure to Prometheus via
+`airalo_package_sync_last_success_timestamp` and `airalo_package_sync_runs_total`.
+
+- **Where it runs**: Kubernetes CronJob defined in `monitoring/cronjobs/airalo-package-sync.yaml`.
+- **Frequency**: Hourly (`0 * * * *`).
+- **Metrics to watch**:
+  - `airalo_package_sync_runs_total{result="failure"}` – increments on failed sync attempts.
+  - `airalo_package_sync_last_success_timestamp` – should update at least once per hour.
+- **Alerts**: See `AiraloPackageSyncFailures` and `AiraloPackageSyncStale` in `monitoring/alerts/airalo-rules.yaml`.
+
+**Troubleshooting steps**
+
+1. Check the CronJob status and recent pod logs:
+   - `kubectl get cronjob airalo-package-sync`
+   - `kubectl logs -l component=airalo-package-sync --since=2h --tail=500`
+2. If pods are crash-looping, inspect environment variables/credentials (`simplify-production-env` secret) and rerun the job:
+   - `kubectl create job --from=cronjob/airalo-package-sync airalo-package-sync-manual-$(date +%s)`
+3. For manual runs outside Kubernetes, execute `npm run airalo:sync` with production credentials loaded. The command exits
+   non-zero on failure and updates Prometheus metrics on success.
+4. After fixes, confirm `airalo_package_sync_last_success_timestamp` updates and that alerts clear.
+
 ### Repeated 5xx Responses
 
 1. **Confirm the alert**: Check the `PublicApiFiveHundreds` alert in Alertmanager/Grafana.
