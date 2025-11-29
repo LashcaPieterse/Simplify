@@ -15,6 +15,11 @@ const nextConfig = {
         protocol: "https",
         hostname: "*.airalo.com",
         pathname: "/**"
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**"
       }
     ]
   },

@@ -44,19 +44,23 @@ model Package {
   countryId          String   @map("country_id") @db.Uuid
   operator           Operator @relation(fields: [operatorId], references: [id], onDelete: Restrict)
   operatorId         String   @map("operator_id") @db.Uuid
-  externalId         String   @map("external_id")
+  externalId         String   @map("external_id") @unique
   name               String
   dataAmountMb       Int?     @map("data_amount_mb")
   validityDays       Int?     @map("validity_days")
   isUnlimited        Boolean  @default(false) @map("is_unlimited")
-  price              Decimal  @db.Decimal(10, 2)
-  currencyCode       String?  @default("USD") @map("currency_code")
+  priceCents         Int      @map("price_cents")
+  sellingPriceCents  Int?     @map("selling_price_cents")
+  currencyCode       String   @default("USD") @map("currency_code")
   shortInfo          String?  @map("short_info")
   qrInstallation     String?  @map("qr_installation")
   manualInstallation String?  @map("manual_installation")
   isFairUsagePolicy  Boolean? @map("is_fair_usage_policy")
   fairUsagePolicy    String?  @map("fair_usage_policy")
+  imageUrl           String?  @map("image_url")
   metadata           Json?    @default(dbgenerated("'{}'::jsonb"))
+  isActive           Boolean  @default(true) @map("is_active")
+  deactivatedAt      DateTime? @map("deactivated_at")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -78,7 +82,7 @@ model AiraloPackage {
   priceCents        Int
   currency          String
   sellingPriceCents Int?
-  metadata          String?
+  metadata          Json?
   lastSyncedAt      DateTime?
   sourceHash        String?
   isActive          Boolean            @default(true)

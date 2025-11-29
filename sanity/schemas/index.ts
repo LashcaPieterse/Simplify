@@ -16,6 +16,9 @@ import { post } from "./post";
 import { regionBundle } from "./regionBundle";
 import { siteSettings } from "./siteSettings";
 import { eSimProduct } from "./eSimProduct";
+import { catalogCountry } from "./catalogCountry";
+import { catalogOperator } from "./catalogOperator";
+import { catalogPackage } from "./catalogPackage";
 
 export const schemaTypes = [
   siteSettings,
@@ -26,6 +29,9 @@ export const schemaTypes = [
   eSimProduct,
   regionBundle,
   post,
+  catalogCountry,
+  catalogOperator,
+  catalogPackage,
   link,
   iconBullet,
   heroSection,

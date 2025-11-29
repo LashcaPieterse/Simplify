@@ -46,6 +46,15 @@ export const structure = (S: StructureBuilder) =>
       S.documentTypeListItem("country").title("Countries").icon(EarthGlobeIcon),
       S.documentTypeListItem("carrier").title("Carriers").icon(DocumentTextIcon),
       S.documentTypeListItem("plan").title("Plans").icon(PackageIcon),
+      S.documentTypeListItem("catalogCountry")
+        .title("Catalog Countries")
+        .icon(EarthGlobeIcon),
+      S.documentTypeListItem("catalogOperator")
+        .title("Catalog Operators")
+        .icon(DocumentTextIcon),
+      S.documentTypeListItem("catalogPackage")
+        .title("Catalog Packages")
+        .icon(PackageIcon),
       S.documentTypeListItem("eSimProduct").title("eSIM Products").icon(PackageIcon),
       S.documentTypeListItem("regionBundle").title("Region Bundles").icon(PackageIcon),
       S.documentTypeListItem("post").title("Posts").icon(BookIcon)
