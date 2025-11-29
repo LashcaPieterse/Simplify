@@ -78,14 +78,66 @@ export interface GetPackagesOptions {
   extraParams?: Record<string, QueryParamValue>;
 }
 
-function normalizePackagesData(
-  data: PackagesResponse["data"],
-): Package[] {
-  if (Array.isArray(data)) {
-    return data;
+function normalizePackagesData(data: unknown): Package[] {
+  // New API shape: array of countries, each with operators[].packages[]
+  if (Array.isArray(data) && data.length && (data[0] as any)?.operators) {
+    const flattened: Package[] = [];
+    for (const country of data as any[]) {
+      const destination = country.country_code ?? country.slug ?? country.title ?? "unknown";
+      const destinationName = country.title ?? country.slug ?? destination;
+      for (const operator of country.operators ?? []) {
+        for (const pkg of operator.packages ?? []) {
+          const netPrices =
+            pkg?.prices?.net_price && typeof pkg.prices.net_price === "object"
+              ? Object.fromEntries(
+                  Object.entries(pkg.prices.net_price).map(([currency, amount]) => [
+                    currency,
+                    { amount: typeof amount === "number" ? amount : Number(amount) },
+                  ]),
+                )
+              : undefined;
+
+          const rrps =
+            pkg?.prices?.recommended_retail_price && typeof pkg.prices.recommended_retail_price === "object"
+              ? Object.fromEntries(
+                  Object.entries(pkg.prices.recommended_retail_price).map(([currency, amount]) => [
+                    currency,
+                    { amount: typeof amount === "number" ? amount : Number(amount) },
+                  ]),
+                )
+              : undefined;
+
+          flattened.push({
+            id: String(pkg?.id ?? pkg?.slug ?? pkg?.title ?? destination),
+            name: pkg?.title ?? pkg?.name ?? "Unknown",
+            destination,
+            destination_name: destinationName,
+            region: country.region ?? country.title ?? null,
+            currency: "USD",
+            price: typeof pkg?.price === "number" ? pkg.price : undefined,
+            validity: typeof pkg?.day === "number" ? pkg.day : undefined,
+            data_amount: pkg?.data ?? (pkg?.is_unlimited ? "Unlimited" : pkg?.amount ? String(pkg.amount) : undefined),
+            is_unlimited: Boolean(pkg?.is_unlimited),
+            net_prices: netPrices,
+            recommended_retail_prices: rrps,
+            sku: pkg?.id ? String(pkg.id) : undefined,
+          });
+        }
+      }
+    }
+    return flattened;
   }
 
-  return Object.values(data).flatMap((packages) => packages);
+  // Legacy shapes: array of packages or index map
+  try {
+    const response = PackagesResponseSchema.parse({ data } as any);
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    return Object.values(response.data).flatMap((packages) => packages);
+  } catch {
+    return [];
+  }
 }
 
 export interface GetUsageOptions {
@@ -120,7 +172,10 @@ export class AiraloError extends Error {
   }
 }
 
-const DEFAULT_BASE_URL = "https://partners.airalo.com/api/v2";
+// Allow overriding the Airalo API host via env if the default ever changes.
+// Docs currently reference /v2/token (no /api prefix).
+const DEFAULT_BASE_URL =
+  process.env.AIRALO_BASE_URL ?? "https://partners-api.airalo.com/v2";
 const DEFAULT_TOKEN_BUFFER_SECONDS = 30;
 const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
   maxRetries: 3,
@@ -274,8 +329,20 @@ export class AiraloClient {
   }
 
   async getPackages(options: GetPackagesOptions = {}): Promise<Package[]> {
-    const response = await this.getPackagesResponse(options);
-    return normalizePackagesData(response.data);
+    const raw = await this.fetchPackagesRaw(options);
+    return normalizePackagesData(raw?.data);
+  }
+
+  /**
+   * Fetch packages while preserving the raw country/operator/package hierarchy.
+   */
+  async getPackagesTree(options: GetPackagesOptions = {}): Promise<any[]> {
+    const raw = await this.fetchPackagesRaw(options);
+    if (Array.isArray(raw?.data)) {
+      return raw.data as any[];
+    }
+
+    throw new Error("Unexpected Airalo response shape; expected an array of countries.");
   }
 
   async getOrderResponseById(orderId: string): Promise<OrderResponse> {
@@ -377,6 +444,52 @@ export class AiraloClient {
       path: `/sims/${encodeURIComponent(iccid)}/packages`,
       schema: PackagesResponseSchema,
     });
+  }
+
+  /**
+   * Fetch packages without strict schema validation so we can tolerate upstream shape changes.
+   */
+  private async fetchPackagesRaw(options: GetPackagesOptions = {}): Promise<any> {
+    const searchParams = new URLSearchParams();
+    this.applyPackageFilters(searchParams, options.filter);
+
+    const includeParam = this.resolvePackageIncludes(options);
+    if (includeParam) {
+      searchParams.set("include", includeParam);
+    }
+
+    if (options.limit !== undefined && options.limit !== null) {
+      searchParams.set("limit", String(options.limit));
+    }
+
+    if (options.page !== undefined && options.page !== null) {
+      searchParams.set("page", String(options.page));
+    }
+
+    if (options.extraParams) {
+      Object.entries(options.extraParams).forEach(([key, value]) => {
+        if (value === undefined || value === null) {
+          return;
+        }
+
+        searchParams.set(key, String(value));
+      });
+    }
+
+    const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+    const token = await this.getAccessToken();
+
+    const response = await this.executeWithRateLimitRetry(() =>
+      this.fetchFn(this.resolveUrl(path), {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }),
+    );
+
+    return this.parseJson(response);
   }
 
   async getSimPackages(iccid: string): Promise<Package[]> {
@@ -640,7 +753,10 @@ export class AiraloClient {
       return path;
     }
 
-    return `${this.baseUrl.replace(/\/$/, "")}${path.startsWith("/") ? "" : "/"}${path.replace(/^\//, "")}`;
+    const base = this.baseUrl.replace(/\/$/, "");
+    const normalisedPath = path.startsWith("/") ? path.slice(1) : path;
+
+    return `${base}/${normalisedPath}`;
   }
 
   private async parseJson(response: Response): Promise<unknown> {

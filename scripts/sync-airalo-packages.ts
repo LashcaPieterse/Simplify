@@ -4,15 +4,19 @@
  * Recommended cadence: run this script every 60 minutes via cron or a background worker
  * to keep pricing and availability fresh without overwhelming the upstream API.
  */
-import { syncAiraloPackages } from "../lib/catalog/sync";
+import { syncAiraloCatalog } from "../lib/catalog/sync";
 import prisma from "../lib/db/client";
 
 async function main() {
   try {
-    const result = await syncAiraloPackages();
+    const result = await syncAiraloCatalog();
 
     console.log(
-      `Synced ${result.total} packages (created: ${result.created}, updated: ${result.updated}, unchanged: ${result.unchanged}).`,
+      [
+        `Countries - created: ${result.countriesCreated}, updated: ${result.countriesUpdated}`,
+        `Operators - created: ${result.operatorsCreated}, updated: ${result.operatorsUpdated}`,
+        `Packages - created: ${result.packagesCreated}, updated: ${result.packagesUpdated}, unchanged: ${result.packagesUnchanged}`,
+      ].join(" | "),
     );
   } finally {
     await prisma.$disconnect();
