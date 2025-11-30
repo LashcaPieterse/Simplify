@@ -25,9 +25,10 @@ export const catalogCountry = defineType({
       validation: (Rule) => Rule.required().max(4)
     }),
     defineField({
-      name: "imageUrl",
-      title: "Image URL",
-      type: "url"
+      name: "image",
+      title: "Cover image",
+      type: "image",
+      options: { hotspot: true }
     }),
     defineField({
       name: "metadataJson",
@@ -47,7 +48,8 @@ export const catalogCountry = defineType({
   preview: {
     select: {
       title: "title",
-      subtitle: "countryCode"
+      subtitle: "countryCode",
+      media: "image"
     }
   }
 });

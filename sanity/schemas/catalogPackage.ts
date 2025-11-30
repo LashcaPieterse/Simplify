@@ -94,9 +94,10 @@ export const catalogPackage = defineType({
       rows: 3
     }),
     defineField({
-      name: "imageUrl",
-      title: "Image URL",
-      type: "url"
+      name: "image",
+      title: "Cover image",
+      type: "image",
+      options: { hotspot: true }
     }),
     defineField({
       name: "metadataJson",
@@ -127,7 +128,8 @@ export const catalogPackage = defineType({
   preview: {
     select: {
       title: "title",
-      subtitle: "operator.title"
+      subtitle: "operator.title",
+      media: "image"
     }
   }
 });
