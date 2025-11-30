@@ -6,8 +6,7 @@ async function main() {
     clientSecret: process.env.AIRALO_CLIENT_SECRET!,
   });
 
-  // @ts-expect-error private
-  const token = await (client as any).getAccessToken();
+  const token = await (client as unknown as { getAccessToken(): Promise<string> }).getAccessToken();
   console.log("token prefix", typeof token === "string" ? token.slice(0, 10) : token);
 
   const res = await fetch("https://partners-api.airalo.com/v2/packages?limit=5&page=1", {
