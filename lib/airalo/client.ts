@@ -78,11 +78,70 @@ export interface GetPackagesOptions {
   extraParams?: Record<string, QueryParamValue>;
 }
 
+export interface AiraloPackagePriceMap {
+  [currency: string]: number | string | null | undefined;
+}
+
+export interface AiraloPackageNode {
+  id?: number | string;
+  slug?: string;
+  title?: string;
+  name?: string;
+  price?: number;
+  day?: number;
+  data?: string;
+  amount?: number | string;
+  is_unlimited?: boolean;
+  isUnlimited?: boolean;
+  currency?: string;
+  validity?: number;
+  short_info?: string;
+  qr_installation?: string;
+  manual_installation?: string;
+  is_fair_usage_policy?: boolean;
+  fair_usage_policy?: string;
+  image?: { url?: string | null } | null;
+  prices?: {
+    net_price?: AiraloPackagePriceMap;
+    recommended_retail_price?: AiraloPackagePriceMap;
+  } | null;
+  [key: string]: unknown;
+}
+
+export interface AiraloOperatorNode {
+  id?: number | string;
+  operator_code?: string;
+  title?: string;
+  name?: string;
+  packages?: AiraloPackageNode[];
+  [key: string]: unknown;
+}
+
+export interface AiraloCountryNode {
+  country_code?: string;
+  slug?: string;
+  title?: string;
+  region?: string | null;
+  image?: { url?: string | null } | null;
+  operators?: AiraloOperatorNode[];
+  [key: string]: unknown;
+}
+
+type PackagesRawResponse = { data?: unknown };
+
+function isCountryTree(data: unknown): data is AiraloCountryNode[] {
+  return (
+    Array.isArray(data) &&
+    data.length > 0 &&
+    data.every((country) => country !== null && typeof country === "object")
+  );
+}
+
 function normalizePackagesData(data: unknown): Package[] {
   // New API shape: array of countries, each with operators[].packages[]
-  if (Array.isArray(data) && data.length && (data[0] as any)?.operators) {
+  if (isCountryTree(data)) {
     const flattened: Package[] = [];
-    for (const country of data as any[]) {
+    for (const country of data) {
       const destination = country.country_code ?? country.slug ?? country.title ?? "unknown";
       const destinationName = country.title ?? country.slug ?? destination;
       for (const operator of country.operators ?? []) {
@@ -130,7 +189,7 @@ function normalizePackagesData(data: unknown): Package[] {
 
   // Legacy shapes: array of packages or index map
   try {
-    const response = PackagesResponseSchema.parse({ data } as any);
+    const response = PackagesResponseSchema.parse({ data });
     if (Array.isArray(response.data)) {
       return response.data;
     }
@@ -336,10 +395,10 @@ export class AiraloClient {
   /**
    * Fetch packages while preserving the raw country/operator/package hierarchy.
    */
-  async getPackagesTree(options: GetPackagesOptions = {}): Promise<any[]> {
+  async getPackagesTree(options: GetPackagesOptions = {}): Promise<AiraloCountryNode[]> {
     const raw = await this.fetchPackagesRaw(options);
-    if (Array.isArray(raw?.data)) {
-      return raw.data as any[];
+    if (isCountryTree(raw?.data)) {
+      return raw.data;
     }
 
     throw new Error("Unexpected Airalo response shape; expected an array of countries.");
@@ -449,7 +508,7 @@ export class AiraloClient {
   /**
    * Fetch packages without strict schema validation so we can tolerate upstream shape changes.
    */
-  private async fetchPackagesRaw(options: GetPackagesOptions = {}): Promise<any> {
+  private async fetchPackagesRaw(options: GetPackagesOptions = {}): Promise<PackagesRawResponse> {
     const searchParams = new URLSearchParams();
     this.applyPackageFilters(searchParams, options.filter);
 
@@ -489,7 +548,12 @@ export class AiraloClient {
       }),
     );
 
-    return this.parseJson(response);
+    const parsed = await this.parseJson(response);
+    if (parsed && typeof parsed === "object") {
+      return parsed as PackagesRawResponse;
+    }
+
+    return { data: undefined };
   }
 
   async getSimPackages(iccid: string): Promise<Package[]> {
