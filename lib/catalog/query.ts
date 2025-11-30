@@ -132,17 +132,24 @@ function normalizeKey(value?: string | null): string | null {
 }
 
 function parsePackageMetadata(pkg: AiraloPackage): PackageMetadata | null {
-  if (!pkg.metadata) {
+  const raw = pkg.metadata;
+  if (!raw) return null;
+
+  // prisma JSON fields can be stored as stringified JSON or object; handle both.
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw) as PackageMetadata;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (error) {
+      console.warn(`Failed to parse Airalo package metadata for ${pkg.externalId}`, error);
+    }
     return null;
   }
 
-  try {
-    const parsed = JSON.parse(pkg.metadata) as PackageMetadata;
-    if (parsed && typeof parsed === "object") {
-      return parsed;
-    }
-  } catch (error) {
-    console.warn(`Failed to parse Airalo package metadata for ${pkg.externalId}`, error);
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as PackageMetadata;
   }
 
   return null;

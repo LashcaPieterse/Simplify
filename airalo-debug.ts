@@ -7,8 +7,7 @@ async function main() {
   });
 
   try {
-    // @ts-expect-error accessing private
-    const token = await (client as any).getAccessToken();
+    const token = await (client as unknown as { getAccessToken(): Promise<string> }).getAccessToken();
     console.log("token", typeof token === "string" ? token.slice(0, 10) + "..." : token);
   } catch (err: any) {
     console.error("token error", err?.details ?? err);

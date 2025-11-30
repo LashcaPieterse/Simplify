@@ -1,7 +1,7 @@
 /**
- * Synchronizes catalog countries, operators, and packages from the database into Sanity.
- * Run after `npx tsx scripts/sync-airalo-packages.ts` to mirror the latest Airalo catalog.
- */
+* Synchronizes catalog countries, operators, and packages from the database into Sanity.
+* Run after `npx tsx scripts/sync-airalo-packages.ts` to mirror the latest Airalo catalog.
+*/
 import { createClient } from "@sanity/client";
 import prisma from "../lib/db/client";
 

@@ -171,7 +171,7 @@ function normalizePackagesData(data: unknown): Package[] {
             name: pkg?.title ?? pkg?.name ?? "Unknown",
             destination,
             destination_name: destinationName,
-            region: country.region ?? country.title ?? null,
+            region: country.region ?? country.title ?? undefined,
             currency: "USD",
             price: typeof pkg?.price === "number" ? pkg.price : undefined,
             validity: typeof pkg?.day === "number" ? pkg.day : undefined,

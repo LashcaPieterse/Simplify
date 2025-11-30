@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import {
   AiraloClient,
@@ -172,12 +172,21 @@ function getSourceHash(pkg: NormalizedAiraloPackage): string {
   return createHash("sha256").update(JSON.stringify(hashPayload)).digest("hex");
 }
 
-function getMetadataJson(metadata: Record<string, unknown> | null): string | null {
-  if (!metadata) {
-    return null;
+function getMetadataJson(
+  metadata: Record<string, unknown> | null,
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return toPrismaJson(metadata);
+}
+
+function toPrismaJson(
+  value: unknown,
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (value === null || value === undefined) {
+    return Prisma.JsonNull;
   }
 
-  return JSON.stringify(metadata);
+  // Sanitize through JSON serialization to ensure Prisma-compatible JSON values.
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 interface PaginateAiraloPackagesOptions {
@@ -513,13 +522,13 @@ export async function syncAiraloCatalog(
         slug,
         name: countryName,
         imageUrl: countryImageUrl,
-        metadata: country ?? {},
+        metadata: toPrismaJson(country),
       },
       update: {
         slug,
         name: countryName,
         imageUrl: countryImageUrl,
-        metadata: country ?? {},
+        metadata: toPrismaJson(country),
         updatedAt: now,
       },
     });
@@ -547,26 +556,26 @@ export async function syncAiraloCatalog(
       let operatorRecord = existingOperator;
       if (!existingOperator) {
         operatorRecord = await db.operator.create({
-          data: {
-            countryId: countryRecord.id,
-            name: operatorName,
-            apiOperatorId,
-            operatorCode: operator?.operator_code ?? null,
-            metadata: operator ?? {},
-          },
-        });
+        data: {
+          countryId: countryRecord.id,
+          name: operatorName,
+          apiOperatorId,
+          operatorCode: operator?.operator_code ?? null,
+          metadata: toPrismaJson(operator),
+        },
+      });
         operatorsCreated.count += 1;
       } else {
         await db.operator.update({
           where: { id: existingOperator.id },
-          data: {
-            name: operatorName,
-            apiOperatorId,
-            operatorCode: operator?.operator_code ?? null,
-            metadata: operator ?? {},
-            updatedAt: now,
-          },
-        });
+        data: {
+          name: operatorName,
+          apiOperatorId,
+          operatorCode: operator?.operator_code ?? null,
+          metadata: toPrismaJson(operator),
+          updatedAt: now,
+        },
+      });
         operatorsUpdated.count += 1;
         operatorRecord = await db.operator.findUniqueOrThrow({
           where: { id: existingOperator.id },
@@ -634,7 +643,7 @@ export async function syncAiraloCatalog(
           isFairUsagePolicy: pkg.is_fair_usage_policy ?? null,
           fairUsagePolicy: pkg.fair_usage_policy ?? null,
           imageUrl: pkg.image?.url ?? null,
-          metadata: pkg ?? {},
+          metadata: toPrismaJson(pkg),
           isActive: true,
           deactivatedAt: null as Date | null,
         };
@@ -671,10 +680,7 @@ export async function syncAiraloCatalog(
           ] as const;
 
           for (const key of comparableKeys) {
-            if (
-              // @ts-expect-error index access for comparison
-              existingPackage[key] !== packageData[key]
-            ) {
+            if (existingPackage[key] !== packageData[key]) {
               return true;
             }
           }
