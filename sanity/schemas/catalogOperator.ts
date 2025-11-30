@@ -22,6 +22,12 @@ export const catalogOperator = defineType({
       type: "string"
     }),
     defineField({
+      name: "image",
+      title: "Cover image",
+      type: "image",
+      options: { hotspot: true }
+    }),
+    defineField({
       name: "country",
       title: "Country",
       type: "reference",
@@ -46,7 +52,8 @@ export const catalogOperator = defineType({
   preview: {
     select: {
       title: "title",
-      subtitle: "country.title"
+      subtitle: "country.title",
+      media: "image"
     }
   }
 });
