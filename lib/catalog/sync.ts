@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 
 import type { PrismaClient } from "@prisma/client";
 
-import { AiraloClient, type GetPackagesOptions } from "../airalo/client";
+import {
+  AiraloClient,
+  type AiraloCountryNode,
+  type GetPackagesOptions,
+} from "../airalo/client";
 import { resolveSharedTokenCache } from "../airalo/token-cache";
 import type { Package } from "../airalo/schemas";
 import { resolvePackagePrice } from "../airalo/pricing";
@@ -404,15 +408,15 @@ export async function syncAiraloCatalog(
   options: SyncAiraloPackagesOptions = {},
 ): Promise<SyncAiraloCatalogResult> {
   // Paginate the hierarchical packages endpoint and merge results by country/operator.
-  async function fetchAllCountries(): Promise<any[]> {
+  async function fetchAllCountries(): Promise<AiraloCountryNode[]> {
     const baseOptions: GetPackagesOptions = {
       ...options.packagesOptions,
     };
     const limit = baseOptions.limit ?? 100;
     let page = baseOptions.page ?? 1;
-    const merged = new Map<string, any>();
+    const merged = new Map<string, AiraloCountryNode>();
 
-    const mergePage = (countries: any[]) => {
+    const mergePage = (countries: AiraloCountryNode[]) => {
       for (const country of countries ?? []) {
         const countryCodeKey =
           (country?.country_code ?? country?.slug ?? country?.title ?? "").toLowerCase() ||
@@ -436,8 +440,7 @@ export async function syncAiraloCatalog(
             operator?.id ?? operator?.operator_code ?? operator?.title ?? operator?.name;
 
           const existingOperator = existingCountry.operators.find(
-            (op: any) =>
-              (op?.id ?? op?.operator_code ?? op?.title ?? op?.name) === operatorKey,
+            (op) => (op?.id ?? op?.operator_code ?? op?.title ?? op?.name) === operatorKey,
           );
 
           if (!existingOperator) {
@@ -594,9 +597,9 @@ export async function syncAiraloCatalog(
           };
         };
 
-        const netPrice = resolvePriceFromMap(pkg.prices?.net_price as any);
+        const netPrice = resolvePriceFromMap(pkg.prices?.net_price);
         const retailPrice =
-          resolvePriceFromMap(pkg.prices?.recommended_retail_price as any) ??
+          resolvePriceFromMap(pkg.prices?.recommended_retail_price) ??
           (typeof pkg.price === "number" && Number.isFinite(pkg.price)
             ? {
                 cents: Math.round(pkg.price * 100),
