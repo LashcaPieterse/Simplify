@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { CheckCircle2, Globe2, Router, SignalHigh } from "lucide-react";
 import { OrderButton } from "@/components/orders/OrderButton";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
-import { getPlanBySlug, getPlanSlugs, getPosts } from "@/lib/sanity.queries";
+import { getCatalogPackageId, getPlanBySlug, getPlanSlugs, getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 
 export const dynamic = "force-static";
@@ -69,7 +69,7 @@ export default async function PlanPage({ params }: PlanPageProps) {
               )}
             </p>
             <OrderButton
-              packageId={plan.package?.id}
+              packageId={getCatalogPackageId(plan.package)}
               label="Get this plan"
               pendingLabel="Processing…"
               size="lg"
