@@ -69,6 +69,14 @@ export type CountrySummary = {
   productCard?: EsimProductCardData;
 };
 
+export type CatalogCountrySummary = {
+  _id: string;
+  title: string;
+  slug: string;
+  countryCode?: string;
+  image?: ImageLike;
+};
+
 export type CountryGridSection = {
   _type: "countryGridSection";
   title: string;
@@ -141,12 +149,17 @@ export type LiveRegion = {
   signalQuality: string;
 };
 
-export type CarrierSummary = {
+export type CatalogOperatorSummary = {
   _id: string;
   title: string;
-  slug: string;
+  operatorCode?: string | null;
+  apiOperatorId?: number | null;
+  slug?: string;
   logo?: ImageLike;
+  image?: ImageLike;
 };
+
+export type CarrierSummary = CatalogOperatorSummary;
 
 export type MoneyValue = {
   amount: number;
@@ -179,6 +192,37 @@ export type CatalogPackageInfo = {
   metadata?: Record<string, unknown> | null;
 };
 
+export type CatalogPackageDocument = {
+  _id: string;
+  title: string;
+  externalId: string;
+  priceCents?: number;
+  sellingPriceCents?: number | null;
+  currencyCode?: string;
+  dataAmountMb?: number | null;
+  validityDays?: number | null;
+  isUnlimited?: boolean;
+  isActive?: boolean;
+  lastSyncedAt?: string | null;
+  metadataJson?: string | null;
+  operator?: CatalogOperatorSummary | null;
+  country?: CatalogCountrySummary | null;
+};
+
+export const getCatalogPackageId = (
+  pkg?: CatalogPackageInfo | CatalogPackageDocument | null
+): string | null => {
+  if (!pkg) {
+    return null;
+  }
+
+  if ("id" in pkg) {
+    return pkg.id;
+  }
+
+  return pkg._id ?? pkg.externalId ?? null;
+};
+
 export type PlanSummary = {
   _id: string;
   title: string;
@@ -190,9 +234,9 @@ export type PlanSummary = {
   fiveG?: boolean;
   label?: string;
   shortBlurb: string;
-  provider?: CarrierSummary;
+  provider?: CatalogOperatorSummary;
   price?: MoneyValue | null;
-  package?: CatalogPackageInfo | null;
+  package?: CatalogPackageInfo | CatalogPackageDocument | null;
 };
 
 export type RegionBundle = {
@@ -257,7 +301,7 @@ export type PlanDetail = PlanSummary & {
   whatsIncluded: string[];
   installSteps: PortableTextBlock[];
   terms?: PortableTextBlock[];
-  country?: CountrySummary;
+  country?: CatalogCountrySummary | CountrySummary;
 };
 
 export type PostDetail = PostSummary & {
@@ -292,11 +336,90 @@ const clone = <T>(value: T): T => {
   return JSON.parse(JSON.stringify(value)) as T;
 };
 
+const parseMetadataJson = (value?: string | null): Record<string, unknown> | null => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+  } catch (error) {
+    console.warn("Failed to parse metadata JSON", error);
+    return null;
+  }
+};
+
+const normalizeCatalogPackage = (
+  pkg?: CatalogPackageInfo | CatalogPackageDocument | null
+): CatalogPackageInfo | null => {
+  if (!pkg) {
+    return null;
+  }
+
+  if ("currency" in pkg) {
+    return pkg as CatalogPackageInfo;
+  }
+
+  return {
+    id: pkg._id ?? pkg.externalId,
+    externalId: pkg.externalId,
+    currency: pkg.currencyCode ?? "USD",
+    priceCents: pkg.priceCents ?? pkg.sellingPriceCents ?? 0,
+    dataLimitMb: pkg.dataAmountMb ?? null,
+    validityDays: pkg.validityDays ?? null,
+    region: null,
+    lastSyncedAt: pkg.lastSyncedAt ?? null,
+    metadata: parseMetadataJson(pkg.metadataJson)
+  };
+};
+
 const CARRIER_SUMMARY_FIELDS = `
   _id,
   title,
   "slug": slug.current,
   logo
+`;
+
+const CATALOG_COUNTRY_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  countryCode,
+  image
+`;
+
+const CATALOG_OPERATOR_FIELDS = `
+  _id,
+  title,
+  operatorCode,
+  apiOperatorId,
+  image,
+  "logo": image,
+  country->{
+    ${CATALOG_COUNTRY_FIELDS}
+  }
+`;
+
+const CATALOG_PACKAGE_FIELDS = `
+  _id,
+  title,
+  externalId,
+  priceCents,
+  sellingPriceCents,
+  currencyCode,
+  dataAmountMb,
+  validityDays,
+  isUnlimited,
+  isActive,
+  lastSyncedAt,
+  metadataJson,
+  operator->{
+    ${CATALOG_OPERATOR_FIELDS}
+  },
+  country->{
+    ${CATALOG_COUNTRY_FIELDS}
+  }
 `;
 
 const PLAN_SUMMARY_FIELDS = `
@@ -311,7 +434,10 @@ const PLAN_SUMMARY_FIELDS = `
   label,
   shortBlurb,
   provider->{
-    ${CARRIER_SUMMARY_FIELDS}
+    ${CATALOG_OPERATOR_FIELDS}
+  },
+  package->{
+    ${CATALOG_PACKAGE_FIELDS}
   }
 `;
 
@@ -373,7 +499,7 @@ const PLAN_DETAIL_FIELDS = `
   installSteps[]{..., markDefs[], children[]},
   terms[]{..., markDefs[], children[]},
   country->{
-    ${COUNTRY_REFERENCE_FIELDS}
+    ${CATALOG_COUNTRY_FIELDS}
   }
 `;
 
@@ -618,8 +744,9 @@ async function enrichPlansWithCatalogPricing<T extends PlanSummary>(plans: T[]):
 
     return plans.map((plan) => {
       const product = byPlanSlug.get(plan.slug);
+      const planPackage = normalizeCatalogPackage(plan.package);
       if (!product) {
-        return plan;
+        return { ...plan, package: planPackage };
       }
 
       const productPrice: MoneyValue | null = product.price ?? null;
@@ -643,7 +770,7 @@ async function enrichPlansWithCatalogPricing<T extends PlanSummary>(plans: T[]):
         ...plan,
         priceUSD: resolvedPriceUSD ?? plan.priceUSD,
         price: resolvedPrice,
-        package: product.package ?? plan.package ?? null,
+        package: product.package ?? planPackage ?? null,
       };
     });
   } catch (error) {

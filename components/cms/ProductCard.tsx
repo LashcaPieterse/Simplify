@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { OrderButton } from "@/components/orders/OrderButton";
-import type { EsimProductSummary } from "@/lib/sanity.queries";
+import { getCatalogPackageId, type EsimProductSummary } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { cn } from "@/components/utils";
 import { getEsimProductHref } from "@/lib/products";
@@ -67,7 +67,7 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
           <p className="font-semibold text-brand-900">{formatPrice(priceAmount, priceCurrency)}</p>
         ) : null}
         <OrderButton
-          packageId={product.package?.id}
+          packageId={getCatalogPackageId(product.package)}
           label={ctaLabel}
           pendingLabel="Processing…"
           variant="ghost"
