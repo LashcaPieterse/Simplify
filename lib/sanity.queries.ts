@@ -1,23 +1,8 @@
 import { groq } from "next-sanity";
-import { getSanityClient, isSanityConfigured } from "./sanity.client";
+import { getSanityClient } from "./sanity.client";
 import { getCatalogProductSummaries } from "./catalog/query";
 
 export { prisma } from "./db/client";
-import {
-  fallbackCountryDetails,
-  fallbackCountrySummaries,
-  fallbackEsimProductSummaries,
-  fallbackHomePage,
-  fallbackPlanDetails,
-  fallbackPostSummaries,
-  fallbackRegionBundles,
-  fallbackSiteSettings,
-  getFallbackBundleBySlug,
-  getFallbackCountryPlans,
-  getFallbackPlanBySlug,
-  getFallbackProductBySlug,
-  getFallbackPostBySlug
-} from "./sanity.fallback";
 import type { ImageLike } from "./image";
 import type { EsimProductCardData } from "./products";
 
@@ -61,20 +46,12 @@ export type CountrySummary = {
   _id: string;
   title: string;
   slug: string;
-  badge?: string;
-  summary: string;
+  badge?: string | null;
+  summary?: string | null;
   coverImage?: ImageLike;
   plan?: PlanSummary;
   featured?: boolean;
   productCard?: EsimProductCardData;
-};
-
-export type CatalogCountrySummary = {
-  _id: string;
-  title: string;
-  slug: string;
-  countryCode?: string;
-  image?: ImageLike;
 };
 
 export type CountryGridSection = {
@@ -149,17 +126,12 @@ export type LiveRegion = {
   signalQuality: string;
 };
 
-export type CatalogOperatorSummary = {
+export type CarrierSummary = {
   _id: string;
   title: string;
-  operatorCode?: string | null;
-  apiOperatorId?: number | null;
-  slug?: string;
+  slug: string;
   logo?: ImageLike;
-  image?: ImageLike;
 };
-
-export type CarrierSummary = CatalogOperatorSummary;
 
 export type MoneyValue = {
   amount: number;
@@ -192,37 +164,6 @@ export type CatalogPackageInfo = {
   metadata?: Record<string, unknown> | null;
 };
 
-export type CatalogPackageDocument = {
-  _id: string;
-  title: string;
-  externalId: string;
-  priceCents?: number;
-  sellingPriceCents?: number | null;
-  currencyCode?: string;
-  dataAmountMb?: number | null;
-  validityDays?: number | null;
-  isUnlimited?: boolean;
-  isActive?: boolean;
-  lastSyncedAt?: string | null;
-  metadataJson?: string | null;
-  operator?: CatalogOperatorSummary | null;
-  country?: CatalogCountrySummary | null;
-};
-
-export const getCatalogPackageId = (
-  pkg?: CatalogPackageInfo | CatalogPackageDocument | null
-): string | null => {
-  if (!pkg) {
-    return null;
-  }
-
-  if ("id" in pkg) {
-    return pkg.id;
-  }
-
-  return pkg._id ?? pkg.externalId ?? null;
-};
-
 export type PlanSummary = {
   _id: string;
   title: string;
@@ -234,9 +175,9 @@ export type PlanSummary = {
   fiveG?: boolean;
   label?: string;
   shortBlurb: string;
-  provider?: CatalogOperatorSummary;
+  provider?: CarrierSummary;
   price?: MoneyValue | null;
-  package?: CatalogPackageInfo | CatalogPackageDocument | null;
+  package?: CatalogPackageInfo | null;
 };
 
 export type RegionBundle = {
@@ -301,7 +242,7 @@ export type PlanDetail = PlanSummary & {
   whatsIncluded: string[];
   installSteps: PortableTextBlock[];
   terms?: PortableTextBlock[];
-  country?: CatalogCountrySummary | CountrySummary;
+  country?: CountrySummary;
 };
 
 export type PostDetail = PostSummary & {
@@ -322,104 +263,11 @@ export type HomePagePayload = {
   sections: HomeSection[];
 };
 
-const structuredCloneFn: (<T>(value: T) => T) | undefined = (globalThis as { structuredClone?: <T>(value: T) => T }).structuredClone;
-
-const clone = <T>(value: T): T => {
-  if (typeof value === "undefined" || value === null) {
-    return value;
-  }
-
-  if (structuredCloneFn) {
-    return structuredCloneFn(value);
-  }
-
-  return JSON.parse(JSON.stringify(value)) as T;
-};
-
-const parseMetadataJson = (value?: string | null): Record<string, unknown> | null => {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch (error) {
-    console.warn("Failed to parse metadata JSON", error);
-    return null;
-  }
-};
-
-const normalizeCatalogPackage = (
-  pkg?: CatalogPackageInfo | CatalogPackageDocument | null
-): CatalogPackageInfo | null => {
-  if (!pkg) {
-    return null;
-  }
-
-  if ("currency" in pkg) {
-    return pkg as CatalogPackageInfo;
-  }
-
-  return {
-    id: pkg._id ?? pkg.externalId,
-    externalId: pkg.externalId,
-    currency: pkg.currencyCode ?? "USD",
-    priceCents: pkg.priceCents ?? pkg.sellingPriceCents ?? 0,
-    dataLimitMb: pkg.dataAmountMb ?? null,
-    validityDays: pkg.validityDays ?? null,
-    region: null,
-    lastSyncedAt: pkg.lastSyncedAt ?? null,
-    metadata: parseMetadataJson(pkg.metadataJson)
-  };
-};
-
 const CARRIER_SUMMARY_FIELDS = `
   _id,
   title,
   "slug": slug.current,
   logo
-`;
-
-const CATALOG_COUNTRY_FIELDS = `
-  _id,
-  title,
-  "slug": slug.current,
-  countryCode,
-  image
-`;
-
-const CATALOG_OPERATOR_FIELDS = `
-  _id,
-  title,
-  operatorCode,
-  apiOperatorId,
-  image,
-  "logo": image,
-  country->{
-    ${CATALOG_COUNTRY_FIELDS}
-  }
-`;
-
-const CATALOG_PACKAGE_FIELDS = `
-  _id,
-  title,
-  externalId,
-  priceCents,
-  sellingPriceCents,
-  currencyCode,
-  dataAmountMb,
-  validityDays,
-  isUnlimited,
-  isActive,
-  lastSyncedAt,
-  metadataJson,
-  operator->{
-    ${CATALOG_OPERATOR_FIELDS}
-  },
-  country->{
-    ${CATALOG_COUNTRY_FIELDS}
-  }
 `;
 
 const PLAN_SUMMARY_FIELDS = `
@@ -434,10 +282,7 @@ const PLAN_SUMMARY_FIELDS = `
   label,
   shortBlurb,
   provider->{
-    ${CATALOG_OPERATOR_FIELDS}
-  },
-  package->{
-    ${CATALOG_PACKAGE_FIELDS}
+    ${CARRIER_SUMMARY_FIELDS}
   }
 `;
 
@@ -448,10 +293,7 @@ const COUNTRY_CARD_FIELDS = `
   badge,
   summary,
   coverImage,
-  featured,
-  "plan": plans[0]->{
-    ${PLAN_SUMMARY_FIELDS}
-  }
+  featured
 `;
 
 const COUNTRY_REFERENCE_FIELDS = `
@@ -462,6 +304,32 @@ const COUNTRY_REFERENCE_FIELDS = `
   summary,
   coverImage,
   featured
+`;
+
+const CATALOG_COUNTRY_FIELDS = `
+  _id,
+  title,
+  countryCode,
+  "slug": slug.current,
+  "coverImage": image
+`;
+
+const CATALOG_PACKAGE_FIELDS = `
+  _id,
+  externalId,
+  title,
+  priceCents,
+  currencyCode,
+  dataAmountMb,
+  validityDays,
+  isUnlimited,
+  shortInfo,
+  "operator": operator->{
+    _id,
+    title,
+    operatorCode,
+    image
+  }
 `;
 
 const REGION_BUNDLE_FIELDS = `
@@ -499,7 +367,7 @@ const PLAN_DETAIL_FIELDS = `
   installSteps[]{..., markDefs[], children[]},
   terms[]{..., markDefs[], children[]},
   country->{
-    ${CATALOG_COUNTRY_FIELDS}
+    ${COUNTRY_REFERENCE_FIELDS}
   }
 `;
 
@@ -601,38 +469,107 @@ const homePageQuery = groq`
 `;
 
 const countriesQuery = groq`
-  *[_type == "country"] | order(title asc) {
-    ${COUNTRY_CARD_FIELDS}
+  *[_type == "catalogCountry"] | order(title asc) {
+    ${CATALOG_COUNTRY_FIELDS}
   }
 `;
 
 const countryBySlugQuery = groq`
-  *[_type == "country" && slug.current == $slug][0]{
-    ${COUNTRY_CARD_FIELDS},
-    carriers[]->{
-      ${CARRIER_SUMMARY_FIELDS}
-    },
-    plans[]->{
-      ${PLAN_SUMMARY_FIELDS}
+  *[_type == "catalogCountry" && slug.current == $slug][0]{
+    ${CATALOG_COUNTRY_FIELDS},
+    "packages": *[_type == "catalogPackage" && country._ref == ^._id]{
+      ${CATALOG_PACKAGE_FIELDS}
     }
   }
 `;
 
 const plansForCountryQuery = groq`
-  *[_type == "plan" && country->slug.current == $slug] | order(priceUSD asc) {
-    ${PLAN_DETAIL_FIELDS}
+  *[_type == "catalogPackage" && country->slug.current == $slug] | order(priceCents asc) {
+    ${CATALOG_PACKAGE_FIELDS}
   }
 `;
 
 const planBySlugQuery = groq`
-  *[_type == "plan" && slug.current == $slug][0]{
-    ${PLAN_DETAIL_FIELDS}
+  *[_type == "catalogPackage" && externalId == $slug][0]{
+    ${CATALOG_PACKAGE_FIELDS}
   }
 `;
 
 const planSlugsQuery = groq`
-  *[_type == "plan" && defined(slug.current)]{ "slug": slug.current }
+  *[_type == "catalogPackage" && defined(externalId)]{ "slug": externalId }
 `;
+
+type CatalogCountryDoc = {
+  _id: string;
+  title: string;
+  slug: string;
+  countryCode?: string;
+  coverImage?: ImageLike;
+  packages?: CatalogPackageDoc[];
+};
+
+type CatalogPackageDoc = {
+  _id: string;
+  externalId: string;
+  title: string;
+  priceCents: number;
+  currencyCode: string;
+  dataAmountMb?: number | null;
+  validityDays?: number | null;
+  isUnlimited?: boolean;
+  shortInfo?: string | null;
+  operator?: {
+    _id: string;
+    title: string;
+    operatorCode?: string | null;
+    image?: ImageLike;
+  } | null;
+};
+
+const centsToUsd = (cents: number, currency: string) => {
+  if (currency?.toUpperCase() !== "USD") {
+    return cents / 100;
+  }
+  return cents / 100;
+};
+
+function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
+  const priceUSD = centsToUsd(pkg.priceCents ?? 0, pkg.currencyCode ?? "USD");
+  return {
+    _id: pkg._id,
+    title: pkg.title,
+    slug: pkg.externalId,
+    priceUSD,
+    dataGB: pkg.dataAmountMb ? Math.round(pkg.dataAmountMb / 1024) : 0,
+    validityDays: pkg.validityDays ?? 0,
+    hotspot: true,
+    fiveG: false,
+    label: pkg.isUnlimited ? "Unlimited" : undefined,
+    shortBlurb: pkg.shortInfo ?? "",
+    provider: pkg.operator
+      ? {
+          _id: pkg.operator._id,
+          title: pkg.operator.title,
+          slug: pkg.operator.operatorCode ?? pkg.operator.title.toLowerCase().replace(/\s+/g, "-"),
+          logo: pkg.operator.image,
+        }
+      : undefined,
+    price: {
+      amount: priceUSD,
+      currency: pkg.currencyCode ?? "USD",
+      source: "sanity",
+    },
+    package: {
+      id: pkg._id,
+      externalId: pkg.externalId,
+      currency: pkg.currencyCode ?? "USD",
+      priceCents: pkg.priceCents,
+      dataLimitMb: pkg.dataAmountMb ?? null,
+      validityDays: pkg.validityDays ?? null,
+      metadata: null,
+    },
+  };
+}
 
 export const esimProductsQuery = groq`
   *[_type == "eSimProduct"] | order(displayName asc) {
@@ -676,47 +613,59 @@ const postBySlugQuery = groq`
 `;
 
 export async function getSiteSettings(): Promise<SiteSettings | null> {
-  if (!isSanityConfigured) {
-    return clone(fallbackSiteSettings);
-  }
-
   try {
     const client = getSanityClient();
     const settings = await client.fetch<SiteSettings | null>(siteSettingsQuery);
-    return settings ?? clone(fallbackSiteSettings);
+    return settings ?? null;
   } catch (error) {
     console.error("Failed to fetch site settings from Sanity", error);
-    return clone(fallbackSiteSettings);
+    return null;
   }
 }
 
 export async function getHomePage(): Promise<HomePagePayload | null> {
-  if (!isSanityConfigured) {
-    return clone(fallbackHomePage);
-  }
-
   try {
     const client = getSanityClient();
     const home = await client.fetch<HomePagePayload | null>(homePageQuery);
-    return home ?? clone(fallbackHomePage);
+    if (!home) return null;
+
+    // Replace any country grid section with catalog countries.
+    const countries = await getCountriesList();
+    const sections = (home.sections ?? []).map((section) => {
+      if (section?._type === "countryGridSection") {
+        return {
+          ...section,
+          countries
+        } as CountryGridSection;
+      }
+      return section;
+    });
+
+    return { ...home, sections };
   } catch (error) {
     console.error("Failed to fetch home page content from Sanity", error);
-    return clone(fallbackHomePage);
+    return null;
   }
 }
 
 export async function getCountriesList(): Promise<CountrySummary[]> {
-  if (!isSanityConfigured) {
-    return clone(fallbackCountrySummaries);
-  }
-
   try {
     const client = getSanityClient();
-    const results = await client.fetch<CountrySummary[]>(countriesQuery);
-    return results ?? [];
+    const results = await client.fetch<CatalogCountryDoc[]>(countriesQuery);
+    return (
+      results?.map((country) => ({
+        _id: country._id,
+        title: country.title,
+        slug: country.slug,
+        badge: null,
+        summary: null,
+        coverImage: country.coverImage,
+        featured: false
+      })) ?? []
+    );
   } catch (error) {
     console.error("Failed to fetch countries from Sanity", error);
-    return clone(fallbackCountrySummaries);
+    return [];
   }
 }
 
@@ -744,9 +693,8 @@ async function enrichPlansWithCatalogPricing<T extends PlanSummary>(plans: T[]):
 
     return plans.map((plan) => {
       const product = byPlanSlug.get(plan.slug);
-      const planPackage = normalizeCatalogPackage(plan.package);
       if (!product) {
-        return { ...plan, package: planPackage };
+        return plan;
       }
 
       const productPrice: MoneyValue | null = product.price ?? null;
@@ -770,7 +718,7 @@ async function enrichPlansWithCatalogPricing<T extends PlanSummary>(plans: T[]):
         ...plan,
         priceUSD: resolvedPriceUSD ?? plan.priceUSD,
         price: resolvedPrice,
-        package: product.package ?? planPackage ?? null,
+        package: product.package ?? plan.package ?? null,
       };
     });
   } catch (error) {
@@ -789,190 +737,135 @@ async function enrichPlanWithCatalogPricing<T extends PlanSummary>(plan: T | nul
 }
 
 export async function getCountryBySlug(slug: string): Promise<CountryDetail | null> {
-  if (!isSanityConfigured) {
-    const fallback = fallbackCountryDetails.find((country) => country.slug === slug);
-    return fallback ? clone(fallback) : null;
-  }
-
   try {
     const client = getSanityClient();
-    const country = await client.fetch<CountryDetail | null>(countryBySlugQuery, { slug });
-    if (!country) {
-      return null;
-    }
+    const country = await client.fetch<CatalogCountryDoc | null>(countryBySlugQuery, { slug });
+    if (!country) return null;
 
-    const enrichedPlan = await enrichPlanWithCatalogPricing(country.plan ?? null);
-    return enrichedPlan ? { ...country, plan: enrichedPlan } : country;
+    const plans = (country.packages ?? []).map(mapCatalogPackageToPlan);
+    return {
+      _id: country._id,
+      title: country.title,
+      slug: country.slug,
+      badge: null,
+      summary: null,
+      coverImage: country.coverImage,
+      featured: false,
+      carriers: [],
+      plans
+    };
   } catch (error) {
     console.error(`Failed to fetch country '${slug}' from Sanity`, error);
-    const fallback = fallbackCountryDetails.find((country) => country.slug === slug);
-    return fallback ? clone(fallback) : null;
+    return null;
   }
 }
 
 export async function getPlansForCountry(slug: string): Promise<PlanDetail[]> {
-  if (!isSanityConfigured) {
-    return clone(getFallbackCountryPlans(slug));
-  }
-
   try {
     const client = getSanityClient();
-    const plans = await client.fetch<PlanDetail[]>(plansForCountryQuery, { slug });
-    const enriched = await enrichPlansWithCatalogPricing(plans ?? []);
-    return enriched ?? [];
+    const packages = await client.fetch<CatalogPackageDoc[]>(plansForCountryQuery, { slug });
+    return (packages ?? []).map((pkg) => mapCatalogPackageToPlan(pkg) as PlanDetail);
   } catch (error) {
     console.error(`Failed to fetch plans for country '${slug}' from Sanity`, error);
-    return clone(getFallbackCountryPlans(slug));
+    return [];
   }
 }
 
 export async function getPlanBySlug(slug: string): Promise<PlanDetail | null> {
-  if (!isSanityConfigured) {
-    const fallback = getFallbackPlanBySlug(slug);
-    return fallback ? clone(fallback) : null;
-  }
-
   try {
     const client = getSanityClient();
-    const plan = await client.fetch<PlanDetail | null>(planBySlugQuery, { slug });
-    if (!plan) {
-      return null;
-    }
-
-    const [enriched] = await enrichPlansWithCatalogPricing([plan]);
-    return enriched ?? plan;
+    const pkg = await client.fetch<CatalogPackageDoc | null>(planBySlugQuery, { slug });
+    if (!pkg) return null;
+    return mapCatalogPackageToPlan(pkg) as PlanDetail;
   } catch (error) {
     console.error(`Failed to fetch plan '${slug}' from Sanity`, error);
-    const fallback = getFallbackPlanBySlug(slug);
-    return fallback ? clone(fallback) : null;
+    return null;
   }
 }
 
 export async function getPlanSlugs(): Promise<string[]> {
-  if (!isSanityConfigured) {
-    return fallbackPlanDetails.map((plan) => plan.slug);
-  }
-
   try {
     const client = getSanityClient();
     const slugs = await client.fetch<{ slug: string }[]>(planSlugsQuery);
     return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
   } catch (error) {
     console.error("Failed to fetch plan slugs from Sanity", error);
-    return fallbackPlanDetails.map((plan) => plan.slug);
+    return [];
   }
 }
 
 export async function getEsimProducts(): Promise<EsimProductSummary[]> {
-  if (!isSanityConfigured) {
-    return clone(fallbackEsimProductSummaries);
-  }
-
   try {
     const products = await getCatalogProductSummaries();
     return products;
   } catch (error) {
     console.error("Failed to fetch eSIM products from Sanity", error);
-    return clone(fallbackEsimProductSummaries);
+    return [];
   }
 }
 
 export async function getEsimProductBySlug(slug: string): Promise<EsimProductDetail | null> {
-  if (!isSanityConfigured) {
-    const fallback = getFallbackProductBySlug(slug);
-    return fallback ? clone(fallback) : null;
-  }
-
   try {
     const client = getSanityClient();
     const product = await client.fetch<EsimProductDetail | null>(esimProductBySlugQuery, { slug });
     return product ?? null;
   } catch (error) {
     console.error(`Failed to fetch eSIM product '${slug}' from Sanity`, error);
-    const fallback = getFallbackProductBySlug(slug);
-    return fallback ? clone(fallback) : null;
+    return null;
   }
 }
 
 export async function getEsimProductSlugs(): Promise<string[]> {
-  if (!isSanityConfigured) {
-    return fallbackEsimProductSummaries
-      .map((product) => product.slugs?.product ?? product.slug)
-      .filter((slug): slug is string => Boolean(slug));
-  }
-
   try {
     const client = getSanityClient();
     const slugs = await client.fetch<{ slug: string }[]>(esimProductSlugsQuery);
     return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
   } catch (error) {
     console.error("Failed to fetch eSIM product slugs from Sanity", error);
-    return fallbackEsimProductSummaries
-      .map((product) => product.slugs?.product ?? product.slug)
-      .filter((slug): slug is string => Boolean(slug));
+    return [];
   }
 }
 
 export async function getRegionBundles(): Promise<RegionBundle[]> {
-  if (!isSanityConfigured) {
-    return clone(fallbackRegionBundles);
-  }
-
   try {
     const client = getSanityClient();
     const bundles = await client.fetch<RegionBundle[]>(regionBundlesQuery);
     return bundles ?? [];
   } catch (error) {
     console.error("Failed to fetch region bundles from Sanity", error);
-    return clone(fallbackRegionBundles);
+    return [];
   }
 }
 
 export async function getBundleBySlug(slug: string): Promise<RegionBundle | null> {
-  if (!isSanityConfigured) {
-    const fallback = getFallbackBundleBySlug(slug);
-    return fallback ? clone(fallback) : null;
-  }
-
   try {
     const client = getSanityClient();
     const bundle = await client.fetch<RegionBundle | null>(bundleBySlugQuery, { slug });
     return bundle ?? null;
   } catch (error) {
     console.error(`Failed to fetch bundle '${slug}' from Sanity`, error);
-    const fallback = getFallbackBundleBySlug(slug);
-    return fallback ? clone(fallback) : null;
+    return null;
   }
 }
 
 export async function getPosts(): Promise<PostSummary[]> {
-  if (!isSanityConfigured) {
-    return clone(fallbackPostSummaries);
-  }
-
   try {
     const client = getSanityClient();
     const posts = await client.fetch<PostSummary[]>(postsQuery);
     return posts ?? [];
   } catch (error) {
     console.error("Failed to fetch posts from Sanity", error);
-    return clone(fallbackPostSummaries);
+    return [];
   }
 }
 
 export async function getPostBySlug(slug: string): Promise<PostDetail | null> {
-  if (!isSanityConfigured) {
-    const fallback = getFallbackPostBySlug(slug);
-    return fallback ? clone(fallback) : null;
-  }
-
   try {
     const client = getSanityClient();
     const post = await client.fetch<PostDetail | null>(postBySlugQuery, { slug });
     return post ?? null;
   } catch (error) {
     console.error(`Failed to fetch post '${slug}' from Sanity`, error);
-    const fallback = getFallbackPostBySlug(slug);
-    return fallback ? clone(fallback) : null;
+    return null;
   }
 }
