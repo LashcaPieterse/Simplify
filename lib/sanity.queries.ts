@@ -209,6 +209,20 @@ export type CatalogPackageDocument = {
   country?: CatalogCountrySummary | null;
 };
 
+export const getCatalogPackageId = (
+  pkg?: CatalogPackageInfo | CatalogPackageDocument | null
+): string | null => {
+  if (!pkg) {
+    return null;
+  }
+
+  if ("id" in pkg) {
+    return pkg.id;
+  }
+
+  return pkg._id ?? pkg.externalId ?? null;
+};
+
 export type PlanSummary = {
   _id: string;
   title: string;

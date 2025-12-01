@@ -5,6 +5,7 @@ import { Clock3, Gauge, Router, SignalHigh, Star, Wifi } from "lucide-react";
 import { OrderButton } from "@/components/orders/OrderButton";
 import { Button } from "@/components/ui/button";
 import {
+  getCatalogPackageId,
   getCountryBySlug,
   getCountriesList,
   getPlansForCountry,
@@ -140,7 +141,7 @@ function PlanCard({ plan }: { plan: PlanDetail }) {
           )}
         </p>
         <OrderButton
-          packageId={plan.package?.id}
+          packageId={getCatalogPackageId(plan.package)}
           label="Get this plan"
           pendingLabel="Processing…"
           size="sm"
