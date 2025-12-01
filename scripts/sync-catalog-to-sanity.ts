@@ -134,6 +134,21 @@ function fallbackCountryImageUrl(countryCode?: string | null, name?: string | nu
   return map[code] ?? "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1600&q=80";
 }
 
+function fallbackOperatorImageUrl(code?: string | null, name?: string | null): string | null {
+  const key = (code ?? name ?? "").toLowerCase();
+  if (key.includes("vod") || key.includes("vodacom") || key.includes("vodafone")) {
+    return "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1600&q=80";
+  }
+  if (key.includes("airtel")) {
+    return "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1600&q=80";
+  }
+  return "https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=1600&q=80";
+}
+
+function fallbackPackageImageUrl(name?: string | null): string | null {
+  return "https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=1600&q=80";
+}
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -193,11 +208,13 @@ async function main() {
   const now = new Date().toISOString();
 
   const countryIdMap = new Map<string, string>();
+  const countryById = new Map<string, (typeof countries)[number]>();
   const countryDocs: Record<string, unknown>[] = [];
 
   for (const country of countries) {
     const docId = `catalog-country-${country.countryCode.toLowerCase()}`;
     countryIdMap.set(country.id, docId);
+    countryById.set(country.id, country);
 
     const sourceImageUrl = country.imageUrl ?? fallbackCountryImageUrl(country.countryCode, country.name);
     const image =
@@ -235,26 +252,35 @@ async function main() {
   });
 
   const operatorIdMap = new Map<string, string>();
-  const operatorDocs = operators.map((operator) => {
+  const operatorDocs: Record<string, unknown>[] = [];
+  for (const operator of operators) {
     const countryRef = countryIdMap.get(operator.countryId);
     const docId = `catalog-operator-${operator.apiOperatorId ?? operator.id}`;
     operatorIdMap.set(operator.id, docId);
-    const existingImage = existingImages.get(docId) ?? null;
+    const country = countryById.get(operator.countryId);
+    const sourceImageUrl =
+      (operator as Record<string, unknown>)["imageUrl"] as string | undefined ??
+      fallbackOperatorImageUrl(operator.operatorCode, operator.name) ??
+      fallbackCountryImageUrl(country?.countryCode, country?.name);
+    const image =
+      (await resolveImageFromUrl(sourceImageUrl)) ??
+      existingImages.get(docId) ??
+      (await uploadPlaceholderImage("catalog-operator-placeholder.png"));
 
-    return {
+    operatorDocs.push({
       _id: docId,
       _type: "catalogOperator",
       title: operator.name,
       apiOperatorId: operator.apiOperatorId ?? null,
       operatorCode: operator.operatorCode ?? null,
-      image: existingImage,
+      image,
       country: countryRef
         ? { _type: "reference", _ref: countryRef }
         : null,
       metadataJson: serializeMetadata(operator.metadata),
       lastSyncedAt: now
-    };
-  });
+    });
+  }
 
   const packageDocs: Record<string, unknown>[] = [];
 
@@ -270,10 +296,11 @@ async function main() {
     }
 
     const docId = `catalog-package-${sanitizeDocumentId(pkg.externalId)}`;
+    const sourceImageUrl = pkg.imageUrl ?? fallbackPackageImageUrl(pkg.name);
     const image =
-      (await resolveImageFromUrl(pkg.imageUrl)) ??
+      (await resolveImageFromUrl(sourceImageUrl)) ??
       existingImages.get(docId) ??
-      null;
+      (await uploadPlaceholderImage("catalog-package-placeholder.png"));
 
     packageDocs.push({
       _id: docId,
