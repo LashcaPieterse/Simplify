@@ -56,14 +56,21 @@ export const plan = defineType({
       name: "provider",
       type: "reference",
       title: "Provider",
-      to: [{ type: "carrier" }],
+      to: [{ type: "catalogOperator" }],
       validation: (Rule) => Rule.required()
     }),
     defineField({
       name: "country",
       type: "reference",
       title: "Country",
-      to: [{ type: "country" }],
+      to: [{ type: "catalogCountry" }],
+      validation: (Rule) => Rule.required()
+    }),
+    defineField({
+      name: "package",
+      type: "reference",
+      title: "Catalog package",
+      to: [{ type: "catalogPackage" }],
       validation: (Rule) => Rule.required()
     }),
     defineField({
