@@ -194,8 +194,6 @@ export async function ensureOrderInstallation(
   // Fetch installation instructions for richer APN/QR/smdp data when possible.
   let smdpAddress: string | null = null;
   let activationCode: string | null = null;
-  let qrCodeData: string | null = null;
-  let apn: string | null = null;
   try {
     if (airaloOrder.iccid) {
       const instructions = await airalo.getSimInstallationInstructions(airaloOrder.iccid, {
@@ -209,15 +207,6 @@ export async function ensureOrderInstallation(
       activationCode =
         (platform?.installation_manual?.activation_code as string | undefined) ??
         airaloOrder.activation_code ??
-        null;
-      qrCodeData =
-        (platform?.installation_via_qr_code?.qr_code as string | undefined) ??
-        airaloOrder.qr_code ??
-        airaloOrder.esim ??
-        null;
-      apn =
-        (platform?.network_setup?.apn as string | undefined) ??
-        (airaloOrder as Record<string, unknown>).apn?.toString() ??
         null;
     }
   } catch (error) {
