@@ -36,6 +36,19 @@ export const catalogPackage = defineType({
       validation: (Rule) => Rule.required().length(3)
     }),
     defineField({
+      name: "badge",
+      title: "Badge",
+      type: "string",
+      description: "Short label such as 'Best value' or 'Unlimited'",
+      validation: (Rule) => Rule.max(30)
+    }),
+    defineField({
+      name: "summary",
+      title: "Summary",
+      type: "text",
+      rows: 3
+    }),
+    defineField({
       name: "dataAmountMb",
       title: "Data allowance (MB)",
       type: "number"

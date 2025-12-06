@@ -13,6 +13,7 @@ model Country {
   name        String
   slug        String     @unique
   imageUrl    String?    @map("image_url")
+  flagUrl     String?    @map("flag_url")
   metadata    Json?      @default(dbgenerated("'{}'::jsonb"))
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at")
@@ -29,6 +30,7 @@ model Operator {
   name          String
   apiOperatorId Int?      @map("api_operator_id")
   operatorCode  String?   @map("operator_code")
+  networkTypes  String[]  @db.Text @map("network_types")
   metadata      Json?     @default(dbgenerated("'{}'::jsonb"))
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
@@ -46,12 +48,27 @@ model Package {
   operatorId         String   @map("operator_id") @db.Uuid
   externalId         String   @map("external_id") @unique
   name               String
+  status             String?  @map("status")
+  simType            String?  @map("sim_type")
+  isRechargeable     Boolean? @map("is_rechargeable")
+  networkTypes       String[] @db.Text @map("network_types")
+  voiceMinutes       Int?     @map("voice_minutes")
+  sms                Int?     @map("sms")
+  apn                String?  @map("apn")
+  iccid              String?  @map("iccid")
+  smdpAddress        String?  @map("smdp_address")
+  qrCodeData         String?  @map("qr_code_data")
+  qrCodeUrl          String?  @map("qr_code_url")
+  activationCode     String?  @map("activation_code")
+  topupParentId      String?  @map("topup_parent_id")
   dataAmountMb       Int?     @map("data_amount_mb")
   validityDays       Int?     @map("validity_days")
   isUnlimited        Boolean  @default(false) @map("is_unlimited")
   priceCents         Int      @map("price_cents")
   sellingPriceCents  Int?     @map("selling_price_cents")
   currencyCode       String   @default("USD") @map("currency_code")
+  netPriceJson       Json?    @map("net_price_json")
+  rrpPriceJson       Json?    @map("rrp_price_json")
   shortInfo          String?  @map("short_info")
   qrInstallation     String?  @map("qr_installation")
   manualInstallation String?  @map("manual_installation")

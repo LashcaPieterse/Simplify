@@ -43,7 +43,20 @@ export async function getTopUpPackages(
   }
 
   const airalo = options.airaloClient ?? resolveAiraloClient();
-  const packages = await airalo.getSimPackages(iccid);
+  let packages: Package[] = [];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      packages = await airalo.getSimPackages(iccid);
+      break;
+    } catch (error) {
+      const status = (error as { details?: { status?: number } })?.details?.status;
+      if (status !== 429 && status !== undefined && status < 500) {
+        throw error;
+      }
+      const delayMs = 300 * 2 ** attempt + Math.floor(Math.random() * 100);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
   const db = options.prisma ?? prismaClient;
 
   const localPackages = await db.airaloPackage.findMany({

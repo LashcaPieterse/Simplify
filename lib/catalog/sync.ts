@@ -510,6 +510,7 @@ export async function syncAiraloCatalog(
     const slug = country?.slug ?? countryCode.toLowerCase();
     const countryName = country?.title ?? slug;
     const countryImageUrl = country?.image?.url ?? null;
+    const countryFlagUrl = country?.image?.url ?? null;
 
     const existingCountry = await db.country.findUnique({
       where: { countryCode },
@@ -522,12 +523,14 @@ export async function syncAiraloCatalog(
         slug,
         name: countryName,
         imageUrl: countryImageUrl,
+        flagUrl: countryFlagUrl,
         metadata: toPrismaJson(country),
       },
       update: {
         slug,
         name: countryName,
         imageUrl: countryImageUrl,
+        flagUrl: countryFlagUrl,
         metadata: toPrismaJson(country),
         updatedAt: now,
       },
@@ -545,6 +548,9 @@ export async function syncAiraloCatalog(
           ? operator.id
           : Number.parseInt(String(operator?.id ?? ""), 10) || undefined;
       const operatorName = operator?.title ?? operator?.name ?? "Unknown";
+      const operatorNetworkTypes = Array.isArray((operator as Record<string, unknown>).network_types)
+        ? ((operator as Record<string, unknown>).network_types as string[]).map((n) => n.toString())
+        : [];
 
       const existingOperator = await db.operator.findFirst({
         where: {
@@ -561,6 +567,7 @@ export async function syncAiraloCatalog(
           name: operatorName,
           apiOperatorId,
           operatorCode: operator?.operator_code ?? null,
+          networkTypes: operatorNetworkTypes,
           metadata: toPrismaJson(operator),
         },
       });
@@ -572,6 +579,7 @@ export async function syncAiraloCatalog(
           name: operatorName,
           apiOperatorId,
           operatorCode: operator?.operator_code ?? null,
+          networkTypes: operatorNetworkTypes,
           metadata: toPrismaJson(operator),
           updatedAt: now,
         },
@@ -631,12 +639,35 @@ export async function syncAiraloCatalog(
           countryId: countryRecord.id,
           operatorId: operatorRecord.id,
           name: pkg.title ?? pkg.name ?? "Unknown",
+          status: (pkg as Record<string, unknown>).status?.toString() ?? "active",
+          simType: (pkg as Record<string, unknown>).sim_type?.toString() ?? null,
+          isRechargeable: Boolean((pkg as Record<string, unknown>).is_rechargeable ?? null),
+          networkTypes: Array.isArray((pkg as Record<string, unknown>).network_types)
+            ? ((pkg as Record<string, unknown>).network_types as string[])
+            : [],
+          voiceMinutes: typeof (pkg as Record<string, unknown>).voice === "number"
+            ? ((pkg as Record<string, unknown>).voice as number)
+            : null,
+          sms: typeof (pkg as Record<string, unknown>).sms === "number"
+            ? ((pkg as Record<string, unknown>).sms as number)
+            : null,
+          apn: (pkg as Record<string, unknown>).apn?.toString() ?? null,
+          iccid: (pkg as Record<string, unknown>).iccid?.toString() ?? null,
+          smdpAddress: (pkg as Record<string, unknown>).smdp_address?.toString() ?? null,
+          qrCodeData: (pkg as Record<string, unknown>).qr_code_data?.toString() ?? null,
+          qrCodeUrl: (pkg as Record<string, unknown>).qr_code_url?.toString() ?? null,
+          activationCode: (pkg as Record<string, unknown>).activation_code?.toString() ?? null,
+          topupParentId: (pkg as Record<string, unknown>).top_up_parent_package_id
+            ? (pkg as Record<string, unknown>).top_up_parent_package_id!.toString()
+            : null,
           dataAmountMb,
           validityDays,
           isUnlimited: Boolean(pkg.is_unlimited ?? pkg.isUnlimited),
           priceCents,
           sellingPriceCents,
           currencyCode,
+          netPriceJson: toPrismaJson(pkg.prices?.net_price ?? null),
+          rrpPriceJson: toPrismaJson(pkg.prices?.recommended_retail_price ?? null),
           shortInfo: pkg.short_info ?? null,
           qrInstallation: pkg.qr_installation ?? null,
           manualInstallation: pkg.manual_installation ?? null,
@@ -666,23 +697,47 @@ export async function syncAiraloCatalog(
         const hasChanges = (() => {
           const comparableKeys = [
             "name",
+            "status",
+            "simType",
+            "isRechargeable",
             "dataAmountMb",
             "validityDays",
             "isUnlimited",
             "priceCents",
             "currencyCode",
+            "netPriceJson",
+            "rrpPriceJson",
             "shortInfo",
             "qrInstallation",
             "manualInstallation",
             "isFairUsagePolicy",
             "fairUsagePolicy",
             "imageUrl",
+            "voiceMinutes",
+            "sms",
+            "apn",
+            "iccid",
+            "smdpAddress",
+            "qrCodeData",
+            "qrCodeUrl",
+            "activationCode",
+            "topupParentId",
           ] as const;
 
           for (const key of comparableKeys) {
             if (existingPackage[key] !== packageData[key]) {
               return true;
             }
+          }
+
+          const existingNetworks = Array.isArray(existingPackage.networkTypes)
+            ? existingPackage.networkTypes.join("|")
+            : "";
+          const nextNetworks = Array.isArray(packageData.networkTypes)
+            ? packageData.networkTypes.join("|")
+            : "";
+          if (existingNetworks !== nextNetworks) {
+            return true;
           }
 
           const existingMeta = JSON.stringify(existingPackage.metadata ?? {});

@@ -286,24 +286,28 @@ const PLAN_SUMMARY_FIELDS = `
   }
 `;
 
-const COUNTRY_CARD_FIELDS = `
+const CATALOG_PACKAGE_FIELDS = `
   _id,
+  externalId,
   title,
-  "slug": slug.current,
+  priceCents,
+  sellingPriceCents,
+  currencyCode,
+  dataAmountMb,
+  validityDays,
+  isUnlimited,
   badge,
   summary,
-  coverImage,
-  featured
-`;
-
-const COUNTRY_REFERENCE_FIELDS = `
-  _id,
-  title,
-  "slug": slug.current,
-  badge,
-  summary,
-  coverImage,
-  featured
+  shortInfo,
+  image,
+  "operator": operator->{
+    _id,
+    title,
+    operatorCode,
+    badge,
+    summary,
+    image
+  }
 `;
 
 const CATALOG_COUNTRY_FIELDS = `
@@ -311,33 +315,24 @@ const CATALOG_COUNTRY_FIELDS = `
   title,
   countryCode,
   "slug": slug.current,
-  "coverImage": image
-`;
-
-const CATALOG_PACKAGE_FIELDS = `
-  _id,
-  externalId,
-  title,
-  priceCents,
-  currencyCode,
-  dataAmountMb,
-  validityDays,
-  isUnlimited,
-  shortInfo,
-  "operator": operator->{
-    _id,
-    title,
-    operatorCode,
-    image
+  badge,
+  summary,
+  featured,
+  "coverImage": image,
+  primaryPackage->{
+    ${CATALOG_PACKAGE_FIELDS}
   }
 `;
+
+// For backwards compatibility with existing selections expecting country reference fields.
+const COUNTRY_REFERENCE_FIELDS = CATALOG_COUNTRY_FIELDS;
 
 const REGION_BUNDLE_FIELDS = `
   _id,
   title,
   "slug": slug.current,
   countries[]->{
-    ${COUNTRY_CARD_FIELDS}
+    ${CATALOG_COUNTRY_FIELDS}
   },
   sharedDataGB,
   includes,
@@ -382,10 +377,10 @@ const ESIM_PRODUCT_CARD_FIELDS = `
   status,
   keywords,
   plan->{
-    ${PLAN_SUMMARY_FIELDS}
+    ${CATALOG_PACKAGE_FIELDS}
   },
   country->{
-    ${COUNTRY_REFERENCE_FIELDS}
+    ${CATALOG_COUNTRY_FIELDS}
   }
 `;
 
@@ -425,7 +420,7 @@ const homePageQuery = groq`
         _type,
         title,
         "countries": countries[]->{
-          ${COUNTRY_CARD_FIELDS}
+          ${CATALOG_COUNTRY_FIELDS}
         }
       },
       _type == "whyChooseUsSection" => {
@@ -477,7 +472,7 @@ const countriesQuery = groq`
 const countryBySlugQuery = groq`
   *[_type == "catalogCountry" && slug.current == $slug][0]{
     ${CATALOG_COUNTRY_FIELDS},
-    "packages": *[_type == "catalogPackage" && country._ref == ^._id]{
+    "packages": *[_type == "catalogPackage" && country._ref == ^._id] | order(priceCents asc) {
       ${CATALOG_PACKAGE_FIELDS}
     }
   }
@@ -498,78 +493,6 @@ const planBySlugQuery = groq`
 const planSlugsQuery = groq`
   *[_type == "catalogPackage" && defined(externalId)]{ "slug": externalId }
 `;
-
-type CatalogCountryDoc = {
-  _id: string;
-  title: string;
-  slug: string;
-  countryCode?: string;
-  coverImage?: ImageLike;
-  packages?: CatalogPackageDoc[];
-};
-
-type CatalogPackageDoc = {
-  _id: string;
-  externalId: string;
-  title: string;
-  priceCents: number;
-  currencyCode: string;
-  dataAmountMb?: number | null;
-  validityDays?: number | null;
-  isUnlimited?: boolean;
-  shortInfo?: string | null;
-  operator?: {
-    _id: string;
-    title: string;
-    operatorCode?: string | null;
-    image?: ImageLike;
-  } | null;
-};
-
-const centsToUsd = (cents: number, currency: string) => {
-  if (currency?.toUpperCase() !== "USD") {
-    return cents / 100;
-  }
-  return cents / 100;
-};
-
-function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
-  const priceUSD = centsToUsd(pkg.priceCents ?? 0, pkg.currencyCode ?? "USD");
-  return {
-    _id: pkg._id,
-    title: pkg.title,
-    slug: pkg.externalId,
-    priceUSD,
-    dataGB: pkg.dataAmountMb ? Math.round(pkg.dataAmountMb / 1024) : 0,
-    validityDays: pkg.validityDays ?? 0,
-    hotspot: true,
-    fiveG: false,
-    label: pkg.isUnlimited ? "Unlimited" : undefined,
-    shortBlurb: pkg.shortInfo ?? "",
-    provider: pkg.operator
-      ? {
-          _id: pkg.operator._id,
-          title: pkg.operator.title,
-          slug: pkg.operator.operatorCode ?? pkg.operator.title.toLowerCase().replace(/\s+/g, "-"),
-          logo: pkg.operator.image,
-        }
-      : undefined,
-    price: {
-      amount: priceUSD,
-      currency: pkg.currencyCode ?? "USD",
-      source: "sanity",
-    },
-    package: {
-      id: pkg._id,
-      externalId: pkg.externalId,
-      currency: pkg.currencyCode ?? "USD",
-      priceCents: pkg.priceCents,
-      dataLimitMb: pkg.dataAmountMb ?? null,
-      validityDays: pkg.validityDays ?? null,
-      metadata: null,
-    },
-  };
-}
 
 export const esimProductsQuery = groq`
   *[_type == "eSimProduct"] | order(displayName asc) {
@@ -629,14 +552,10 @@ export async function getHomePage(): Promise<HomePagePayload | null> {
     const home = await client.fetch<HomePagePayload | null>(homePageQuery);
     if (!home) return null;
 
-    // Replace any country grid section with catalog countries.
     const countries = await getCountriesList();
     const sections = (home.sections ?? []).map((section) => {
       if (section?._type === "countryGridSection") {
-        return {
-          ...section,
-          countries
-        } as CountryGridSection;
+        return { ...section, countries } as CountryGridSection;
       }
       return section;
     });
@@ -657,10 +576,11 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
         _id: country._id,
         title: country.title,
         slug: country.slug,
-        badge: null,
-        summary: null,
+        badge: country.badge ?? null,
+        summary: country.summary ?? null,
         coverImage: country.coverImage,
-        featured: false
+        featured: country.featured ?? false,
+        plan: country.primaryPackage ? mapCatalogPackageToPlan(country.primaryPackage) : undefined,
       })) ?? []
     );
   } catch (error) {
@@ -747,12 +667,14 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
       _id: country._id,
       title: country.title,
       slug: country.slug,
-      badge: null,
-      summary: null,
+      badge: country.badge ?? null,
+      summary: country.summary ?? null,
       coverImage: country.coverImage,
-      featured: false,
+      featured: country.featured ?? false,
       carriers: [],
-      plans
+      plans,
+      productCard: undefined,
+      plan: country.primaryPackage ? mapCatalogPackageToPlan(country.primaryPackage) : undefined,
     };
   } catch (error) {
     console.error(`Failed to fetch country '${slug}' from Sanity`, error);

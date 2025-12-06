@@ -172,7 +172,7 @@ function normalizePackagesData(data: unknown): Package[] {
             destination,
             destination_name: destinationName,
             region: country.region ?? country.title ?? undefined,
-            currency: "USD",
+            currency: (pkg as Record<string, unknown>).currency?.toString() ?? "USD",
             price: typeof pkg?.price === "number" ? pkg.price : undefined,
             validity: typeof pkg?.day === "number" ? pkg.day : undefined,
             data_amount: pkg?.data ?? (pkg?.is_unlimited ? "Unlimited" : pkg?.amount ? String(pkg.amount) : undefined),
@@ -180,6 +180,23 @@ function normalizePackagesData(data: unknown): Package[] {
             net_prices: netPrices,
             recommended_retail_prices: rrps,
             sku: pkg?.id ? String(pkg.id) : undefined,
+            status: (pkg as Record<string, unknown>).status?.toString(),
+            sim_type: (pkg as Record<string, unknown>).sim_type?.toString(),
+            is_rechargeable: Boolean((pkg as Record<string, unknown>).is_rechargeable ?? false),
+            network_types: Array.isArray((pkg as Record<string, unknown>).network_types)
+              ? ((pkg as Record<string, unknown>).network_types as unknown[]).map((n) => n?.toString?.() ?? "")
+              : undefined,
+            voice: typeof (pkg as Record<string, unknown>).voice === "number" ? (pkg as Record<string, unknown>).voice : undefined,
+            sms: typeof (pkg as Record<string, unknown>).sms === "number" ? (pkg as Record<string, unknown>).sms : undefined,
+            apn: (pkg as Record<string, unknown>).apn?.toString(),
+            qr_code_data: (pkg as Record<string, unknown>).qr_code_data?.toString(),
+            qr_code_url: (pkg as Record<string, unknown>).qr_code_url?.toString(),
+            smdp_address: (pkg as Record<string, unknown>).smdp_address?.toString(),
+            iccid: (pkg as Record<string, unknown>).iccid?.toString(),
+            activation_code: (pkg as Record<string, unknown>).activation_code?.toString(),
+            top_up_parent_package_id: (pkg as Record<string, unknown>).top_up_parent_package_id
+              ? (pkg as Record<string, unknown>).top_up_parent_package_id!.toString()
+              : undefined,
           });
         }
       }
@@ -235,7 +252,8 @@ export class AiraloError extends Error {
 // Docs currently reference /v2/token (no /api prefix).
 const DEFAULT_BASE_URL =
   process.env.AIRALO_BASE_URL ?? "https://partners-api.airalo.com/v2";
-const DEFAULT_TOKEN_BUFFER_SECONDS = 30;
+// Pad token expiry to avoid using near-expired tokens; Airalo issues short-lived tokens.
+const DEFAULT_TOKEN_BUFFER_SECONDS = 60;
 const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
   maxRetries: 3,
   baseDelayMs: 500,
@@ -792,7 +810,7 @@ export class AiraloClient {
 
     const remainingSeconds = Math.max(
       parsed.data.expires_in - this.tokenExpiryBufferSeconds,
-      0,
+      1, // ensure a minimum TTL to prevent tight refresh loops
     );
 
     const expiresAt = Date.now() + remainingSeconds * 1000;
@@ -845,7 +863,10 @@ export class AiraloClient {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const response = await makeRequest();
 
-      if (response.status !== 429) {
+      const shouldRetry =
+        response.status === 429 || response.status >= 500;
+
+      if (!shouldRetry) {
         return response;
       }
 
@@ -866,11 +887,12 @@ export class AiraloClient {
       this.rateLimitRetryPolicy.baseDelayMs * 2 ** (attempt - 1),
       this.rateLimitRetryPolicy.maxDelayMs,
     );
+    const jitter = Math.floor(Math.random() * 150);
 
     const retryAfterMs = this.parseRetryAfter(headers.get("Retry-After"));
     const requiredDelay = retryAfterMs ?? 0;
 
-    return Math.max(backoffDelay, requiredDelay);
+    return Math.max(backoffDelay, requiredDelay) + jitter;
   }
 
   private parseRetryAfter(value: string | null): number | null {

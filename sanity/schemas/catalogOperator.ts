@@ -22,6 +22,19 @@ export const catalogOperator = defineType({
       type: "string"
     }),
     defineField({
+      name: "badge",
+      title: "Badge",
+      type: "string",
+      description: "Short label such as 'Best coverage'",
+      validation: (Rule) => Rule.max(30)
+    }),
+    defineField({
+      name: "summary",
+      title: "Summary",
+      type: "text",
+      rows: 3
+    }),
+    defineField({
       name: "image",
       title: "Cover image",
       type: "image",

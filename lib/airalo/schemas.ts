@@ -47,6 +47,19 @@ export const PackageSchema = z
     validity: z.number().int().positive().optional(),
     data_amount: z.string().optional(),
     is_unlimited: z.boolean().optional(),
+    status: z.string().optional(),
+    sim_type: z.string().optional(),
+    is_rechargeable: z.boolean().optional(),
+    network_types: z.array(z.string()).optional(),
+    voice: z.coerce.number().optional(),
+    sms: z.coerce.number().optional(),
+    apn: z.string().optional(),
+    qr_code_data: z.string().optional(),
+    qr_code_url: z.string().url().optional(),
+    smdp_address: z.string().optional(),
+    iccid: z.string().optional(),
+    activation_code: z.string().optional(),
+    top_up_parent_package_id: z.union([z.string(), z.number()]).transform(String).optional(),
     net_prices: MultiCurrencyPricesSchema,
     recommended_retail_prices: MultiCurrencyPricesSchema,
   })
@@ -93,11 +106,14 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
       order_id: z.union([z.string(), z.number()]).transform(String),
       package_id: z.union([z.string(), z.number()]).transform(String).optional(),
       status: z.string(),
-      qr_code: z.string().url().optional(),
+      qr_code: z.string().optional(),
+      qr_code_data: z.string().optional(),
+      smdp_address: z.string().optional(),
       activation_code: z.string().optional(),
       iccid: z.string().optional(),
       esim: z.string().optional(),
       order_reference: z.string().optional(),
+      top_up_parent_package_id: z.union([z.string(), z.number()]).transform(String).optional(),
     })
     .passthrough(),
 });
@@ -128,6 +144,9 @@ const UsageMetricSchema = z
     total: z.coerce.number().optional(),
     used: z.coerce.number().optional(),
     remaining: z.coerce.number().optional(),
+    voice: z.coerce.number().optional(),
+    sms: z.coerce.number().optional(),
+    data: z.coerce.number().optional(),
   })
   .passthrough();
 

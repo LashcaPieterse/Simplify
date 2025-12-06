@@ -1,4 +1,4 @@
-import type { PrismaClient, UsageSnapshot } from "@prisma/client";
+import type { Prisma, PrismaClient, UsageSnapshot } from "@prisma/client";
 
 import type { AiraloClient, Usage as AiraloUsage } from "../airalo/client";
 import prismaClient from "../db/client";
@@ -65,8 +65,25 @@ export async function pollUsageForProfile(
   }
 
   const airalo = options.airaloClient ?? resolveAiraloClient();
-  const usage = await airalo.getSimUsage(profile.iccid);
-  const dataMetrics = usage.data;
+  // Simple retry for transient 429/5xx
+  let usage: AiraloUsage | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      usage = await airalo.getSimUsage(profile.iccid);
+      break;
+    } catch (error) {
+      const status = (error as { details?: { status?: number } })?.details?.status;
+      if (status !== 429 && status !== undefined && status < 500) {
+        throw error;
+      }
+      const delayMs = 300 * 2 ** attempt + Math.floor(Math.random() * 100);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+
+  const dataMetrics = usage?.data;
+  const voiceMetrics = usage?.voice;
+  const smsMetrics = usage?.sms;
 
   const snapshot = await db.usageSnapshot.create({
     data: {
@@ -75,6 +92,12 @@ export async function pollUsageForProfile(
       usedMb: typeof dataMetrics?.used === "number" ? dataMetrics.used : null,
       remainingMb:
         typeof dataMetrics?.remaining === "number" ? dataMetrics.remaining : null,
+      // Optional: store voice/SMS in metadata if columns don't exist
+      metadata: {
+        voice: voiceMetrics ?? null,
+        sms: smsMetrics ?? null,
+        lastUpdatedAt: usage?.last_updated_at ?? null,
+      } as unknown as Prisma.JsonValue,
     },
   });
 

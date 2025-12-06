@@ -190,6 +190,22 @@ async function main() {
 
   const now = new Date().toISOString();
 
+  // Select a primary package per country (cheapest by priceCents).
+  const primaryPackageRefByCountryId = new Map<string, string>();
+  for (const pkg of packages) {
+    if (typeof pkg.priceCents !== "number") continue;
+    const currentRef = primaryPackageRefByCountryId.get(pkg.countryId);
+    const currentPrice =
+      currentRef === undefined
+        ? Number.POSITIVE_INFINITY
+        : pkg.priceCents;
+    const candidatePrice = pkg.priceCents;
+    if (candidatePrice <= currentPrice) {
+      const pkgDocId = `catalog-package-${safeId(pkg.externalId)}`;
+      primaryPackageRefByCountryId.set(pkg.countryId, pkgDocId);
+    }
+  }
+
   const countryIdMap = new Map<string, string>();
   const countryDocs: Record<string, unknown>[] = [];
 
@@ -209,6 +225,12 @@ async function main() {
       title: country.name,
       slug: { _type: "slug", current: country.slug || slugify(country.name) },
       countryCode: country.countryCode,
+      badge: null,
+      summary: null,
+      featured: false,
+      primaryPackage: primaryPackageRefByCountryId.has(country.id)
+        ? { _type: "reference", _ref: primaryPackageRefByCountryId.get(country.id)! }
+        : null,
       image,
       metadataJson: serializeMetadata(country.metadata),
       lastSyncedAt: now,
@@ -227,6 +249,12 @@ async function main() {
     title: "Seed Syncing Test",
     slug: { _type: "slug", current: "seed-syncing-test" },
     countryCode: "ZZ",
+    badge: null,
+    summary: null,
+    featured: false,
+    primaryPackage: primaryPackageRefByCountryId.size
+      ? { _type: "reference", _ref: Array.from(primaryPackageRefByCountryId.values())[0] }
+      : null,
     image: seedSyncTestImage,
     metadataJson: null,
     lastSyncedAt: now,
@@ -245,6 +273,8 @@ async function main() {
       title: operator.name,
       apiOperatorId: operator.apiOperatorId ?? null,
       operatorCode: operator.operatorCode ?? null,
+      badge: null,
+      summary: null,
       image: existingImage,
       country: countryRef ? { _type: "reference", _ref: countryRef } : null,
       metadataJson: serializeMetadata(operator.metadata),
@@ -283,6 +313,8 @@ async function main() {
       dataAmountMb: pkg.dataAmountMb ?? null,
       validityDays: pkg.validityDays ?? null,
       isUnlimited: pkg.isUnlimited,
+      badge: null,
+      summary: null,
       country: { _type: "reference", _ref: countryRef },
       operator: { _type: "reference", _ref: operatorRef },
       shortInfo: pkg.shortInfo ?? null,
