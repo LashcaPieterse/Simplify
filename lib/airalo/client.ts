@@ -186,8 +186,14 @@ function normalizePackagesData(data: unknown): Package[] {
             network_types: Array.isArray((pkg as Record<string, unknown>).network_types)
               ? ((pkg as Record<string, unknown>).network_types as unknown[]).map((n) => n?.toString?.() ?? "")
               : undefined,
-            voice: typeof (pkg as Record<string, unknown>).voice === "number" ? (pkg as Record<string, unknown>).voice : undefined,
-            sms: typeof (pkg as Record<string, unknown>).sms === "number" ? (pkg as Record<string, unknown>).sms : undefined,
+            voice:
+              typeof (pkg as Record<string, unknown>).voice === "number"
+                ? Number((pkg as Record<string, unknown>).voice)
+                : undefined,
+            sms:
+              typeof (pkg as Record<string, unknown>).sms === "number"
+                ? Number((pkg as Record<string, unknown>).sms)
+                : undefined,
             apn: (pkg as Record<string, unknown>).apn?.toString(),
             qr_code_data: (pkg as Record<string, unknown>).qr_code_data?.toString(),
             qr_code_url: (pkg as Record<string, unknown>).qr_code_url?.toString(),
