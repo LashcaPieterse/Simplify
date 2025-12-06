@@ -164,6 +164,12 @@ export type CatalogPackageInfo = {
   metadata?: Record<string, unknown> | null;
 };
 
+// Utility: pick a stable identifier from a catalog package reference.
+export function getCatalogPackageId(pkg?: CatalogPackageInfo | null): string | undefined {
+  if (!pkg) return undefined;
+  return pkg.externalId || pkg.id;
+}
+
 export type PlanSummary = {
   _id: string;
   title: string;
@@ -353,17 +359,6 @@ const POST_SUMMARY_FIELDS = `
   readingMinutes,
   tags,
   "publishedAt": coalesce(publishedAt, _updatedAt)
-`;
-
-const PLAN_DETAIL_FIELDS = `
-  ${PLAN_SUMMARY_FIELDS},
-  features,
-  whatsIncluded,
-  installSteps[]{..., markDefs[], children[]},
-  terms[]{..., markDefs[], children[]},
-  country->{
-    ${COUNTRY_REFERENCE_FIELDS}
-  }
 `;
 
 const ESIM_PRODUCT_CARD_FIELDS = `
@@ -587,73 +582,6 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
     console.error("Failed to fetch countries from Sanity", error);
     return [];
   }
-}
-
-async function enrichPlansWithCatalogPricing<T extends PlanSummary>(plans: T[]): Promise<T[]> {
-  if (!plans.length) {
-    return plans;
-  }
-
-  try {
-    const products = await getCatalogProductSummaries();
-    if (!products.length) {
-      return plans;
-    }
-
-    const byPlanSlug = new Map<string, EsimProductSummary>();
-
-    for (const product of products) {
-      const planSlug = product.slugs?.plan ?? product.plan?.slug;
-      if (!planSlug || byPlanSlug.has(planSlug)) {
-        continue;
-      }
-
-      byPlanSlug.set(planSlug, product);
-    }
-
-    return plans.map((plan) => {
-      const product = byPlanSlug.get(plan.slug);
-      if (!product) {
-        return plan;
-      }
-
-      const productPrice: MoneyValue | null = product.price ?? null;
-      const planPrice: MoneyValue | null = plan.price ?? null;
-
-      const resolvedPriceUSD =
-        productPrice && productPrice.currency === "USD"
-          ? productPrice.amount
-          : product.priceUSD ?? plan.priceUSD;
-
-      const fallbackPrice: MoneyValue = {
-        amount: resolvedPriceUSD,
-        currency: (productPrice ?? planPrice)?.currency ?? "USD",
-        source: (productPrice ?? planPrice)?.source ?? "sanity",
-        lastSyncedAt: (productPrice ?? planPrice)?.lastSyncedAt ?? null,
-      };
-
-      const resolvedPrice = productPrice ?? planPrice ?? fallbackPrice;
-
-      return {
-        ...plan,
-        priceUSD: resolvedPriceUSD ?? plan.priceUSD,
-        price: resolvedPrice,
-        package: product.package ?? plan.package ?? null,
-      };
-    });
-  } catch (error) {
-    console.error("Failed to merge catalog pricing with Sanity plans", error);
-    return plans;
-  }
-}
-
-async function enrichPlanWithCatalogPricing<T extends PlanSummary>(plan: T | null): Promise<T | null> {
-  if (!plan) {
-    return plan;
-  }
-
-  const [enriched] = await enrichPlansWithCatalogPricing([plan]);
-  return enriched ?? plan;
 }
 
 export async function getCountryBySlug(slug: string): Promise<CountryDetail | null> {
