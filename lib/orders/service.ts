@@ -36,6 +36,13 @@ export type CreateOrderResult = {
   orderId: string;
   orderNumber: string | null;
   requestId: string | null;
+  installation?: {
+    qrCodeData?: string | null;
+    qrCodeUrl?: string | null;
+    smdpAddress?: string | null;
+    activationCode?: string | null;
+    apn?: string | null;
+  };
 };
 
 export class OrderServiceError extends Error {
@@ -81,6 +88,7 @@ export interface CreateOrderOptions {
 
 const DEFAULT_QUANTITY = 1;
 const MAX_QUANTITY = 10;
+const ORDER_RATE_LIMIT_RETRY = { attempts: 3, baseDelayMs: 500 };
 
 let cachedAiraloClient: AiraloClient | null = null;
 
@@ -183,6 +191,40 @@ export async function ensureOrderInstallation(
   const airaloOrder = await airalo.getOrderById(existing.orderNumber);
   const payload = createInstallationPayload(airaloOrder);
 
+  // Fetch installation instructions for richer APN/QR/smdp data when possible.
+  let smdpAddress: string | null = null;
+  let activationCode: string | null = null;
+  let qrCodeData: string | null = null;
+  let apn: string | null = null;
+  try {
+    if (airaloOrder.iccid) {
+      const instructions = await airalo.getSimInstallationInstructions(airaloOrder.iccid, {
+        acceptLanguage: "en",
+      });
+      const platform = instructions.instructions?.ios?.[0] ?? instructions.instructions?.android?.[0];
+      smdpAddress =
+        (platform?.installation_manual?.smdp_address as string | undefined) ??
+        (airaloOrder as Record<string, unknown>).smdp_address?.toString() ??
+        null;
+      activationCode =
+        (platform?.installation_manual?.activation_code as string | undefined) ??
+        airaloOrder.activation_code ??
+        null;
+      qrCodeData =
+        (platform?.installation_via_qr_code?.qr_code as string | undefined) ??
+        airaloOrder.qr_code ??
+        airaloOrder.esim ??
+        null;
+      apn =
+        (platform?.network_setup?.apn as string | undefined) ??
+        (airaloOrder as Record<string, unknown>).apn?.toString() ??
+        null;
+    }
+  } catch (error) {
+    // Swallow instruction fetch errors; keep existing installation data.
+    console.warn("Failed to fetch installation instructions", error);
+  }
+
   const performUpdate = async (tx: Prisma.TransactionClient) => {
     await tx.esimOrder.update({
       where: { id: existing.id },
@@ -216,6 +258,16 @@ export async function ensureOrderInstallation(
         payload,
       },
     });
+
+    if (airaloOrder.iccid) {
+      await tx.esimProfile.update({
+        where: { iccid: airaloOrder.iccid },
+        data: {
+          smdpAddress,
+          activationCode,
+        },
+      });
+    }
   };
 
   if (isPrismaClient(db)) {
@@ -583,11 +635,34 @@ export async function createOrder(
   let airaloOrder: AiraloOrder | null = null;
   let airaloLatencyMs = 0;
 
+  const invokeWithBackoff = async <T>(fn: () => Promise<T>): Promise<T> => {
+    let attempt = 0;
+    let lastError: unknown;
+    while (attempt < ORDER_RATE_LIMIT_RETRY.attempts) {
+      try {
+        return await fn();
+      } catch (error) {
+        lastError = error;
+        const isRateLimit =
+          error instanceof AiraloError && error.details.status === 429;
+        if (!isRateLimit) {
+          throw error;
+        }
+        const delayMs =
+          ORDER_RATE_LIMIT_RETRY.baseDelayMs * 2 ** attempt +
+          Math.floor(Math.random() * 150);
+        await new Promise((r) => setTimeout(r, delayMs));
+        attempt += 1;
+      }
+    }
+    throw lastError;
+  };
+
   try {
     if (isAsyncSubmission) {
-      airaloAck = await airalo.createOrderAsync(orderPayload);
+      airaloAck = await invokeWithBackoff(() => airalo.createOrderAsync(orderPayload));
     } else {
-      airaloOrder = await airalo.createOrder(orderPayload);
+      airaloOrder = await invokeWithBackoff(() => airalo.createOrder(orderPayload));
     }
   } catch (error: unknown) {
     airaloLatencyMs = Date.now() - airaloCallStartedAt;
@@ -762,6 +837,15 @@ export async function createOrder(
       orderId: result.id,
       orderNumber: result.orderNumber ?? null,
       requestId: result.requestId ?? result.orderNumber ?? null,
+      installation: airaloOrder
+        ? {
+            qrCodeData: airaloOrder.qr_code ?? airaloOrder.esim ?? null,
+            qrCodeUrl: airaloOrder.qr_code ?? null,
+            smdpAddress: (airaloOrder as Record<string, unknown>).smdp_address?.toString() ?? null,
+            activationCode: airaloOrder.activation_code ?? null,
+            apn: (airaloOrder as Record<string, unknown>).apn?.toString() ?? null,
+          }
+        : undefined,
     };
   } catch (error: unknown) {
     logOrderError("order.persistence.failed", {

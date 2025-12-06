@@ -12,6 +12,19 @@ export const catalogCountry = defineType({
       validation: (Rule) => Rule.required().max(120)
     }),
     defineField({
+      name: "badge",
+      title: "Badge",
+      type: "string",
+      description: "Short label such as 'Popular' or 'Best value'.",
+      validation: (Rule) => Rule.max(30)
+    }),
+    defineField({
+      name: "summary",
+      title: "Summary",
+      type: "text",
+      rows: 4
+    }),
+    defineField({
       name: "slug",
       title: "Slug",
       type: "slug",
@@ -23,6 +36,18 @@ export const catalogCountry = defineType({
       title: "Country code",
       type: "string",
       validation: (Rule) => Rule.required().max(4)
+    }),
+    defineField({
+      name: "featured",
+      title: "Featured",
+      type: "boolean",
+      initialValue: false
+    }),
+    defineField({
+      name: "primaryPackage",
+      title: "Primary package",
+      type: "reference",
+      to: [{ type: "catalogPackage" }]
     }),
     defineField({
       name: "image",
