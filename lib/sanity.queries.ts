@@ -276,22 +276,6 @@ const CARRIER_SUMMARY_FIELDS = `
   logo
 `;
 
-const PLAN_SUMMARY_FIELDS = `
-  _id,
-  title,
-  "slug": slug.current,
-  priceUSD,
-  dataGB,
-  validityDays,
-  hotspot,
-  fiveG,
-  label,
-  shortBlurb,
-  provider->{
-    ${CARRIER_SUMMARY_FIELDS}
-  }
-`;
-
 const CATALOG_PACKAGE_FIELDS = `
   _id,
   externalId,
@@ -329,9 +313,6 @@ const CATALOG_COUNTRY_FIELDS = `
     ${CATALOG_PACKAGE_FIELDS}
   }
 `;
-
-// For backwards compatibility with existing selections expecting country reference fields.
-const COUNTRY_REFERENCE_FIELDS = CATALOG_COUNTRY_FIELDS;
 
 const REGION_BUNDLE_FIELDS = `
   _id,
