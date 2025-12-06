@@ -269,13 +269,6 @@ export type HomePagePayload = {
   sections: HomeSection[];
 };
 
-const CARRIER_SUMMARY_FIELDS = `
-  _id,
-  title,
-  "slug": slug.current,
-  logo
-`;
-
 const CATALOG_PACKAGE_FIELDS = `
   _id,
   externalId,
