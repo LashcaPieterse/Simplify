@@ -192,7 +192,6 @@ export async function ensureOrderInstallation(
   const payload = createInstallationPayload(airaloOrder);
 
   // Fetch installation instructions for richer APN/QR/smdp data when possible.
-  let smdpAddress: string | null = null;
   let activationCode: string | null = null;
   try {
     if (airaloOrder.iccid) {
@@ -200,10 +199,6 @@ export async function ensureOrderInstallation(
         acceptLanguage: "en",
       });
       const platform = instructions.instructions?.ios?.[0] ?? instructions.instructions?.android?.[0];
-      smdpAddress =
-        (platform?.installation_manual?.smdp_address as string | undefined) ??
-        (airaloOrder as Record<string, unknown>).smdp_address?.toString() ??
-        null;
       activationCode =
         (platform?.installation_manual?.activation_code as string | undefined) ??
         airaloOrder.activation_code ??
@@ -252,7 +247,6 @@ export async function ensureOrderInstallation(
       await tx.esimProfile.update({
         where: { iccid: airaloOrder.iccid },
         data: {
-          smdpAddress,
           activationCode,
         },
       });
