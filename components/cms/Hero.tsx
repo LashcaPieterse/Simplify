@@ -211,7 +211,7 @@ function HeroCountryCard({ country }: { country: CountrySummary }) {
   const plan = country.plan;
   const priceAmount = plan?.price?.amount ?? plan?.priceUSD;
   const priceCurrency = plan?.price?.currency ?? "USD";
-  const providerName = plan?.provider?.title;
+  const providerName = plan?.provider?.title ?? plan?.package?.operator?.title;
 
   return (
     <>

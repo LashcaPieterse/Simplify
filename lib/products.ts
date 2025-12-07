@@ -26,19 +26,13 @@ export type EsimProductCardData = {
 
 export const getEsimProductHref = (product: EsimProductSummary): LinkHref | undefined => {
   const planSlug = product.slugs?.plan ?? product.plan?.slug;
-  if (planSlug) {
-    return `/plan/${planSlug}` as Route;
-  }
-
-  const productSlug = product.slugs?.product ?? product.slug;
-  if (productSlug) {
-    return `/product/${productSlug}` as Route;
-  }
+  if (planSlug) return `/plan/${planSlug}` as Route;
 
   const countrySlug = product.slugs?.country ?? product.country?.slug;
-  if (countrySlug) {
-    return `/country/${countrySlug}` as Route;
-  }
+  if (countrySlug) return `/country/${countrySlug}` as Route;
+
+  const productSlug = product.slugs?.product ?? product.slug;
+  if (productSlug) return `/product/${productSlug}` as Route;
 
   return undefined;
 };
@@ -49,7 +43,7 @@ export const mapProductToCardData = (product: EsimProductSummary): EsimProductCa
   const priceAmount = product.price?.amount ?? product.priceUSD;
   const priceCurrency = product.price?.currency ?? "USD";
   const providerBadge = product.provider?.badge ?? product.providerBadge;
-  const providerName = product.provider?.title ?? product.plan?.provider?.title;
+  const providerName = product.provider?.title ?? product.package?.operator?.title;
 
   return {
     id: product._id,

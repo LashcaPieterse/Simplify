@@ -51,17 +51,17 @@ export const eSimProduct = defineType({
       validation: (Rule) => Rule.required().min(1)
     }),
     defineField({
-      name: "plan",
-      title: "Associated plan",
+      name: "package",
+      title: "Catalog package",
       type: "reference",
-      to: [{ type: "plan" }],
+      to: [{ type: "catalogPackage" }],
       validation: (Rule) => Rule.required()
     }),
     defineField({
       name: "country",
-      title: "Country",
+      title: "Catalog country",
       type: "reference",
-      to: [{ type: "country" }],
+      to: [{ type: "catalogCountry" }],
       validation: (Rule) => Rule.required()
     }),
     defineField({

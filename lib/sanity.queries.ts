@@ -194,13 +194,24 @@ export type ProductSlugSet = {
 export type CatalogPackageInfo = {
   id: string;
   externalId: string;
+  title?: string;
   currency: string;
   priceCents: number;
+  badge?: string | null;
+  summary?: string | null;
+  image?: ImageLike;
   dataLimitMb?: number | null;
   validityDays?: number | null;
   region?: string | null;
   lastSyncedAt?: string | null;
   metadata?: Record<string, unknown> | null;
+  operator?: {
+    _id: string;
+    title?: string;
+    slug?: string;
+    logo?: ImageLike;
+    badge?: string | null;
+  };
 };
 
 // Utility: pick a stable identifier from a catalog package reference.
@@ -384,7 +395,7 @@ const ESIM_PRODUCT_CARD_FIELDS = `
   providerBadge,
   status,
   keywords,
-  plan->{
+  package->{
     ${CATALOG_PACKAGE_FIELDS}
   },
   country->{

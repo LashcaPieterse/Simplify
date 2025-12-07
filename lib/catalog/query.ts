@@ -8,36 +8,13 @@ import type {
   EsimProductStatus,
   EsimProductSummary,
   MoneyValue,
-  PlanSummary,
   ProductSlugSet,
   ProviderInfo,
 } from "../sanity.queries";
 import type { ImageLike } from "../image";
 import type { Package } from "../airalo/schemas";
 
-const CARRIER_SUMMARY_FIELDS = `
-  _id,
-  title,
-  "slug": slug.current,
-  logo
-`;
-
-const PLAN_SUMMARY_FIELDS = `
-  _id,
-  title,
-  "slug": slug.current,
-  priceUSD,
-  dataGB,
-  validityDays,
-  hotspot,
-  fiveG,
-  label,
-  shortBlurb,
-  provider->{
-    ${CARRIER_SUMMARY_FIELDS}
-  }
-`;
-
+// Featured products now reference Catalog Countries and Catalog Packages directly.
 const COUNTRY_REFERENCE_FIELDS = `
   _id,
   title,
@@ -46,6 +23,30 @@ const COUNTRY_REFERENCE_FIELDS = `
   summary,
   coverImage,
   featured
+`;
+
+const CATALOG_PACKAGE_FIELDS = `
+  _id,
+  externalId,
+  title,
+  priceCents,
+  sellingPriceCents,
+  currencyCode,
+  dataAmountMb,
+  validityDays,
+  isUnlimited,
+  badge,
+  summary,
+  shortInfo,
+  image,
+  operator->{
+    _id,
+    title,
+    operatorCode,
+    badge,
+    summary,
+    image
+  }
 `;
 
 const CATALOG_PRODUCTS_QUERY = groq`
@@ -60,8 +61,8 @@ const CATALOG_PRODUCTS_QUERY = groq`
     providerBadge,
     status,
     keywords,
-    plan->{
-      ${PLAN_SUMMARY_FIELDS}
+    package->{
+      ${CATALOG_PACKAGE_FIELDS}
     },
     country->{
       ${COUNTRY_REFERENCE_FIELDS}
@@ -78,22 +79,46 @@ type SanityCatalogProduct = {
   shortDescription: string;
   providerBadge?: string;
   status: EsimProductStatus;
-  plan?: PlanSummary;
-  country?: {
-    _id: string;
-    title: string;
-    slug: string;
-    badge?: string;
-    summary: string;
-    coverImage?: ImageLike;
-    featured?: boolean;
-    plan?: PlanSummary;
-  };
+  package?: CatalogPackageDoc | null;
+  country?: CatalogCountryDoc | null;
   keywords?: string[];
   price?: MoneyValue | null;
   provider?: ProviderInfo | null;
   slugs?: ProductSlugSet;
-  package?: CatalogPackageInfo | null;
+};
+
+type CatalogCountryDoc = {
+  _id: string;
+  title: string;
+  slug: string;
+  badge?: string | null;
+  summary?: string | null;
+  coverImage?: ImageLike;
+  featured?: boolean;
+};
+
+type CatalogPackageDoc = {
+  _id: string;
+  externalId?: string;
+  title?: string;
+  priceCents?: number;
+  sellingPriceCents?: number | null;
+  currencyCode?: string;
+  dataAmountMb?: number | null;
+  validityDays?: number | null;
+  isUnlimited?: boolean;
+  badge?: string | null;
+  summary?: string | null;
+  shortInfo?: string | null;
+  image?: ImageLike;
+  operator?: {
+    _id: string;
+    title?: string;
+    operatorCode?: string;
+    badge?: string;
+    summary?: string | null;
+    image?: ImageLike;
+  } | null;
 };
 
 type MultiCurrencyPriceMap = NonNullable<Package["net_prices"]>;
@@ -221,36 +246,17 @@ function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
   };
 }
 
-function mergePlanWithPricing(plan: PlanSummary | undefined, price: MoneyValue | null, pkg: CatalogPackageInfo | null): PlanSummary | undefined {
-  if (!plan) {
-    return plan;
-  }
-
-  const priceUSDOverride = price && price.currency === "USD" ? price.amount : plan.priceUSD;
-
-  return {
-    ...plan,
-    priceUSD: priceUSDOverride,
-    price: price ?? plan.price ?? {
-      amount: plan.priceUSD,
-      currency: "USD",
-      source: "sanity",
-    },
-    package: pkg ?? plan.package ?? null,
-  };
-}
-
-function buildProviderInfo(product: SanityCatalogProduct): ProviderInfo | null {
-  const provider = product.plan?.provider;
+function buildProviderInfo(product: SanityCatalogProduct, pkg?: CatalogPackageInfo | null): ProviderInfo | null {
   const badge = product.providerBadge ?? undefined;
+  const operator = pkg?.operator;
 
-  if (!provider && !badge) {
+  if (!operator && !badge) {
     return null;
   }
 
   return {
-    title: provider?.title,
-    slug: provider?.slug,
+    title: operator?.title,
+    slug: operator?.slug,
     badge,
   };
 }
@@ -258,8 +264,49 @@ function buildProviderInfo(product: SanityCatalogProduct): ProviderInfo | null {
 function buildSlugs(product: SanityCatalogProduct): ProductSlugSet {
   return {
     product: product.slug,
-    plan: product.plan?.slug,
+    plan: product.package?.externalId,
     country: product.country?.slug,
+  };
+}
+
+function toCatalogPackageInfo(pkg?: CatalogPackageDoc | null): CatalogPackageInfo | null {
+  if (!pkg) return null;
+
+  const currency = pkg.currencyCode ?? "USD";
+
+  return {
+    id: pkg._id,
+    externalId: pkg.externalId ?? pkg._id,
+    title: pkg.title,
+    currency,
+    badge: pkg.badge,
+    summary: pkg.summary,
+    image: pkg.image,
+    priceCents: pkg.priceCents ?? 0,
+    dataLimitMb: pkg.dataAmountMb ?? null,
+    validityDays: pkg.validityDays ?? null,
+    region: null,
+    lastSyncedAt: null,
+    metadata: null,
+    operator: pkg.operator
+      ? {
+          _id: pkg.operator._id,
+          title: pkg.operator.title ?? "",
+          slug: pkg.operator.operatorCode ?? pkg.operator._id,
+          logo: pkg.operator.image,
+          badge: pkg.operator.badge,
+        }
+      : undefined,
+  };
+}
+
+function priceFromCatalogPackage(pkg?: CatalogPackageInfo | null): MoneyValue | null {
+  if (!pkg || typeof pkg.priceCents !== "number") return null;
+
+  return {
+    amount: centsToAmount(pkg.priceCents),
+    currency: pkg.currency,
+    source: "sanity",
   };
 }
 
@@ -267,18 +314,18 @@ function applyPackageToProduct(
   product: SanityCatalogProduct,
   maps: PackageMaps,
 ): EsimProductSummary {
-  const planSlug = normalizeKey(product.plan?.slug ?? null);
   const productSlug = normalizeKey(product.slug);
   const countrySlug = normalizeKey(product.country?.slug ?? null);
+  const packageInfoFromSanity = toCatalogPackageInfo(product.package);
 
   const matchedRecord =
-    (planSlug && maps.bySku.get(planSlug)) ||
     (productSlug && maps.bySku.get(productSlug)) ||
     (countrySlug && maps.byDestination.get(countrySlug)) ||
     null;
 
   const priceFromPackage = matchedRecord ? createPriceFromPackage(matchedRecord) : null;
-  const packageInfo = matchedRecord ? createPackageInfo(matchedRecord) : null;
+  const packageInfo = packageInfoFromSanity ?? (matchedRecord ? createPackageInfo(matchedRecord) : null);
+  const sanityPackagePrice = priceFromCatalogPackage(packageInfoFromSanity);
 
   const fallbackPrice: MoneyValue | null = product.price ??
     (typeof product.priceUSD === "number"
@@ -289,22 +336,19 @@ function applyPackageToProduct(
         }
       : null);
 
-  const price = priceFromPackage ?? fallbackPrice;
+  const price = priceFromPackage ?? sanityPackagePrice ?? fallbackPrice;
   const priceUSD =
     price && price.currency === "USD"
       ? price.amount
       : typeof product.priceUSD === "number"
         ? product.priceUSD
-        : price?.amount ?? product.plan?.priceUSD ?? 0;
+        : price?.amount ?? 0;
 
-  const provider = product.provider ?? buildProviderInfo(product);
+  const provider = product.provider ?? buildProviderInfo(product, packageInfo);
   const slugs = product.slugs ?? buildSlugs(product);
-
-  const mergedPlan = mergePlanWithPricing(product.plan, price, packageInfo);
 
   return {
     ...product,
-    plan: mergedPlan,
     priceUSD,
     price,
     providerBadge: provider?.badge,
@@ -355,9 +399,9 @@ export async function getCatalogProductSummariesMap(): Promise<Map<string, EsimP
       map.set(slug, product);
     }
 
-    const planSlug = product.slugs?.plan ?? product.plan?.slug;
-    if (planSlug && !map.has(planSlug)) {
-      map.set(planSlug, product);
+    const packageSlug = product.slugs?.plan;
+    if (packageSlug && !map.has(packageSlug)) {
+      map.set(packageSlug, product);
     }
   }
 
