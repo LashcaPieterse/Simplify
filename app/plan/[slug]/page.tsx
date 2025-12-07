@@ -27,6 +27,10 @@ export default async function PlanPage({ params }: PlanPageProps) {
   }
 
   const relatedPosts = (await getPosts()).slice(0, 3);
+  const inclusions = Array.isArray(plan.whatsIncluded) ? plan.whatsIncluded : [];
+  const installSteps = Array.isArray(plan.installSteps) ? plan.installSteps : [];
+  const terms = Array.isArray(plan.terms) ? plan.terms : [];
+  const features = Array.isArray(plan.features) ? plan.features : [];
   const providerLogo = plan.provider?.logo ? urlForImage(plan.provider.logo)?.width(160).height(160).url() : null;
   const providerHandle = plan.provider?.title
     ? plan.provider.title.toLowerCase().replace(/\s+/g, "")
@@ -83,7 +87,7 @@ export default async function PlanPage({ params }: PlanPageProps) {
           <div>
             <h2 className="text-xl font-semibold text-brand-900">What&apos;s included</h2>
             <ul className="mt-4 space-y-3 text-sm text-brand-600">
-              {plan.whatsIncluded.map((item) => (
+              {inclusions.map((item) => (
                 <li key={item} className="flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-brand-400" />
                   {item}
@@ -91,11 +95,11 @@ export default async function PlanPage({ params }: PlanPageProps) {
               ))}
             </ul>
 
-            {plan.features?.length ? (
+            {features.length ? (
               <div className="mt-8">
                 <h3 className="text-lg font-semibold text-brand-900">Perks</h3>
                 <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {plan.features.map((feature) => (
+                  {features.map((feature) => (
                     <li key={feature} className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-600">
                       {feature}
                     </li>
@@ -108,14 +112,14 @@ export default async function PlanPage({ params }: PlanPageProps) {
               <div>
                 <h3 className="text-lg font-semibold text-brand-900">Installation steps</h3>
                 <div className="prose prose-brand max-w-none">
-                  <PortableTextRenderer value={plan.installSteps} />
+                  <PortableTextRenderer value={installSteps} />
                 </div>
               </div>
-              {plan.terms?.length ? (
+              {terms.length ? (
                 <div>
                   <h3 className="text-lg font-semibold text-brand-900">Terms</h3>
                   <div className="prose prose-brand max-w-none">
-                    <PortableTextRenderer value={plan.terms} />
+                    <PortableTextRenderer value={terms} />
                   </div>
                 </div>
               ) : null}
