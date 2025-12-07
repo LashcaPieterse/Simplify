@@ -56,8 +56,8 @@ const CATALOG_PRODUCTS_QUERY = groq`
     displayName,
     "slug": slug.current,
     priceUSD,
-    // Prefer explicit product artwork; otherwise fall back to the catalog country's cover image.
-    "coverImage": coalesce(coverImage, country->coverImage),
+    // Always use the selected Catalog Country cover when available; otherwise fall back to the product cover image.
+    "coverImage": coalesce(country->coverImage, coverImage),
     shortDescription,
     providerBadge,
     status,
