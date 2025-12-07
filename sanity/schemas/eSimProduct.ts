@@ -36,7 +36,6 @@ export const eSimProduct = defineType({
       type: "image",
       options: { hotspot: true },
       description: "Optional. If left empty, the cover image from the linked Catalog Country will be used.",
-      validation: (Rule) => Rule.optional()
     }),
     defineField({
       name: "shortDescription",
