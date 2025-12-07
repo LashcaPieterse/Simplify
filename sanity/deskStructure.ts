@@ -21,8 +21,7 @@ const singletonItems = [
 const previewableTypes = new Set([
   "siteSettings",
   "homePage",
-  "country",
-  "plan",
+  "catalogCountry",
   "eSimProduct",
   "regionBundle",
   "post"
@@ -43,9 +42,7 @@ export const structure = (S: StructureBuilder) =>
           )
       ),
       S.divider(),
-      S.documentTypeListItem("country").title("Countries").icon(EarthGlobeIcon),
       S.documentTypeListItem("carrier").title("Carriers").icon(DocumentTextIcon),
-      S.documentTypeListItem("plan").title("Plans").icon(PackageIcon),
       S.documentTypeListItem("catalogCountry")
         .title("Catalog Countries")
         .icon(EarthGlobeIcon),

@@ -35,7 +35,8 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
   const priceAmount = product.price?.amount ?? product.priceUSD;
   const priceCurrency = product.price?.currency ?? "USD";
   const providerBadge = product.provider?.badge ?? product.providerBadge;
-  const providerName = product.provider?.title ?? product.plan?.provider?.title;
+  const providerName = product.provider?.title ?? product.package?.operator?.title;
+  const packageTitle = product.package?.title ?? product.displayName;
 
   return (
     <article className={cn("flex items-start gap-4 rounded-2xl border border-brand-100/80 bg-white px-4 py-4 shadow-sm", className)}>
@@ -59,7 +60,7 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
           {product.country?.title ? <span>{product.country.title}</span> : null}
           {providerName ? <span>{providerName}</span> : null}
         </div>
-        {product.plan?.title ? <p className="font-medium text-brand-900">{product.plan.title}</p> : null}
+        {packageTitle ? <p className="font-medium text-brand-900">{packageTitle}</p> : null}
         <p className="text-sm text-brand-600">{product.shortDescription}</p>
       </div>
       <div className="flex flex-col items-end gap-2 text-right">
