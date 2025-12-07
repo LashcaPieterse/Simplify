@@ -8,7 +8,7 @@ const statusOptions: { title: string; value: "active" | "comingSoon" | "archived
 
 export const eSimProduct = defineType({
   name: "eSimProduct",
-  title: "eSIM Product",
+  title: "Featured Product",
   type: "document",
   fields: [
     defineField({
@@ -35,7 +35,8 @@ export const eSimProduct = defineType({
       title: "Cover image",
       type: "image",
       options: { hotspot: true },
-      validation: (Rule) => Rule.required()
+      description: "Optional. If left empty, the cover image from the linked Catalog Country will be used.",
+      validation: (Rule) => Rule.optional()
     }),
     defineField({
       name: "shortDescription",

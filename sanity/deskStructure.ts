@@ -55,7 +55,7 @@ export const structure = (S: StructureBuilder) =>
       S.documentTypeListItem("catalogPackage")
         .title("Catalog Packages")
         .icon(PackageIcon),
-      S.documentTypeListItem("eSimProduct").title("eSIM Products").icon(PackageIcon),
+      S.documentTypeListItem("eSimProduct").title("Featured Products").icon(PackageIcon),
       S.documentTypeListItem("regionBundle").title("Region Bundles").icon(PackageIcon),
       S.documentTypeListItem("post").title("Posts").icon(BookIcon)
     ]);
