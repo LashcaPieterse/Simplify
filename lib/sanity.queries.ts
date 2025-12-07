@@ -624,7 +624,7 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
       results?.map((country) => ({
         _id: country._id,
         title: country.title,
-        slug: country.slug,
+        slug: country.slug?.current ?? "",
         badge: country.badge ?? null,
         summary: country.summary ?? null,
         coverImage: country.coverImage,
@@ -648,7 +648,7 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
     return {
       _id: country._id,
       title: country.title,
-      slug: country.slug,
+      slug: country.slug?.current ?? "",
       badge: country.badge ?? null,
       summary: country.summary ?? null,
       coverImage: country.coverImage,
