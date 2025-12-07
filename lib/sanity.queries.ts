@@ -108,6 +108,45 @@ export type HomeSection =
   | NewsletterSection
   | ArticlesSection;
 
+// Sanity catalog document shapes (as fetched via GROQ)
+type CatalogPackageDoc = {
+  _id: string;
+  externalId?: string;
+  title?: string;
+  slug?: { current?: string };
+  priceCents?: number;
+  sellingPriceCents?: number | null;
+  currencyCode?: string;
+  dataAmountMb?: number | null;
+  validityDays?: number | null;
+  isUnlimited?: boolean | null;
+  badge?: string | null;
+  summary?: string | null;
+  shortInfo?: string | null;
+  image?: ImageLike;
+  operator?: {
+    _id: string;
+    title?: string;
+    operatorCode?: string;
+    badge?: string | null;
+    summary?: string | null;
+    image?: ImageLike;
+  } | null;
+};
+
+type CatalogCountryDoc = {
+  _id: string;
+  title: string;
+  slug: { current?: string };
+  countryCode?: string;
+  badge?: string | null;
+  summary?: string | null;
+  featured?: boolean | null;
+  image?: ImageLike;
+  primaryPackage?: CatalogPackageDoc | null;
+  packages?: CatalogPackageDoc[];
+};
+
 export type IconBullet = {
   iconName: string;
   title: string;
@@ -503,6 +542,47 @@ const postBySlugQuery = groq`
     body[]{..., markDefs[], children[]}
   }
 `;
+
+function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
+  return {
+    _id: pkg._id,
+    title: pkg.title ?? pkg.slug?.current ?? "Untitled package",
+    slug: pkg.slug?.current ?? pkg._id,
+    priceUSD: (pkg.priceCents ?? 0) / 100,
+    dataGB: pkg.dataAmountMb ? Math.round(pkg.dataAmountMb / 102.4) / 10 : 0,
+    validityDays: pkg.validityDays ?? 0,
+    hotspot: undefined,
+    fiveG: undefined,
+    label: pkg.badge ?? undefined,
+    shortBlurb: pkg.summary ?? pkg.shortInfo ?? "",
+    provider: pkg.operator
+      ? {
+          _id: pkg.operator._id,
+          title: pkg.operator.title ?? "",
+          slug: pkg.operator.operatorCode ?? pkg.operator._id,
+          logo: pkg.operator.image,
+        }
+      : undefined,
+    price: pkg.priceCents
+      ? {
+          amount: pkg.priceCents / 100,
+          currency: pkg.currencyCode ?? "USD",
+          source: "airalo",
+        }
+      : null,
+    package: {
+      id: pkg._id,
+      externalId: pkg.externalId ?? pkg._id,
+      currency: pkg.currencyCode ?? "USD",
+      priceCents: pkg.priceCents ?? 0,
+      dataLimitMb: pkg.dataAmountMb ?? null,
+      validityDays: pkg.validityDays ?? null,
+      region: null,
+      lastSyncedAt: null,
+      metadata: null,
+    },
+  };
+}
 
 export async function getSiteSettings(): Promise<SiteSettings | null> {
   try {
