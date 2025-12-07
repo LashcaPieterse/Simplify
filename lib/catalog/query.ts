@@ -346,6 +346,17 @@ function applyPackageToProduct(
 
   const provider = product.provider ?? buildProviderInfo(product, packageInfo);
   const slugs = product.slugs ?? buildSlugs(product);
+  const country: CountrySummary | undefined = product.country
+    ? {
+        _id: product.country._id,
+        title: product.country.title,
+        slug: product.country.slug,
+        badge: product.country.badge ?? undefined,
+        summary: product.country.summary ?? undefined,
+        coverImage: product.country.coverImage,
+        featured: product.country.featured ?? false,
+      }
+    : undefined;
 
   return {
     ...product,
@@ -354,6 +365,7 @@ function applyPackageToProduct(
     providerBadge: provider?.badge,
     provider,
     slugs,
+    country,
     package: packageInfo ?? null,
   };
 }
