@@ -92,12 +92,6 @@ export async function pollUsageForProfile(
       usedMb: typeof dataMetrics?.used === "number" ? dataMetrics.used : null,
       remainingMb:
         typeof dataMetrics?.remaining === "number" ? dataMetrics.remaining : null,
-      // Optional: store voice/SMS in metadata if columns don't exist
-      metadata: {
-        voice: voiceMetrics ?? null,
-        sms: smsMetrics ?? null,
-        lastUpdatedAt: usage?.last_updated_at ?? null,
-      } as unknown as Prisma.JsonValue,
     },
   });
 
