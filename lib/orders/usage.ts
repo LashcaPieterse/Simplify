@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient, UsageSnapshot } from "@prisma/client";
+import type { PrismaClient, UsageSnapshot } from "@prisma/client";
 
 import type { AiraloClient, Usage as AiraloUsage } from "../airalo/client";
 import prismaClient from "../db/client";
@@ -82,9 +82,6 @@ export async function pollUsageForProfile(
   }
 
   const dataMetrics = usage?.data;
-  const voiceMetrics = usage?.voice;
-  const smsMetrics = usage?.sms;
-
   const snapshot = await db.usageSnapshot.create({
     data: {
       orderId,
