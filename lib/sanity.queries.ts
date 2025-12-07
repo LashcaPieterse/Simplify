@@ -627,7 +627,7 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
         slug: country.slug?.current ?? "",
         badge: country.badge ?? null,
         summary: country.summary ?? null,
-        coverImage: country.coverImage,
+        coverImage: country.image,
         featured: country.featured ?? false,
         plan: country.primaryPackage ? mapCatalogPackageToPlan(country.primaryPackage) : undefined,
       })) ?? []
@@ -651,7 +651,7 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
       slug: country.slug?.current ?? "",
       badge: country.badge ?? null,
       summary: country.summary ?? null,
-      coverImage: country.coverImage,
+      coverImage: country.image,
       featured: country.featured ?? false,
       carriers: [],
       plans,
