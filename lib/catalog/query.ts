@@ -5,6 +5,7 @@ import prisma from "../db/client";
 import { getSanityClient } from "../sanity.client";
 import type {
   CatalogPackageInfo,
+  CountrySummary,
   EsimProductStatus,
   EsimProductSummary,
   MoneyValue,
