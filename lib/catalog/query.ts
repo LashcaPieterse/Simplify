@@ -354,7 +354,7 @@ function applyPackageToProduct(
     providerBadge: provider?.badge,
     provider,
     slugs,
-    package: packageInfo ?? product.package ?? null,
+    package: packageInfo ?? null,
   };
 }
 
