@@ -621,16 +621,19 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
     const client = getSanityClient();
     const results = await client.fetch<CatalogCountryDoc[]>(countriesQuery);
     return (
-      results?.map((country) => ({
-        _id: country._id,
-        title: country.title,
-        slug: country.slug?.current ?? "",
-        badge: country.badge ?? null,
-        summary: country.summary ?? null,
-        coverImage: country.image,
-        featured: country.featured ?? false,
-        plan: country.primaryPackage ? mapCatalogPackageToPlan(country.primaryPackage) : undefined,
-      })) ?? []
+      results
+        // Ignore countries that do not have a slug to avoid generating invalid paths like "/country".
+        ?.filter((country) => country.slug?.current)
+        .map((country) => ({
+          _id: country._id,
+          title: country.title,
+          slug: country.slug?.current ?? "",
+          badge: country.badge ?? null,
+          summary: country.summary ?? null,
+          coverImage: country.image,
+          featured: country.featured ?? false,
+          plan: country.primaryPackage ? mapCatalogPackageToPlan(country.primaryPackage) : undefined,
+        })) ?? []
     );
   } catch (error) {
     console.error("Failed to fetch countries from Sanity", error);
