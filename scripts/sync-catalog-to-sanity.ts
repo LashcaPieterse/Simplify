@@ -197,6 +197,21 @@ async function upsertDocuments(documents: Record<string, unknown>[], label: stri
   console.info(`[sanity-sync] Upserted ${documents.length} ${label}`);
 }
 
+async function fetchExistingIds(type: string): Promise<Set<string>> {
+  const ids = await sanity.fetch<string[]>(`*[_type == $type]._id`, { type });
+  return new Set(ids ?? []);
+}
+
+async function deleteDocuments(docIds: string[], label: string) {
+  if (!docIds.length) return;
+  for (const batch of chunk(docIds, BATCH_SIZE)) {
+    // Sanity's newer API versions expect the delete mutation to be an object with an id property.
+    const mutations = batch.map((id) => ({ delete: { id } }));
+    await sanity.mutate(mutations, { returnIds: false, visibility: "async" });
+  }
+  console.info(`[sanity-sync] Deleted ${docIds.length} stale ${label}`);
+}
+
 async function main() {
   const [countries, operators, packages] = await Promise.all([
     prisma.country.findMany(),
@@ -255,27 +270,6 @@ async function main() {
       lastSyncedAt: now
     });
   }
-
-  // Extra test document to validate sync behavior.
-  const syncCatalogTestImage =
-    (await resolveImageFromUrl(
-      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80"
-    )) ??
-    (await uploadPlaceholderImage("sync-catalog-placeholder.png"));
-  countryDocs.push({
-    _id: "syncCatelogTest",
-    _type: "catalogCountry",
-    title: "Sync Catalog Test",
-    slug: { _type: "slug", current: "sync-catalog-test" },
-    countryCode: "ZX",
-    badge: null,
-    summary: null,
-    featured: false,
-    primaryPackage: null,
-    image: syncCatalogTestImage,
-    metadataJson: null,
-    lastSyncedAt: now
-  });
 
   const operatorIdMap = new Map<string, string>();
   const operatorDocs: Record<string, unknown>[] = [];
@@ -361,6 +355,25 @@ async function main() {
   await upsertDocuments(countryDocs, "catalog countries");
   await upsertDocuments(operatorDocs, "catalog operators");
   await upsertDocuments(packageDocs, "catalog packages");
+
+  // Remove stale docs so Sanity mirrors the database exactly.
+  const [existingCountryIds, existingOperatorIds, existingPackageIds] = await Promise.all([
+    fetchExistingIds("catalogCountry"),
+    fetchExistingIds("catalogOperator"),
+    fetchExistingIds("catalogPackage")
+  ]);
+
+  const expectedCountryIds = new Set(countryDocs.map((doc) => doc._id as string));
+  const expectedOperatorIds = new Set(operatorDocs.map((doc) => doc._id as string));
+  const expectedPackageIds = new Set(packageDocs.map((doc) => doc._id as string));
+
+  const staleCountries = Array.from(existingCountryIds).filter((id) => !expectedCountryIds.has(id));
+  const staleOperators = Array.from(existingOperatorIds).filter((id) => !expectedOperatorIds.has(id));
+  const stalePackages = Array.from(existingPackageIds).filter((id) => !expectedPackageIds.has(id));
+
+  await deleteDocuments(staleCountries, "catalog countries");
+  await deleteDocuments(staleOperators, "catalog operators");
+  await deleteDocuments(stalePackages, "catalog packages");
 
   console.info(
     `[sanity-sync] Completed. countries=${countryDocs.length} operators=${operatorDocs.length} packages=${packageDocs.length}`
