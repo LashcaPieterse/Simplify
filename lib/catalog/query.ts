@@ -317,9 +317,11 @@ function applyPackageToProduct(
 ): EsimProductSummary {
   const productSlug = normalizeKey(product.slug);
   const countrySlug = normalizeKey(product.country?.slug ?? null);
+  const packageSlug = normalizeKey(product.package?.externalId ?? product.slugs?.plan ?? null);
   const packageInfoFromSanity = toCatalogPackageInfo(product.package);
 
   const matchedRecord =
+    (packageSlug && maps.bySku.get(packageSlug)) ||
     (productSlug && maps.bySku.get(productSlug)) ||
     (countrySlug && maps.byDestination.get(countrySlug)) ||
     null;
