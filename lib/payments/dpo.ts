@@ -9,6 +9,8 @@ export type CreateDpoTransactionInput = {
   amount: number;
   currency: string;
   reference: string; // CompanyRef
+  description?: string; // optional label/intent
+  metadata?: Record<string, unknown>;
   customerEmail?: string | null;
   redirectUrl: string;
   cancelUrl: string;
