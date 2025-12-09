@@ -1,76 +1,80 @@
-import crypto from "node:crypto";
-
 export type DpoClientOptions = {
   companyToken: string;
   serviceUrl: string;
   paymentUrl: string;
-  merchantId: string;
-  apiKey: string;
+  serviceType: string;
 };
 
 export type CreateDpoTransactionInput = {
   amount: number;
   currency: string;
+  reference: string; // CompanyRef
   customerEmail?: string | null;
   redirectUrl: string;
   cancelUrl: string;
   callbackUrl: string;
-  account?: string;
-  reference?: string;
-  description?: string;
-  metadata?: Record<string, unknown>;
+  paymentTimeLimitMinutes?: number; // PTL
+  serviceDescription?: string;
+  serviceId?: string | number;
+  serviceName?: string;
 };
 
 export type CreateDpoTransactionResult = {
   token: string;
   redirectUrl: string;
   reference?: string;
+  resultCode?: string;
+  resultExplanation?: string;
+  allocationId?: string;
+  allocationCode?: string;
   rawResponse: unknown;
 };
 
 export type VerifyDpoTransactionResult = {
   status: string;
   resultCode?: string;
-  reference?: string;
+  resultExplanation?: string;
+  approval?: string;
+  fraudAlert?: string;
+  fraudExplanation?: string;
   amount?: number;
   currency?: string;
+  netAmount?: number;
+  settlementDate?: string;
+  rollingReserveAmount?: number;
+  rollingReserveDate?: string;
+  customerPhone?: string;
+  customerCountry?: string;
+  customerAddress?: string;
+  customerCity?: string;
+  customerZip?: string;
+  accRef?: string;
   rawResponse: unknown;
 };
-
-const JSON_CONTENT_TYPE = "application/json";
 
 function normaliseUrl(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-function buildSignaturePayload(fields: Record<string, string | number | undefined>): string {
-  return Object.values(fields)
-    .filter((value): value is string | number => value !== undefined)
-    .map((value) => String(value))
-    .join("");
+function extractTag(xml: string, tag: string): string | undefined {
+  const match = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`, "i"));
+  return match?.[1]?.trim();
 }
 
 export class DpoClient {
   private readonly companyToken: string;
-  private readonly merchantId: string;
-  private readonly apiKey: string;
   private readonly serviceUrl: string;
   private readonly paymentUrl: string;
+  private readonly serviceType: string;
 
   constructor(options: DpoClientOptions) {
     this.companyToken = options.companyToken;
-    this.merchantId = options.merchantId;
-    this.apiKey = options.apiKey;
     this.serviceUrl = normaliseUrl(options.serviceUrl);
     this.paymentUrl = normaliseUrl(options.paymentUrl);
+    this.serviceType = options.serviceType;
   }
 
-  private sign(fields: Record<string, string | number | undefined>): string {
-    const payload = buildSignaturePayload(fields) + this.apiKey;
-    return crypto.createHash("sha256").update(payload).digest("hex");
-  }
-
-  private async fetchJson<T>(input: RequestInfo | URL, init: RequestInit = {}): Promise<T> {
+  private async fetchXml(input: RequestInfo | URL, init: RequestInit = {}): Promise<string> {
     const response = await fetch(input, init);
 
     if (!response.ok) {
@@ -78,115 +82,153 @@ export class DpoClient {
       throw new Error(`DPO request failed with ${response.status}: ${text}`);
     }
 
-    return (await response.json()) as T;
+    return response.text();
   }
 
   async createTransaction(input: CreateDpoTransactionInput): Promise<CreateDpoTransactionResult> {
-    const url = `${this.serviceUrl}/transactions`; // Endpoint per DPO REST docs
+    const url = `${this.serviceUrl}/`;
+    const now = new Date();
+  const serviceDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(
+    now.getHours(),
+  ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-    const payload: Record<string, unknown> = {
-      CompanyToken: this.companyToken,
-      MerchantId: this.merchantId,
-      Amount: input.amount,
-      Currency: input.currency,
-      RedirectURL: input.redirectUrl,
-      BackURL: input.cancelUrl,
-      CallBackURL: input.callbackUrl,
-      CustomerEmail: input.customerEmail ?? undefined,
-      Account: input.account ?? undefined,
-      CompanyRef: input.reference ?? undefined,
-      CompanyAccRef: input.description ?? undefined,
-      MetaData: input.metadata ?? undefined,
-    };
+    const ptl = input.paymentTimeLimitMinutes ?? 5;
+    const serviceDescription = input.serviceDescription ?? input.serviceName ?? "Simplify eSIM plan";
+    const serviceName = input.serviceName ?? "Simplify eSIM";
+    const serviceId = input.serviceId ?? input.reference;
 
-    const signature = this.sign({
-      CompanyToken: this.companyToken,
-      MerchantId: this.merchantId,
-      Amount: input.amount,
-      Currency: input.currency,
-      RedirectURL: input.redirectUrl,
-      BackURL: input.cancelUrl,
-    });
+    const xml = [
+      `<API3G>`,
+      `<CompanyToken>${this.companyToken}</CompanyToken>`,
+      `<Request>createToken</Request>`,
+      `<Transaction>`,
+      `<PaymentAmount>${input.amount}</PaymentAmount>`,
+      `<PaymentCurrency>${input.currency}</PaymentCurrency>`,
+      `<CompanyRef>${input.reference}</CompanyRef>`,
+      `<CompanyRefUnique>0</CompanyRefUnique>`,
+      `<PTL>${ptl}</PTL>`,
+      input.customerEmail ? `<CustomerEmail>${input.customerEmail}</CustomerEmail>` : "",
+      `<RedirectURL>${input.redirectUrl}</RedirectURL>`,
+      `<BackURL>${input.cancelUrl}</BackURL>`,
+      `<CallBackURL>${input.callbackUrl}</CallBackURL>`,
+      `</Transaction>`,
+      `<Services>`,
+      `<Service>`,
+      `<ServiceType>${this.serviceType}</ServiceType>`,
+      serviceDescription ? `<ServiceDescription>${serviceDescription}</ServiceDescription>` : "",
+      serviceId ? `<ServiceID>${serviceId}</ServiceID>` : "",
+      serviceName ? `<ServiceTypeName>${serviceName}</ServiceTypeName>` : "",
+      `<ServiceDate>${serviceDate}</ServiceDate>`,
+      `</Service>`,
+      `</Services>`,
+      `</API3G>`,
+    ]
+      .filter(Boolean)
+      .join("");
 
-    const body = JSON.stringify({ ...payload, Signature: signature });
-
-    const data = await this.fetchJson<Record<string, unknown>>(url, {
+    const responseXml = await this.fetchXml(url, {
       method: "POST",
       headers: {
-        "Content-Type": JSON_CONTENT_TYPE,
+        "Content-Type": "application/xml",
+        Accept: "application/xml",
       },
-      body,
+      body: xml,
     });
 
-    const token = String(data?.TransactionToken ?? data?.TransactionRef ?? "").trim();
+    const result = extractTag(responseXml, "Result");
+    const resultExplanation = extractTag(responseXml, "ResultExplanation");
+    if (result && result !== "000") {
+      const error = resultExplanation ?? "DPO createToken failed";
+      throw new Error(error);
+    }
+
+    const token = extractTag(responseXml, "TransToken") ?? extractTag(responseXml, "TransactionToken") ?? "";
 
     if (!token) {
       throw new Error("DPO response did not include a transaction token.");
     }
 
-    const redirectUrl = `${this.paymentUrl}/v1/hosted/pay?TransactionToken=${encodeURIComponent(token)}`;
+    const redirectUrl = `${this.paymentUrl}/payv2.php?ID=${encodeURIComponent(token)}`;
 
     return {
       token,
       redirectUrl,
-      reference: typeof data?.TransactionRef === "string" ? data.TransactionRef : undefined,
-      rawResponse: data,
+      reference: input.reference,
+      resultCode: result,
+      resultExplanation,
+      allocationId: extractTag(responseXml, "AllocationID"),
+      allocationCode: extractTag(responseXml, "AllocationCode"),
+      rawResponse: responseXml,
     };
   }
 
-  async verifyTransaction(token: string): Promise<VerifyDpoTransactionResult> {
-    const url = `${this.serviceUrl}/transactions/${encodeURIComponent(token)}`;
+  async verifyTransaction(token: string, companyRef?: string): Promise<VerifyDpoTransactionResult> {
+    const url = `${this.serviceUrl}/`;
 
-    const payload = {
-      CompanyToken: this.companyToken,
-      MerchantId: this.merchantId,
-      TransactionToken: token,
-    };
+    const xml = [
+      `<API3G>`,
+      `<CompanyToken>${this.companyToken}</CompanyToken>`,
+      `<Request>verifyToken</Request>`,
+      `<TransactionToken>${token}</TransactionToken>`,
+      companyRef ? `<CompanyRef>${companyRef}</CompanyRef>` : "",
+      `<VerifyTransaction>1</VerifyTransaction>`,
+      `</API3G>`,
+    ].join("");
 
-    const signature = this.sign({
-      CompanyToken: this.companyToken,
-      MerchantId: this.merchantId,
-      TransactionToken: token,
-    });
-
-    const data = await this.fetchJson<Record<string, unknown>>(url, {
+    const responseXml = await this.fetchXml(url, {
       method: "POST",
       headers: {
-        "Content-Type": JSON_CONTENT_TYPE,
+        "Content-Type": "application/xml",
+        Accept: "application/xml",
       },
-      body: JSON.stringify({ ...payload, Signature: signature }),
+      body: xml,
     });
 
-    const status = String(data?.Result ?? data?.ResultCode ?? data?.Status ?? "unknown");
+    const status = extractTag(responseXml, "Result") ?? "unknown";
+    const amountStr = extractTag(responseXml, "TransactionAmount");
+    const currency = extractTag(responseXml, "TransactionCurrency");
 
     return {
       status,
-      resultCode: typeof data?.ResultCode === "string" ? data.ResultCode : undefined,
-      reference: typeof data?.TransactionRef === "string" ? data.TransactionRef : undefined,
-      amount: typeof data?.Amount === "number" ? data.Amount : undefined,
-      currency: typeof data?.Currency === "string" ? data.Currency : undefined,
-      rawResponse: data,
+      resultCode: status,
+      resultExplanation: extractTag(responseXml, "ResultExplanation"),
+      approval: extractTag(responseXml, "TransactionApproval"),
+      fraudAlert: extractTag(responseXml, "FraudAlert"),
+      fraudExplanation: extractTag(responseXml, "FraudExplanation"),
+      amount: amountStr ? Number(amountStr) : undefined,
+      currency,
+      netAmount: extractTag(responseXml, "TransactionNetAmount")
+        ? Number(extractTag(responseXml, "TransactionNetAmount"))
+        : undefined,
+      settlementDate: extractTag(responseXml, "TransactionSettlementDate"),
+      rollingReserveAmount: extractTag(responseXml, "TransactionRollingReserveAmount")
+        ? Number(extractTag(responseXml, "TransactionRollingReserveAmount"))
+        : undefined,
+      rollingReserveDate: extractTag(responseXml, "TransactionRollingReserveDate"),
+      customerPhone: extractTag(responseXml, "CustomerPhone"),
+      customerCountry: extractTag(responseXml, "CustomerCountry"),
+      customerAddress: extractTag(responseXml, "CustomerAddress"),
+      customerCity: extractTag(responseXml, "CustomerCity"),
+      customerZip: extractTag(responseXml, "CustomerZip"),
+      accRef: extractTag(responseXml, "AccRef"),
+      rawResponse: responseXml,
     };
   }
 }
 
 export function resolveDpoClient(): DpoClient {
-  const merchantId = process.env.DPO_MERCHANT_ID;
   const companyToken = process.env.DPO_COMPANY_TOKEN;
-  const apiKey = process.env.DPO_API_KEY;
-  const serviceUrl = process.env.DPO_SERVICE_URL ?? "https://secure.3gdirectpay.com/api/v1";
+  const serviceType = process.env.DPO_SERVICE_TYPE;
+  const serviceUrl = process.env.DPO_SERVICE_URL ?? "https://secure.3gdirectpay.com/API/v6";
   const paymentUrl = process.env.DPO_PAYMENT_URL ?? "https://secure.3gdirectpay.com";
 
-  if (!merchantId || !companyToken || !apiKey) {
-    throw new Error(
-      "DPO_MERCHANT_ID, DPO_COMPANY_TOKEN and DPO_API_KEY must be configured to create payments.",
-    );
+  if (!companyToken || !serviceType) {
+    throw new Error("DPO_COMPANY_TOKEN and DPO_SERVICE_TYPE must be configured to create payments.");
   }
 
   return new DpoClient({
-    merchantId,
     companyToken,
-    apiKey,
+    serviceType,
     serviceUrl,
     paymentUrl,
   });
