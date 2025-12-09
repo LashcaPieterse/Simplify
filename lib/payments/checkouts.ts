@@ -86,8 +86,11 @@ export async function createCheckout(
   const db = options.prisma ?? prismaClient;
   const quantity = normaliseQuantity(input.quantity);
 
-  const airaloPackage = await db.airaloPackage.findUnique({
-    where: { id: input.packageId },
+  // Accept either the Prisma package id or the externalId from catalog/Sanity.
+  const airaloPackage = await db.airaloPackage.findFirst({
+    where: {
+      OR: [{ id: input.packageId }, { externalId: input.packageId }],
+    },
   });
 
   if (!airaloPackage || !airaloPackage.isActive) {
