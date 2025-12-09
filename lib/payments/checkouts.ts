@@ -295,7 +295,7 @@ export async function verifyCheckoutPayment(
   }
 
   const dpoClient = resolveDpoClient();
-  const verification = await dpoClient.verifyTransaction(payment.transactionToken);
+  const verification = await dpoClient.verifyTransaction(payment.transactionToken, payment.providerReference ?? undefined);
 
   const updated = await db.paymentTransaction.update({
     where: { id: payment.id },
