@@ -301,7 +301,7 @@ export async function verifyCheckoutPayment(
     where: { id: payment.id },
     data: {
       status: verification.status?.toLowerCase?.() ?? verification.status ?? STATUS_PENDING,
-      providerReference: verification.reference ?? payment.providerReference,
+      providerReference: payment.providerReference,
       statusHistory: appendStatusHistory(payment.statusHistory, {
         status: verification.status,
         at: new Date().toISOString(),
