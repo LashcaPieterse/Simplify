@@ -44,8 +44,11 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
           return;
         }
 
-        setStatus(data.paymentStatus ?? data.status ?? "pending");
-        if (data.message) {
+        const nextStatus = data.paymentStatus ?? data.status ?? "pending";
+        setStatus(nextStatus);
+        if (nextStatus.toLowerCase() === "approved") {
+          setMessage(null);
+        } else if (data.message) {
           setMessage(data.message);
         }
 
