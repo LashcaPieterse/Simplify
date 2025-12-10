@@ -362,7 +362,8 @@ export async function verifyCheckoutPayment(
           paymentId: payment.id,
           error: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        const message = error instanceof Error ? error.message : "Failed to create order.";
+        return { paymentStatus: updated.status, orderId: null, message };
       }
     }
   } else if (normalizedStatus === STATUS_FAILED) {
