@@ -268,7 +268,7 @@ async function markCheckoutStatus(
 export async function verifyCheckoutPayment(
   checkoutId: string,
   options: { prisma?: PrismaClient } = {},
-): Promise<{ paymentStatus: string; orderId?: string | null }> {
+): Promise<{ paymentStatus: string; orderId?: string | null; message?: string }> {
   const db = options.prisma ?? prismaClient;
 
   const checkout = await db.checkoutSession.findUnique({
@@ -296,16 +296,26 @@ export async function verifyCheckoutPayment(
   }
 
   const dpoClient = resolveDpoClient();
-  const verification = await dpoClient.verifyTransaction(payment.transactionToken, payment.providerReference ?? undefined);
-  // Log key verification fields to help debug DPO responses in non-IPN flow.
-  console.info("dpo.verifyTransaction", {
-    checkoutId,
-    transactionToken: payment.transactionToken,
-    resultCode: verification.resultCode ?? verification.status,
-    resultExplanation: verification.resultExplanation,
-    status: verification.status,
-    raw: verification.rawResponse,
-  });
+  let verification;
+  try {
+    verification = await dpoClient.verifyTransaction(payment.transactionToken, payment.providerReference ?? undefined);
+    // Log key verification fields to help debug DPO responses in non-IPN flow.
+    console.info("dpo.verifyTransaction", {
+      checkoutId,
+      transactionToken: payment.transactionToken,
+      resultCode: verification.resultCode ?? verification.status,
+      resultExplanation: verification.resultExplanation,
+      status: verification.status,
+      raw: verification.rawResponse,
+    });
+  } catch (error) {
+    console.error("dpo.verifyTransaction failed", {
+      checkoutId,
+      transactionToken: payment.transactionToken,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { paymentStatus: payment.status ?? STATUS_PENDING, orderId: checkout.orderId ?? null, message: "Verification failed." };
+  }
   const resultCode = verification.resultCode ?? verification.status;
   const isPaid = resultCode === "000";
   const normalizedStatus =
