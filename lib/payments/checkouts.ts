@@ -73,7 +73,7 @@ function serialise(value: unknown): string {
 
 export async function createCheckout(
   rawInput: CreateCheckoutInput,
-  options: { prisma?: PrismaClient; baseUrl: string },
+  options: { prisma?: PrismaClient; baseUrl: string; userId?: string },
 ): Promise<CreateCheckoutResult> {
   const parsed = checkoutInputSchema.safeParse(rawInput);
 
@@ -101,6 +101,7 @@ export async function createCheckout(
 
   const checkout = await db.checkoutSession.create({
     data: {
+      userId: options.userId ?? null,
       packageId: airaloPackage.id,
       customerEmail: input.customerEmail ?? null,
       quantity,
@@ -159,6 +160,7 @@ export async function createCheckout(
 
   const transaction = await db.paymentTransaction.create({
     data: {
+      user: options.userId ? { connect: { id: options.userId } } : undefined,
       provider: PROVIDER,
       providerReference: response.reference ?? null,
       transactionToken: response.token,
@@ -434,6 +436,7 @@ export async function finaliseOrderFromCheckout(
         ...options.airaloOptions,
         prisma: tx,
         submissionMode: options.airaloOptions?.submissionMode ?? "sync",
+        userId: checkout.userId ?? undefined,
       },
     );
 

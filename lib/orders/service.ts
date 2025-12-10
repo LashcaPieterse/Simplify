@@ -130,6 +130,7 @@ export interface CreateOrderOptions {
   prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
   submissionMode?: "async" | "sync";
+  userId?: string;
 }
 
 const DEFAULT_QUANTITY = 1;
@@ -801,6 +802,7 @@ export async function createOrder(
     const createOrderRecords = async (tx: Prisma.TransactionClient) => {
       const orderRecord = await tx.esimOrder.create({
         data: {
+          userId: options.userId ?? null,
           orderNumber: resolveAiraloOrderId(airaloOrder),
           requestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? resolveAiraloOrderId(airaloOrder),
           packageId: pkg.id,
