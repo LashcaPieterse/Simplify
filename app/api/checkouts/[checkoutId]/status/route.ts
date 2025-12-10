@@ -24,11 +24,13 @@ export async function GET(request: Request, context: { params: Params }) {
 
     let paymentStatus = summary.paymentStatus;
     let orderId = summary.orderId;
+    let message: string | undefined;
 
     if (!orderId) {
       const verification = await verifyCheckoutPayment(checkoutId);
       paymentStatus = verification.paymentStatus;
       orderId = verification.orderId ?? null;
+      message = verification.message;
     }
 
     return NextResponse.json({
@@ -36,6 +38,7 @@ export async function GET(request: Request, context: { params: Params }) {
       status: summary.status,
       paymentStatus,
       orderId,
+      message,
       paymentUrl: summary.paymentUrl,
     });
   } catch (error) {
