@@ -297,6 +297,15 @@ export async function verifyCheckoutPayment(
 
   const dpoClient = resolveDpoClient();
   const verification = await dpoClient.verifyTransaction(payment.transactionToken, payment.providerReference ?? undefined);
+  // Log key verification fields to help debug DPO responses in non-IPN flow.
+  console.info("dpo.verifyTransaction", {
+    checkoutId,
+    transactionToken: payment.transactionToken,
+    resultCode: verification.resultCode ?? verification.status,
+    resultExplanation: verification.resultExplanation,
+    status: verification.status,
+    raw: verification.rawResponse,
+  });
   const resultCode = verification.resultCode ?? verification.status;
   const isPaid = resultCode === "000";
   const normalizedStatus =
