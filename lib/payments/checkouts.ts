@@ -116,7 +116,8 @@ export async function createCheckout(
 
   const successUrl = `${options.baseUrl}/checkout/${checkout.id}/return`;
   const cancelUrl = `${options.baseUrl}/checkout/${checkout.id}`;
-  const callbackUrl = `${options.baseUrl}/api/payments/dpo/ipn`;
+  // No IPN/webhook flow; use the return URL for callback and verify on return.
+  const callbackUrl = successUrl;
 
   const dpoClient = resolveDpoClient();
   const amount = centsToMajorUnits(totalCents);
@@ -493,7 +494,7 @@ export async function updatePaymentStatus(
       statusHistory: appendStatusHistory(payment.statusHistory, {
         status: normalizedStatus,
         at: new Date().toISOString(),
-        source: "ipn",
+        source: "verify",
       }),
     },
   });
