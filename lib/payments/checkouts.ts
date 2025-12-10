@@ -296,14 +296,20 @@ export async function verifyCheckoutPayment(
 
   const dpoClient = resolveDpoClient();
   const verification = await dpoClient.verifyTransaction(payment.transactionToken, payment.providerReference ?? undefined);
+  const resultCode = verification.resultCode ?? verification.status;
+  const isPaid = resultCode === "000";
+  const normalizedStatus =
+    (isPaid ? STATUS_APPROVED : verification.status?.toLowerCase?.()) ??
+    verification.status ??
+    STATUS_PENDING;
 
   const updated = await db.paymentTransaction.update({
     where: { id: payment.id },
     data: {
-      status: verification.status?.toLowerCase?.() ?? verification.status ?? STATUS_PENDING,
+      status: normalizedStatus,
       providerReference: payment.providerReference,
       statusHistory: appendStatusHistory(payment.statusHistory, {
-        status: verification.status,
+        status: normalizedStatus,
         at: new Date().toISOString(),
         source: "verify",
       }),
@@ -318,10 +324,9 @@ export async function verifyCheckoutPayment(
     },
   });
 
-  const normalizedStatus = verification.status?.toLowerCase();
   let orderId = checkout.orderId ?? null;
 
-  if (normalizedStatus === STATUS_APPROVED) {
+  if (isPaid || normalizedStatus === STATUS_APPROVED) {
     await markCheckoutStatus(checkout.id, STATUS_PAID, { prisma: db });
 
     if (!orderId) {
