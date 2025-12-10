@@ -45,6 +45,9 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
         }
 
         setStatus(data.paymentStatus ?? data.status ?? "pending");
+        if (data.message) {
+          setMessage(data.message);
+        }
 
         if (data.orderId) {
           router.replace(`/orders/${data.orderId}`);
@@ -53,6 +56,11 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
 
         if ((data.paymentStatus ?? "").toLowerCase() === "failed") {
           router.replace(`/checkout/${checkoutId}/failed`);
+          return;
+        }
+
+        // If payment is approved but no orderId yet and we have a message, stop polling and show it.
+        if ((data.paymentStatus ?? "").toLowerCase() === "approved" && !data.orderId && data.message) {
           return;
         }
 
