@@ -433,6 +433,7 @@ export async function finaliseOrderFromCheckout(
       {
         ...options.airaloOptions,
         prisma: tx,
+        submissionMode: options.airaloOptions?.submissionMode ?? "sync",
       },
     );
 
