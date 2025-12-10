@@ -80,6 +80,44 @@ function isPrismaClient(client: PrismaDbClient): client is PrismaClient {
   return typeof (client as PrismaClient).$transaction === "function";
 }
 
+function resolveAiraloOrderId(order: AiraloOrder | null | undefined): string | null {
+  if (!order) {
+    return null;
+  }
+
+  return order.order_id ?? order.code ?? order.id ?? null;
+}
+
+function resolveAiraloPrimarySim(order: AiraloOrder | null | undefined) {
+  if (!order) {
+    return null;
+  }
+
+  if (Array.isArray(order.sims) && order.sims.length > 0) {
+    return order.sims[0];
+  }
+
+  return null;
+}
+
+function resolveAiraloIccid(order: AiraloOrder | null | undefined): string | null {
+  if (!order) {
+    return null;
+  }
+
+  const primarySim = resolveAiraloPrimarySim(order);
+  return order.iccid ?? primarySim?.iccid ?? null;
+}
+
+function resolveAiraloActivationCode(order: AiraloOrder | null | undefined): string | null {
+  if (!order) {
+    return null;
+  }
+
+  const primarySim = resolveAiraloPrimarySim(order);
+  return order.activation_code ?? primarySim?.activation_code ?? null;
+}
+
 export interface CreateOrderOptions {
   prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
@@ -715,6 +753,7 @@ export async function createOrder(
       packageExternalId: pkg.externalId,
       latencyMs: airaloLatencyMs,
       message: mapped.message,
+      error: error instanceof Error ? error.message : String(error),
     });
 
     recordOrderMetrics({
@@ -741,8 +780,8 @@ export async function createOrder(
     logOrderInfo("airalo.order.sync.completed", {
       packageId: pkg.id,
       packageExternalId: pkg.externalId,
-      airaloOrderId: airaloOrder.order_id,
-      airaloRequestId: airaloOrder.order_reference ?? null,
+      airaloOrderId: resolveAiraloOrderId(airaloOrder),
+      airaloRequestId: airaloOrder.order_reference ?? resolveAiraloOrderId(airaloOrder) ?? null,
       status: airaloOrder.status,
       latencyMs: airaloLatencyMs,
     });
@@ -752,8 +791,8 @@ export async function createOrder(
     const createOrderRecords = async (tx: Prisma.TransactionClient) => {
       const orderRecord = await tx.esimOrder.create({
         data: {
-          orderNumber: airaloOrder?.order_id ?? null,
-          requestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? null,
+          orderNumber: resolveAiraloOrderId(airaloOrder),
+          requestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? resolveAiraloOrderId(airaloOrder),
           packageId: pkg.id,
           status: airaloOrder?.status ?? "pending",
           customerEmail: customerEmail ?? null,
@@ -764,18 +803,19 @@ export async function createOrder(
       });
 
       if (airaloOrder) {
-        if (airaloOrder.iccid) {
+        const iccid = resolveAiraloIccid(airaloOrder);
+        if (iccid) {
           await tx.esimProfile.upsert({
-            where: { iccid: airaloOrder.iccid },
+            where: { iccid },
             create: {
-              iccid: airaloOrder.iccid,
+              iccid,
               status: airaloOrder.status,
-              activationCode: airaloOrder.activation_code ?? null,
+              activationCode: resolveAiraloActivationCode(airaloOrder),
               orderId: orderRecord.id,
             },
             update: {
               status: airaloOrder.status,
-              activationCode: airaloOrder.activation_code ?? null,
+              activationCode: resolveAiraloActivationCode(airaloOrder),
               orderId: orderRecord.id,
             },
           });

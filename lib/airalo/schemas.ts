@@ -103,9 +103,13 @@ export type PackagesResponse = z.infer<typeof PackagesResponseSchema>;
 export const OrderResponseSchema = BaseResponseSchema.extend({
   data: z
     .object({
-      order_id: z.union([z.string(), z.number()]).transform(String),
+      // Airalo has shipped multiple response shapes; accept both the classic webhook-style payload
+      // and the richer synchronous /orders response with SIM details.
+      order_id: z.union([z.string(), z.number()]).transform(String).optional(),
+      id: z.union([z.string(), z.number()]).transform(String).optional(),
+      code: z.union([z.string(), z.number()]).transform(String).optional(),
       package_id: z.union([z.string(), z.number()]).transform(String).optional(),
-      status: z.string(),
+      status: z.string().optional(),
       qr_code: z.string().optional(),
       qr_code_data: z.string().optional(),
       smdp_address: z.string().optional(),
@@ -114,6 +118,27 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
       esim: z.string().optional(),
       order_reference: z.string().optional(),
       top_up_parent_package_id: z.union([z.string(), z.number()]).transform(String).optional(),
+      manual_installation: z.string().optional(),
+      qrcode_installation: z.string().optional(),
+      direct_apple_installation_url: z.string().optional(),
+      sims: z
+        .array(
+          z
+            .object({
+              iccid: z.string().optional(),
+              qrcode: z.string().optional(),
+              qrcode_url: z.string().optional(),
+              direct_apple_installation_url: z.string().optional(),
+              lpa: z.string().optional(),
+              matching_id: z.string().optional(),
+              activation_code: z.string().optional(),
+              apn_type: z.string().optional(),
+              apn_value: z.string().optional(),
+              is_roaming: z.boolean().optional(),
+            })
+            .passthrough(),
+        )
+        .optional(),
     })
     .passthrough(),
 });
