@@ -64,13 +64,17 @@ export function extractUsage(metadata: unknown): UsageMetadata | null {
 }
 
 export function createInstallationPayload(order: AiraloOrder): string {
+  const firstSim = Array.isArray(order.sims) ? order.sims[0] : undefined;
+  const resolvedOrderId =
+    order.order_id ?? order.code ?? order.id ?? null;
   const payload = {
-    orderId: order.order_id,
+    orderId: resolvedOrderId,
     orderReference: order.order_reference ?? null,
-    iccid: order.iccid ?? null,
-    activationCode: order.activation_code ?? null,
-    qrCode: order.qr_code ?? null,
-    esim: order.esim ?? null,
+    iccid: order.iccid ?? firstSim?.iccid ?? null,
+    activationCode: order.activation_code ?? firstSim?.activation_code ?? null,
+    qrCode: order.qr_code ?? firstSim?.qrcode ?? firstSim?.qrcode_url ?? order.qr_code_data ?? null,
+    esim: order.esim ?? firstSim?.lpa ?? null,
+    directAppleUrl: order.direct_apple_installation_url ?? firstSim?.direct_apple_installation_url ?? null,
   };
 
   return JSON.stringify(payload);
