@@ -322,6 +322,7 @@ export async function verifyCheckoutPayment(
     (isPaid ? STATUS_APPROVED : verification.status?.toLowerCase?.()) ??
     verification.status ??
     STATUS_PENDING;
+  const verificationMessage = !isPaid && verification.resultExplanation ? verification.resultExplanation : undefined;
 
   const updated = await db.paymentTransaction.update({
     where: { id: payment.id },
@@ -370,7 +371,7 @@ export async function verifyCheckoutPayment(
     await markCheckoutStatus(checkout.id, STATUS_FAILED, { prisma: db });
   }
 
-  return { paymentStatus: updated.status, orderId };
+  return { paymentStatus: updated.status, orderId, message: verificationMessage };
 }
 
 export async function finaliseOrderFromCheckout(
