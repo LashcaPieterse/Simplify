@@ -118,6 +118,14 @@ function resolveAiraloActivationCode(order: AiraloOrder | null | undefined): str
   return order.activation_code ?? primarySim?.activation_code ?? null;
 }
 
+function resolveAiraloStatus(order: AiraloOrder | null | undefined): string {
+  if (!order) {
+    return "pending";
+  }
+
+  return order.status ?? "pending";
+}
+
 export interface CreateOrderOptions {
   prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
@@ -229,11 +237,13 @@ export async function ensureOrderInstallation(
   const airaloOrder = await airalo.getOrderById(existing.orderNumber);
   const payload = createInstallationPayload(airaloOrder);
 
+  const resolvedIccid = resolveAiraloIccid(airaloOrder);
+  const resolvedStatus = resolveAiraloStatus(airaloOrder);
   // Fetch installation instructions for richer APN/QR/smdp data when possible.
   let activationCode: string | null = null;
   try {
-    if (airaloOrder.iccid) {
-      const instructions = await airalo.getSimInstallationInstructions(airaloOrder.iccid, {
+    if (resolvedIccid) {
+      const instructions = await airalo.getSimInstallationInstructions(resolvedIccid, {
         acceptLanguage: "en",
       });
       const platform = instructions.instructions?.ios?.[0] ?? instructions.instructions?.android?.[0];
@@ -251,21 +261,21 @@ export async function ensureOrderInstallation(
     await tx.esimOrder.update({
       where: { id: existing.id },
       data: {
-        status: airaloOrder.status,
+        status: resolvedStatus,
       },
     });
 
-    if (airaloOrder.iccid) {
+    if (resolvedIccid) {
       await tx.esimProfile.upsert({
-        where: { iccid: airaloOrder.iccid },
+        where: { iccid: resolvedIccid },
         create: {
-          iccid: airaloOrder.iccid,
-          status: airaloOrder.status,
+          iccid: resolvedIccid,
+          status: resolvedStatus,
           activationCode: airaloOrder.activation_code ?? null,
           orderId: existing.id,
         },
         update: {
-          status: airaloOrder.status,
+          status: resolvedStatus,
           activationCode: airaloOrder.activation_code ?? null,
           orderId: existing.id,
         },
@@ -281,9 +291,9 @@ export async function ensureOrderInstallation(
       },
     });
 
-    if (airaloOrder.iccid) {
+    if (resolvedIccid) {
       await tx.esimProfile.update({
-        where: { iccid: airaloOrder.iccid },
+        where: { iccid: resolvedIccid },
         data: {
           activationCode,
         },
@@ -782,7 +792,7 @@ export async function createOrder(
       packageExternalId: pkg.externalId,
       airaloOrderId: resolveAiraloOrderId(airaloOrder),
       airaloRequestId: airaloOrder.order_reference ?? resolveAiraloOrderId(airaloOrder) ?? null,
-      status: airaloOrder.status,
+      status: resolveAiraloStatus(airaloOrder),
       latencyMs: airaloLatencyMs,
     });
   }
@@ -794,7 +804,7 @@ export async function createOrder(
           orderNumber: resolveAiraloOrderId(airaloOrder),
           requestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? resolveAiraloOrderId(airaloOrder),
           packageId: pkg.id,
-          status: airaloOrder?.status ?? "pending",
+          status: resolveAiraloStatus(airaloOrder),
           customerEmail: customerEmail ?? null,
           quantity: normalisedQuantity,
           totalCents: pkg.priceCents * normalisedQuantity,
@@ -809,12 +819,12 @@ export async function createOrder(
             where: { iccid },
             create: {
               iccid,
-              status: airaloOrder.status,
+              status: resolveAiraloStatus(airaloOrder),
               activationCode: resolveAiraloActivationCode(airaloOrder),
               orderId: orderRecord.id,
             },
             update: {
-              status: airaloOrder.status,
+              status: resolveAiraloStatus(airaloOrder),
               activationCode: resolveAiraloActivationCode(airaloOrder),
               orderId: orderRecord.id,
             },
