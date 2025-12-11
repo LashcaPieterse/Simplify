@@ -42,6 +42,7 @@ let webhookDuration: Histogram<string>;
 let rateLimitCounter: Counter<string>;
 let tokenRefreshCounter: Counter<string>;
 let packageSyncGauge: Gauge<string>;
+let packageSyncRunCounter: Counter<string>;
 const orderOtelCounter = meter.createCounter("airalo.order.requests", {
   description: "Number of order creation attempts.",
 });
@@ -129,6 +130,13 @@ function ensureCounters(): void {
   packageSyncGauge = new Gauge({
     name: "airalo_package_sync_last_success_timestamp",
     help: "Unix timestamp of the last successful Airalo package sync.",
+    registers: [register],
+  });
+
+  packageSyncRunCounter = new Counter({
+    name: "airalo_package_sync_runs_total",
+    help: "Number of Airalo package sync attempts.",
+    labelNames: ["result"],
     registers: [register],
   });
 
@@ -220,6 +228,11 @@ export function recordPackageSyncSuccess(date: Date = new Date()): void {
   ensureCounters();
   packageSyncLastSuccessTimestamp = Math.floor(date.getTime() / 1000);
   packageSyncGauge.set(packageSyncLastSuccessTimestamp);
+}
+
+export function recordPackageSyncResult(result: "success" | "failure"): void {
+  ensureCounters();
+  packageSyncRunCounter.labels(result).inc();
 }
 
 export function getPrometheusRegistry(): Registry {

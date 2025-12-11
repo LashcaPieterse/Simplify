@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: airalo-package-sync
+  labels:
+    app: simplify
+    component: airalo-package-sync
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: airalo-package-sync
+              image: ghcr.io/simplify/app:latest
+              args:
+                - "npm"
+                - "run"
+                - "airalo:sync"
+              envFrom:
+                - secretRef:
+                    name: simplify-production-env
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: AIRALO_SYNC_RUN_ONCE
+                  value: "true"
