@@ -29,9 +29,9 @@ export const eSimProduct = defineType({
       name: "priceUSD",
       title: "Price (USD)",
       type: "number",
-      readOnly: true,
       components: { input: CatalogPackagePriceInput },
-      description: "Derived from the selected catalog package selling price.",
+      description:
+        "Derived from the selected catalog package selling price (or enter manually if missing).",
       validation: (Rule) => Rule.required().positive()
     }),
     defineField({

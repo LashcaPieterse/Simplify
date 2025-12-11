@@ -15,8 +15,11 @@ export function CatalogPackagePriceInput(props: NumberInputProps) {
   const { renderDefault, onChange } = props;
   const packageRef = useFormValue(["package"]) as Reference | undefined;
   const client = useClient({ apiVersion });
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "warning">(
+    "idle"
+  );
   const [message, setMessage] = useState<string | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(true);
 
   const packageId = useMemo(() => packageRef?._ref, [packageRef]);
 
@@ -27,6 +30,7 @@ export function CatalogPackagePriceInput(props: NumberInputProps) {
       if (!packageId) {
         setStatus("idle");
         setMessage("Select a catalog package to sync price.");
+        setIsReadOnly(true);
         onChange?.(unset());
         return;
       }
@@ -49,19 +53,22 @@ export function CatalogPackagePriceInput(props: NumberInputProps) {
           onChange?.(set(price));
           setStatus("idle");
           setMessage(`Synced from sellingPriceCents (${sellingPriceCents}¢).`);
+          setIsReadOnly(true);
         } else {
-          onChange?.(unset());
-          setStatus("error");
-          setMessage("Selected package is missing a selling price.");
+          setStatus("warning");
+          setIsReadOnly(false);
+          setMessage(
+            "Selected package is missing a selling price. Enter a price manually."
+          );
         }
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        onChange?.(unset());
         setStatus("error");
-        setMessage("Could not load selling price. Check your permissions.");
+        setIsReadOnly(false);
+        setMessage("Could not load selling price. Enter a price manually.");
       }
     }
 
@@ -74,9 +81,14 @@ export function CatalogPackagePriceInput(props: NumberInputProps) {
 
   return (
     <Stack space={3}>
-      {renderDefault({ ...props, readOnly: true })}
+      {renderDefault({ ...props, readOnly: isReadOnly })}
 
-      <Card padding={3} radius={2} shadow={1} tone={status === "error" ? "critical" : "primary"}>
+      <Card
+        padding={3}
+        radius={2}
+        shadow={1}
+        tone={status === "error" ? "critical" : status === "warning" ? "caution" : "primary"}
+      >
         <Flex align="center" gap={3}>
           {status === "loading" ? (
             <Spinner muted />
