@@ -32,7 +32,7 @@ export const eSimProduct = defineType({
       components: { input: CatalogPackagePriceInput },
       description:
         "Derived from the selected catalog package selling price (or enter manually if missing).",
-      validation: (Rule) => Rule.required().positive()
+      validation: (Rule) => Rule.positive()
     }),
     defineField({
       name: "coverImage",
