@@ -84,7 +84,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
             disabled={pendingId === emailProvider.id}
           />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-brand-700">You'll stay signed in on this device after verification.</p>
+            <p className="text-xs text-brand-700">You will stay signed in on this device after verification.</p>
             <Button type="submit" disabled={pendingId === emailProvider.id || !email}>
               {pendingId === emailProvider.id ? (
                 <>

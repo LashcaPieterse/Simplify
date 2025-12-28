@@ -59,7 +59,7 @@ export function AuthPage({ providers, mode }: { providers: ProviderInfo[]; mode:
           <div className="mt-6 flex items-center justify-between rounded-2xl bg-brand-50/80 px-4 py-3 text-xs text-brand-800">
             <div>
               <p className="font-semibold text-brand-900">Need help?</p>
-              <p>Contact support and we'll get you signed in quickly.</p>
+              <p>Contact support and we will get you signed in quickly.</p>
             </div>
             <Button asChild size="sm" variant="secondary" className="text-xs">
               <Link href="/resources">Visit support</Link>
