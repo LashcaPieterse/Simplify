@@ -327,13 +327,29 @@ model UserIdentity {
   id             String   @id @default(cuid())
   provider       String
   providerUserId String
+  type           String   @default("oauth")
   email          String?
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      Int?
+  idToken        String?
+  scope          String?
+  tokenType      String?
+  sessionState   String?
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId         String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([provider, providerUserId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String  @unique
+  expires    DateTime
+
+  @@id([identifier, token])
 }
 
 model AuditLog {

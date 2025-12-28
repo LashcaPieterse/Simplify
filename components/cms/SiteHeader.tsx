@@ -34,10 +34,12 @@ export function SiteHeader({ settings }: { settings: SiteSettings }) {
         </nav>
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" className="hidden md:inline-flex">
-          Log in
+        <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
+          <Link href="/auth/signin">Log in</Link>
         </Button>
-        <Button size="sm">Sign up</Button>
+        <Button asChild size="sm">
+          <Link href="/auth/signup">Sign up</Link>
+        </Button>
       </div>
     </header>
   );
