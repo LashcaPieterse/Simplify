@@ -104,10 +104,10 @@ export function HeaderActions() {
   );
 }
 
-function DropdownLink({ href, label, primary }: { href: string; label: string; primary?: boolean }) {
+function DropdownLink({ href, label, primary }: { href: Route | string; label: string; primary?: boolean }) {
   return (
     <Link
-      href={href}
+      href={href as Route}
       className={cn(
         "flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-brand-800 transition hover:bg-brand-50",
         primary && "border border-brand-100 bg-brand-50/70 text-brand-900"
