@@ -1,10 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { SiteSettings } from "@/lib/sanity.queries";
-import { Button } from "@/components/ui/button";
 import { Wifi } from "lucide-react";
 import { urlForImage } from "@/lib/image";
 import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
+import { HeaderActions } from "./HeaderActions";
 
 export function SiteHeader({ settings }: { settings: SiteSettings }) {
   const logoUrl = settings.logo ? urlForImage(settings.logo)?.width(120).height(120).url() : null;
@@ -33,14 +33,7 @@ export function SiteHeader({ settings }: { settings: SiteSettings }) {
           })}
         </nav>
       </div>
-      <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-          <Link href="/auth/signin">Log in</Link>
-        </Button>
-        <Button asChild size="sm">
-          <Link href="/auth/signup">Sign up</Link>
-        </Button>
-      </div>
+      <HeaderActions />
     </header>
   );
 }
