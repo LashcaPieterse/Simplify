@@ -77,7 +77,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
           provider: account.provider,
           providerUserId: account.providerAccountId,
           type: account.type,
-          email: account.email ?? null,
+          email: typeof account.email === "string" ? account.email : null,
           accessToken: account.access_token ?? null,
           refreshToken: account.refresh_token ?? null,
           expiresAt: account.expires_at ?? null,
