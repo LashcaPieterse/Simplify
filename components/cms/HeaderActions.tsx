@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import type { Route } from "next";
 import { useSession, signOut } from "next-auth/react";
 import { ChevronDown } from "lucide-react";
 
@@ -57,7 +58,7 @@ export function HeaderActions() {
   return (
     <div className="relative flex items-center gap-2">
       <Button asChild size="sm" variant="secondary" className="text-brand-900">
-        <Link href="/account/esims">My eSIMs</Link>
+        <Link href={"/account/esims" as Route}>My eSIMs</Link>
       </Button>
       <button
         type="button"
@@ -79,14 +80,14 @@ export function HeaderActions() {
           ref={menuRef}
           className="absolute right-0 top-12 w-64 rounded-2xl border border-brand-100 bg-white p-2 shadow-card"
         >
-          <DropdownLink href="/account/esims" label="My eSIMs / Orders" primary />
-          <DropdownLink href="/account/receipts" label="Receipts & billing" />
-          <DropdownLink href="/account/profile" label="Account & profile" />
-          <DropdownLink href="/account/payments" label="Payment methods" />
+          <DropdownLink href={"/account/esims" as Route} label="My eSIMs / Orders" primary />
+          <DropdownLink href={"/account/receipts" as Route} label="Receipts & billing" />
+          <DropdownLink href={"/account/profile" as Route} label="Account & profile" />
+          <DropdownLink href={"/account/payments" as Route} label="Payment methods" />
           <div className="my-2 h-px bg-brand-100" />
           <div className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-800">
             No eSIMs yet.{" "}
-            <Link href="/plan" className="font-semibold text-brand-700 hover:text-brand-900">
+            <Link href={"/plan" as Route} className="font-semibold text-brand-700 hover:text-brand-900">
               Browse plans
             </Link>
           </div>
