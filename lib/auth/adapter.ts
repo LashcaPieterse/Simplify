@@ -1,4 +1,5 @@
 import type { Adapter, AdapterAccount, AdapterUser, VerificationToken } from "next-auth/adapters";
+import type { ProviderType } from "next-auth/providers";
 
 import prisma from "@/lib/db/client";
 
@@ -90,7 +91,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
       const adapterAccount: AdapterAccount = {
         id: created.id,
         userId: created.userId,
-        type: created.type,
+        type: created.type as ProviderType,
         provider: created.provider,
         providerAccountId: created.providerUserId,
         refresh_token: created.refreshToken ?? undefined,
