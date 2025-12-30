@@ -1,10 +1,10 @@
-import type { Adapter, AdapterAccount } from "next-auth/adapters";
+import type { Adapter, AdapterAccount, AdapterUser, VerificationToken } from "next-auth/adapters";
 
 import prisma from "@/lib/db/client";
 
 export function PrismaUserIdentityAdapter(): Adapter {
   return {
-    async createUser(data) {
+    async createUser(data: Omit<AdapterUser, "id">) {
       const user = await prisma.user.create({
         data: {
           email: data.email ?? "",
@@ -19,7 +19,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
         emailVerified: null,
       };
     },
-    async getUser(id) {
+    async getUser(id: string) {
       const user = await prisma.user.findUnique({ where: { id } });
       if (!user) return null;
       return {
@@ -29,7 +29,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
         emailVerified: null,
       };
     },
-    async getUserByEmail(email) {
+    async getUserByEmail(email: string) {
       const user = await prisma.user.findUnique({ where: { email } });
       if (!user) return null;
       return {
@@ -39,7 +39,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
         emailVerified: null,
       };
     },
-    async getUserByAccount({ provider, providerAccountId }) {
+    async getUserByAccount({ provider, providerAccountId }: { provider: string; providerAccountId: string }) {
       const identity = await prisma.userIdentity.findUnique({
         where: { provider_providerUserId: { provider, providerUserId: providerAccountId } },
         include: { user: true },
@@ -52,7 +52,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
         emailVerified: null,
       };
     },
-    async updateUser(user) {
+    async updateUser(user: Partial<AdapterUser> & { id: string }) {
       const updated = await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -67,10 +67,10 @@ export function PrismaUserIdentityAdapter(): Adapter {
         emailVerified: null,
       };
     },
-    async deleteUser(id) {
+    async deleteUser(id: string) {
       await prisma.user.delete({ where: { id } });
     },
-    async linkAccount(account) {
+    async linkAccount(account: AdapterAccount) {
       const created = await prisma.userIdentity.create({
         data: {
           userId: account.userId,
@@ -103,15 +103,15 @@ export function PrismaUserIdentityAdapter(): Adapter {
       };
       return adapterAccount;
     },
-    async unlinkAccount({ provider, providerAccountId }) {
+    async unlinkAccount({ provider, providerAccountId }: { provider: string; providerAccountId: string }) {
       await prisma.userIdentity.delete({
         where: { provider_providerUserId: { provider, providerUserId: providerAccountId } },
       });
     },
-    async createVerificationToken(token) {
+    async createVerificationToken(token: VerificationToken) {
       return prisma.verificationToken.create({ data: token });
     },
-    async useVerificationToken(params) {
+    async useVerificationToken(params: { identifier: string; token: string }) {
       const existing = await prisma.verificationToken.findUnique({
         where: {
           identifier_token: { identifier: params.identifier, token: params.token },
