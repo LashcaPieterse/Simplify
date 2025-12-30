@@ -56,7 +56,7 @@ export function HeaderActions() {
     : session.user.email?.slice(0, 2)?.toUpperCase() ?? "YO";
 
   return (
-    <div className="relative flex items-center gap-2">
+    <div className="relative z-20 flex items-center gap-2">
       <Button asChild size="sm" variant="secondary" className="text-brand-900">
         <Link href={"/account/esims" as Route}>My eSIMs</Link>
       </Button>
@@ -78,7 +78,7 @@ export function HeaderActions() {
       {open ? (
         <div
           ref={menuRef}
-          className="absolute right-0 top-12 w-64 rounded-2xl border border-brand-100 bg-white p-2 shadow-card"
+          className="absolute right-0 top-12 w-64 rounded-2xl border border-brand-100 bg-white p-2 shadow-card z-40"
         >
           <DropdownLink href={"/account/esims" as Route} label="My eSIMs / Orders" primary />
           <DropdownLink href={"/account/receipts" as Route} label="Receipts & billing" />
