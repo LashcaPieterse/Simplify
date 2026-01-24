@@ -251,7 +251,7 @@ function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
     region: null,
     lastSyncedAt: record.pkg.updatedAt?.toISOString() ?? null,
     metadata: record.metadata,
-    image: record.pkg.imageUrl ?? undefined,
+    image: record.pkg.imageUrl ? { url: record.pkg.imageUrl } : undefined,
     operator: record.pkg.operator
       ? {
           _id: record.pkg.operator.id,
