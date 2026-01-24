@@ -644,6 +644,17 @@ export async function createOrder(
   }
 
   const pkg = await db.package.findFirst({ where: packageLookup });
+  if (!pkg) {
+    const byId = await db.package.findFirst({ where: { id: packageId } });
+    const byExternalId = await db.package.findFirst({ where: { externalId: packageId } });
+    console.info("order.package.lookup", {
+      packageId,
+      foundById: Boolean(byId),
+      foundByExternalId: Boolean(byExternalId),
+      isActiveById: byId?.isActive ?? null,
+      isActiveByExternalId: byExternalId?.isActive ?? null,
+    });
+  }
 
   if (!pkg) {
     logOrderError("order.package.unavailable", {
