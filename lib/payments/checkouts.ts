@@ -94,14 +94,15 @@ export async function createCheckout(
   const quantity = normaliseQuantity(input.quantity);
 
   // Accept either the Prisma package id or the externalId from catalog/Sanity.
-  const packageLookup: Prisma.PackageWhereInput = {
-    externalId: input.packageId,
-    isActive: true,
-  };
-
-  if (isUuid(input.packageId)) {
-    packageLookup.OR = [{ id: input.packageId }, { externalId: input.packageId }];
-  }
+  const packageLookup: Prisma.PackageWhereInput = isUuid(input.packageId)
+    ? {
+        isActive: true,
+        OR: [{ id: input.packageId }, { externalId: input.packageId }],
+      }
+    : {
+        isActive: true,
+        externalId: input.packageId,
+      };
 
   const pkg = await db.package.findFirst({ where: packageLookup });
 

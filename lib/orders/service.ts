@@ -634,14 +634,15 @@ export async function createOrder(
   const isAsyncSubmission = submissionMode !== "sync";
   const uuidRegex =
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-  const packageLookup: Prisma.PackageWhereInput = {
-    externalId: packageId,
-    isActive: true,
-  };
-
-  if (uuidRegex.test(packageId)) {
-    packageLookup.OR = [{ id: packageId }, { externalId: packageId }];
-  }
+  const packageLookup: Prisma.PackageWhereInput = uuidRegex.test(packageId)
+    ? {
+        isActive: true,
+        OR: [{ id: packageId }, { externalId: packageId }],
+      }
+    : {
+        isActive: true,
+        externalId: packageId,
+      };
 
   const pkg = await db.package.findFirst({ where: packageLookup });
   if (!pkg) {
