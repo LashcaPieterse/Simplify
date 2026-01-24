@@ -68,7 +68,8 @@ export const eSimProduct = defineType({
       to: [{ type: "catalogPackage" }],
       options: {
         filter: ({ document }) => {
-          const countryId = document?.country?._ref;
+          const doc = document as { country?: { _ref?: string } } | null;
+          const countryId = doc?.country?._ref;
           if (!countryId) {
             return { filter: "defined(country)", params: {} };
           }
