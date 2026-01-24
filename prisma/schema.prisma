@@ -315,6 +315,7 @@ model User {
   email      String               @unique
   name       String?
   phone      String?
+  passwordHash String?            @map("password_hash")
   createdAt  DateTime             @default(now())
   updatedAt  DateTime             @updatedAt
   checkouts  CheckoutSession[]

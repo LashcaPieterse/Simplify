@@ -51,6 +51,13 @@ const STATUS_FAILED = "failed";
 const STATUS_APPROVED = "approved";
 const PROVIDER = "dpo";
 
+const UUID_REGEX =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function isUuid(value: string) {
+  return UUID_REGEX.test(value);
+}
+
 function normaliseQuantity(quantity?: number): number {
   if (typeof quantity !== "number" || Number.isNaN(quantity)) {
     return 1;
@@ -87,26 +94,32 @@ export async function createCheckout(
   const quantity = normaliseQuantity(input.quantity);
 
   // Accept either the Prisma package id or the externalId from catalog/Sanity.
-  const airaloPackage = await db.airaloPackage.findFirst({
-    where: {
-      OR: [{ id: input.packageId }, { externalId: input.packageId }],
-    },
-  });
+  const packageLookup: Prisma.PackageWhereInput = {
+    externalId: input.packageId,
+    isActive: true,
+  };
 
-  if (!airaloPackage || !airaloPackage.isActive) {
+  if (isUuid(input.packageId)) {
+    packageLookup.OR = [{ id: input.packageId }, { externalId: input.packageId }];
+  }
+
+  const pkg = await db.package.findFirst({ where: packageLookup });
+
+  if (!pkg) {
     throw new Error("Selected package is unavailable.");
   }
 
-  const totalCents = airaloPackage.priceCents * quantity;
+  const priceCents = pkg.sellingPriceCents ?? pkg.priceCents;
+  const totalCents = priceCents * quantity;
 
   const checkout = await db.checkoutSession.create({
     data: {
       userId: options.userId ?? null,
-      packageId: airaloPackage.id,
+      packageId: pkg.id,
       customerEmail: input.customerEmail ?? null,
       quantity,
       totalCents,
-      currency: airaloPackage.currency,
+      currency: pkg.currencyCode,
       status: STATUS_PENDING,
       intent: input.intent ?? "purchase",
       topUpForOrderId: input.topUpForOrderId ?? null,
@@ -201,7 +214,6 @@ export async function getCheckoutSummary(
   const checkout = await db.checkoutSession.findUnique({
     where: { id: checkoutId },
     include: {
-      package: true,
       payments: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -214,12 +226,17 @@ export async function getCheckoutSummary(
   }
 
   const latestPayment = checkout.payments[0];
+  const packageLookup: Prisma.PackageWhereInput = isUuid(checkout.packageId)
+    ? { OR: [{ id: checkout.packageId }, { externalId: checkout.packageId }] }
+    : { externalId: checkout.packageId };
+
+  const pkg = await db.package.findFirst({ where: packageLookup });
 
   return {
     id: checkout.id,
     packageId: checkout.packageId,
-    packageName: checkout.package.name,
-    packageDescription: checkout.package.description,
+    packageName: pkg?.name ?? "Package",
+    packageDescription: pkg?.shortInfo ?? null,
     quantity: checkout.quantity,
     totalCents: checkout.totalCents,
     currency: checkout.currency,
@@ -536,10 +553,10 @@ export async function setCheckoutStatus(
 export async function fetchCheckoutWithPayment(
   checkoutId: string,
   options: { prisma?: PrismaClient } = {},
-): Promise<Prisma.CheckoutSessionGetPayload<{ include: { payments: true; package: true } }> | null> {
+): Promise<Prisma.CheckoutSessionGetPayload<{ include: { payments: true } }> | null> {
   const db = options.prisma ?? prismaClient;
   return db.checkoutSession.findUnique({
     where: { id: checkoutId },
-    include: { payments: true, package: true },
+    include: { payments: true },
   });
 }

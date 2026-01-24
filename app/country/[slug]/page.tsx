@@ -136,9 +136,12 @@ function PlanCard({ plan }: { plan: PlanDetail }) {
       </ul>
       <div className="mt-6 space-y-3">
         <p className="text-2xl font-semibold text-brand-900">
-          {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
-            plan.priceUSD
-          )}
+          {new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+            minimumFractionDigits: plan.priceUSD % 1 !== 0 ? 2 : 0,
+            maximumFractionDigits: 2
+          }).format(plan.priceUSD)}
         </p>
         <OrderButton
           packageId={getCatalogPackageId(plan.package)}

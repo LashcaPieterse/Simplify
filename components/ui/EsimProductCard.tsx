@@ -10,11 +10,13 @@ const formatPrice = (price?: { amount?: number; currency?: string }) => {
   }
 
   const currency = price.currency ?? "USD";
+  const hasCents = price.amount % 1 !== 0;
 
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    maximumFractionDigits: 0
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: 2
   }).format(price.amount);
 };
 

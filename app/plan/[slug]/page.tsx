@@ -68,9 +68,12 @@ export default async function PlanPage({ params }: PlanPageProps) {
               <Image src={providerLogo} alt={plan.provider?.title ?? "Carrier"} width={64} height={64} className="rounded-full" />
             ) : null}
             <p className="text-3xl font-semibold text-brand-900">
-              {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
-                plan.priceUSD
-              )}
+              {new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+                minimumFractionDigits: plan.priceUSD % 1 !== 0 ? 2 : 0,
+                maximumFractionDigits: 2
+              }).format(plan.priceUSD)}
             </p>
             <OrderButton
               packageId={getCatalogPackageId(plan.package)}

@@ -64,12 +64,15 @@ const resolveUrl = (source: ImageLike | string | null | undefined) => {
     return null;
   }
 
+  const isValidImageSrc = (value: string) =>
+    value.startsWith("/") || value.startsWith("http://") || value.startsWith("https://");
+
   if (typeof source === "string") {
-    return source;
+    return isValidImageSrc(source) ? source : null;
   }
 
   if (typeof source.url === "string" && source.url.length > 0) {
-    return source.url;
+    return isValidImageSrc(source.url) ? source.url : null;
   }
 
   const asset = source.asset;
@@ -79,15 +82,11 @@ const resolveUrl = (source: ImageLike | string | null | undefined) => {
     }
 
     if (typeof asset.url === "string" && asset.url.length > 0) {
-      return asset.url;
+      return isValidImageSrc(asset.url) ? asset.url : null;
     }
 
     if (typeof asset.path === "string" && asset.path.length > 0) {
-      return asset.path;
-    }
-
-    if (typeof asset._ref === "string" && asset._ref.length > 0) {
-      return asset._ref;
+      return isValidImageSrc(asset.path) ? asset.path : null;
     }
   }
 

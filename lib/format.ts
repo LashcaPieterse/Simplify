@@ -1,9 +1,11 @@
 export function formatCurrency(amountCents: number, currency: string) {
   try {
+    const hasCents = amountCents % 100 !== 0;
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      minimumFractionDigits: 2,
+      minimumFractionDigits: hasCents ? 2 : 0,
+      maximumFractionDigits: 2,
     }).format(amountCents / 100);
   } catch {
     return `${currency} ${(amountCents / 100).toFixed(2)}`;

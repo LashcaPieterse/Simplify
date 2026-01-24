@@ -632,9 +632,20 @@ export async function createOrder(
   const airalo = options.airaloClient ?? resolveAiraloClient();
   const submissionMode = options.submissionMode ?? "async";
   const isAsyncSubmission = submissionMode !== "sync";
-  const pkg = await db.airaloPackage.findUnique({ where: { id: packageId } });
+  const uuidRegex =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  const packageLookup: Prisma.PackageWhereInput = {
+    externalId: packageId,
+    isActive: true,
+  };
 
-  if (!pkg || !pkg.isActive) {
+  if (uuidRegex.test(packageId)) {
+    packageLookup.OR = [{ id: packageId }, { externalId: packageId }];
+  }
+
+  const pkg = await db.package.findFirst({ where: packageLookup });
+
+  if (!pkg) {
     logOrderError("order.package.unavailable", {
       packageId,
     });
@@ -809,8 +820,8 @@ export async function createOrder(
           status: resolveAiraloStatus(airaloOrder),
           customerEmail: customerEmail ?? null,
           quantity: normalisedQuantity,
-          totalCents: pkg.priceCents * normalisedQuantity,
-          currency: pkg.currency,
+          totalCents: (pkg.sellingPriceCents ?? pkg.priceCents) * normalisedQuantity,
+          currency: pkg.currencyCode,
         },
       });
 

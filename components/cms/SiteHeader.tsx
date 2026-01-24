@@ -10,7 +10,7 @@ export function SiteHeader({ settings }: { settings: SiteSettings }) {
   const logoUrl = settings.logo ? urlForImage(settings.logo)?.width(120).height(120).url() : null;
 
   return (
-    <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 pb-8 pt-10 lg:px-10">
+    <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pb-8 pt-10 lg:px-10">
       <div className="flex items-center gap-4">
         <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
           {logoUrl ? (

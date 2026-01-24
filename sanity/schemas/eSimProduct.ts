@@ -55,18 +55,33 @@ export const eSimProduct = defineType({
       validation: (Rule) => Rule.required().min(1)
     }),
     defineField({
-      name: "package",
-      title: "Catalog package",
-      type: "reference",
-      to: [{ type: "catalogPackage" }],
-      validation: (Rule) => Rule.required()
-    }),
-    defineField({
       name: "country",
       title: "Catalog country",
       type: "reference",
       to: [{ type: "catalogCountry" }],
       validation: (Rule) => Rule.required()
+    }),
+    defineField({
+      name: "package",
+      title: "Catalog package",
+      type: "reference",
+      to: [{ type: "catalogPackage" }],
+      options: {
+        filter: ({ document }) => {
+          const countryId = document?.country?._ref;
+          if (!countryId) {
+            return { filter: "defined(country)", params: {} };
+          }
+          return { filter: "country._ref == $countryId", params: { countryId } };
+        }
+      },
+      validation: (Rule) =>
+        Rule.required().custom((value, context) => {
+          if (!context.document?.country) {
+            return "Select a catalog country before choosing a package.";
+          }
+          return value ? true : "Catalog package is required.";
+        })
     }),
     defineField({
       name: "providerBadge",

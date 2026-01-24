@@ -390,7 +390,7 @@ const ESIM_PRODUCT_CARD_FIELDS = `
   displayName,
   "slug": slug.current,
   priceUSD,
-  coverImage,
+  "coverImage": coalesce(coverImage, country->image),
   shortDescription,
   providerBadge,
   status,

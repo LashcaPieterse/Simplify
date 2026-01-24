@@ -14,10 +14,12 @@ const formatPrice = (amount?: number, currency = "USD") => {
   }
 
   try {
+    const hasCents = amount % 1 !== 0;
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      maximumFractionDigits: currency === "USD" ? 0 : 2
+      minimumFractionDigits: hasCents ? 2 : 0,
+      maximumFractionDigits: 2
     }).format(amount);
   } catch (error) {
     console.warn("Failed to format price", error);

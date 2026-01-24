@@ -1,5 +1,5 @@
 import { groq } from "next-sanity";
-import type { AiraloPackage } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import prisma from "../db/client";
 import { getSanityClient } from "../sanity.client";
@@ -22,7 +22,7 @@ const COUNTRY_REFERENCE_FIELDS = `
   "slug": slug.current,
   badge,
   summary,
-  coverImage,
+  "coverImage": image,
   featured
 `;
 
@@ -57,7 +57,7 @@ const CATALOG_PRODUCTS_QUERY = groq`
     "slug": slug.current,
     priceUSD,
     // Always use the selected Catalog Country cover when available; otherwise fall back to the product cover image.
-    "coverImage": coalesce(country->coverImage, coverImage),
+    "coverImage": coalesce(country->image, coverImage),
     shortDescription,
     providerBadge,
     status,
@@ -134,7 +134,9 @@ type PackageMetadata = {
 };
 
 type PackageRecord = {
-  pkg: AiraloPackage;
+  pkg: Prisma.PackageGetPayload<{
+    include: { operator: true; country: true };
+  }>;
   metadata: PackageMetadata | null;
 };
 
@@ -158,7 +160,7 @@ function normalizeKey(value?: string | null): string | null {
     .replace(/(^-|-$)+/g, "");
 }
 
-function parsePackageMetadata(pkg: AiraloPackage): PackageMetadata | null {
+function parsePackageMetadata(pkg: PackageRecord["pkg"]): PackageMetadata | null {
   const raw = pkg.metadata;
   if (!raw) return null;
 
@@ -182,7 +184,7 @@ function parsePackageMetadata(pkg: AiraloPackage): PackageMetadata | null {
   return null;
 }
 
-function buildPackageMaps(packages: AiraloPackage[]): PackageMaps {
+function buildPackageMaps(packages: PackageRecord["pkg"][]): PackageMaps {
   const bySku = new Map<string, PackageRecord>();
   const byDestination = new Map<string, PackageRecord>();
 
@@ -190,7 +192,7 @@ function buildPackageMaps(packages: AiraloPackage[]): PackageMaps {
     const metadata = parsePackageMetadata(pkg);
     const record: PackageRecord = { pkg, metadata };
 
-    const skuKey = normalizeKey(metadata?.sku ?? null);
+    const skuKey = normalizeKey(metadata?.sku ?? pkg.externalId ?? null);
     if (skuKey && !bySku.has(skuKey)) {
       bySku.set(skuKey, record);
     }
@@ -198,7 +200,8 @@ function buildPackageMaps(packages: AiraloPackage[]): PackageMaps {
     const destinationKeys = new Set<string>();
     const destination = normalizeKey(metadata?.destination ?? null);
     const destinationName = normalizeKey(metadata?.destinationName ?? null);
-    const region = normalizeKey(pkg.region ?? null);
+    const countrySlug = normalizeKey(pkg.country?.slug ?? null);
+    const countryName = normalizeKey(pkg.country?.name ?? null);
 
     if (destination) {
       destinationKeys.add(destination);
@@ -206,8 +209,11 @@ function buildPackageMaps(packages: AiraloPackage[]): PackageMaps {
     if (destinationName) {
       destinationKeys.add(destinationName);
     }
-    if (region) {
-      destinationKeys.add(region);
+    if (countrySlug) {
+      destinationKeys.add(countrySlug);
+    }
+    if (countryName) {
+      destinationKeys.add(countryName);
     }
 
     destinationKeys.forEach((key) => {
@@ -225,11 +231,12 @@ function centsToAmount(cents: number): number {
 }
 
 function createPriceFromPackage(record: PackageRecord): MoneyValue {
+  const priceCents = record.pkg.sellingPriceCents ?? record.pkg.priceCents;
   return {
-    amount: centsToAmount(record.pkg.priceCents),
-    currency: record.pkg.currency.toUpperCase(),
+    amount: centsToAmount(priceCents),
+    currency: record.pkg.currencyCode.toUpperCase(),
     source: "airalo",
-    lastSyncedAt: record.pkg.lastSyncedAt?.toISOString() ?? null,
+    lastSyncedAt: record.pkg.updatedAt?.toISOString() ?? null,
   };
 }
 
@@ -237,13 +244,23 @@ function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
   return {
     id: record.pkg.id,
     externalId: record.pkg.externalId,
-    currency: record.pkg.currency.toUpperCase(),
-    priceCents: record.pkg.priceCents,
-    dataLimitMb: record.pkg.dataLimitMb,
+    currency: record.pkg.currencyCode.toUpperCase(),
+    priceCents: record.pkg.sellingPriceCents ?? record.pkg.priceCents,
+    dataLimitMb: record.pkg.dataAmountMb,
     validityDays: record.pkg.validityDays,
-    region: record.pkg.region,
-    lastSyncedAt: record.pkg.lastSyncedAt?.toISOString() ?? null,
+    region: null,
+    lastSyncedAt: record.pkg.updatedAt?.toISOString() ?? null,
     metadata: record.metadata,
+    image: record.pkg.imageUrl ?? undefined,
+    operator: record.pkg.operator
+      ? {
+          _id: record.pkg.operator.id,
+          title: record.pkg.operator.name ?? "",
+          slug: record.pkg.operator.operatorCode ?? record.pkg.operator.id,
+          logo: undefined,
+          badge: undefined,
+        }
+      : undefined,
   };
 }
 
@@ -375,7 +392,7 @@ function applyPackageToProduct(
 
 export interface CatalogProductSummaryOptions {
   fetchProducts?: () => Promise<SanityCatalogProduct[]>;
-  fetchPackages?: () => Promise<AiraloPackage[]>;
+  fetchPackages?: () => Promise<PackageRecord["pkg"][]>;
 }
 
 export async function getCatalogProductSummaries(
@@ -388,8 +405,9 @@ export async function getCatalogProductSummaries(
   const fetchPackages =
     options.fetchPackages ??
     (() =>
-      prisma.airaloPackage.findMany({
+      prisma.package.findMany({
         where: { isActive: true },
+        include: { operator: true, country: true },
         orderBy: { updatedAt: "desc" },
       }));
 

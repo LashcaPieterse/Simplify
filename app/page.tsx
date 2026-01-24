@@ -26,7 +26,7 @@ import { SiteFooter } from "@/components/cms/SiteFooter";
 import { AfricaCoverageMap } from "@/components/AfricaCoverageMap";
 
 export const dynamic = "force-static";
-export const revalidate = false;
+export const revalidate = 60;
 
 export default async function HomePage() {
   const [settings, home, products] = await Promise.all([getSiteSettings(), getHomePage(), getEsimProducts()]);

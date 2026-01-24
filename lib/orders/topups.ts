@@ -59,7 +59,7 @@ export async function getTopUpPackages(
   }
   const db = options.prisma ?? prismaClient;
 
-  const localPackages = await db.airaloPackage.findMany({
+  const localPackages = await db.package.findMany({
     where: {
       externalId: {
         in: packages.map((pkg) => pkg.id),
