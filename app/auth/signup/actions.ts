@@ -1,8 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { signIn } from "next-auth/react";
-
 import prisma from "@/lib/db/client";
 import { hashPassword } from "@/lib/auth/password";
 
