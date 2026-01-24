@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Route } from "next";
 import { signIn } from "next-auth/react";
 import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 
@@ -79,7 +80,11 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
           return;
         }
       }
-      router.push(callbackUrl);
+      if (callbackUrl.startsWith("http")) {
+        window.location.assign(callbackUrl);
+        return;
+      }
+      router.push(callbackUrl as Route);
     });
   }
 
