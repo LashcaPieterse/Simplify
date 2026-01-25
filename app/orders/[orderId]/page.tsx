@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { ensureOrderInstallation, OrderServiceError } from "@/lib/orders/service";
+import prisma from "@/lib/db/client";
 import { pollUsageForProfile } from "@/lib/orders/usage";
 import { getTopUpPackages } from "@/lib/orders/topups";
 import { createCheckout } from "@/lib/payments/checkouts";
@@ -101,6 +102,11 @@ export default async function OrderPage({ params }: OrderPageParams) {
   if (!order) {
     notFound();
   }
+  const pkg = await prisma.package.findFirst({
+    where: {
+      OR: [{ id: order.packageId }, { externalId: order.packageId }],
+    },
+  });
   const profile = order.profiles[0] ?? null;
 
   const usageResult = profile ? await pollUsageForProfile(order.id, profile) : null;
@@ -119,7 +125,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
       <header className="space-y-2">
         <p className="text-sm uppercase tracking-wide text-sand-500">Order</p>
         <h1 className="text-3xl font-semibold text-brand-900">
-          {order.package?.name ?? "eSIM order"}
+          {pkg?.name ?? "eSIM order"}
         </h1>
         <div className="text-sm text-sand-600">
           <p>

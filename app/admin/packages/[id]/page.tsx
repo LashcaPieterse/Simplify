@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
 import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { TagPill } from "@/components/admin/TagPill";
 import prisma from "@/lib/db/client";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { addNote, saveTags, updateSellingPrice, updateStatus } from "./actions";
+import { updateSellingPrice, updateStatus } from "./actions";
 
 function margin(base?: number | null, selling?: number | null) {
   if (!base || !selling) return 0;
@@ -12,24 +11,31 @@ function margin(base?: number | null, selling?: number | null) {
 }
 
 export default async function PackageDetailPage({ params }: { params: { id: string } }) {
-  const pkg = await prisma.airaloPackage.findUnique({
+  const pkg = await prisma.package.findUnique({
     where: { id: params.id },
-    include: { tags: { include: { tag: true } }, notes: true, esimOrders: true },
+    include: { country: true, operator: true },
   });
 
   if (!pkg) {
     notFound();
   }
 
-  const revenue = pkg.esimOrders.reduce((sum, order) => sum + (order.totalCents ?? 0), 0);
-  const units = pkg.esimOrders.reduce((sum, order) => sum + order.quantity, 0);
-  const profit = pkg.esimOrders.reduce((sum, order) => {
+  const orders = await prisma.esimOrder.findMany({
+    where: {
+      OR: [{ packageId: pkg.id }, { packageId: pkg.externalId }],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const revenue = orders.reduce((sum, order) => sum + (order.totalCents ?? 0), 0);
+  const units = orders.reduce((sum, order) => sum + order.quantity, 0);
+  const profit = orders.reduce((sum, order) => {
     const selling = order.totalCents ?? (pkg.sellingPriceCents ?? pkg.priceCents) * order.quantity;
     const base = pkg.priceCents * order.quantity;
     return sum + (selling - base);
   }, 0);
 
-  const salesByDate = pkg.esimOrders.reduce<Record<string, number>>((acc, order) => {
+  const salesByDate = orders.reduce<Record<string, number>>((acc, order) => {
     const date = order.createdAt.toISOString().slice(0, 10);
     acc[date] = (acc[date] ?? 0) + (order.totalCents ?? 0);
     return acc;
@@ -46,14 +52,12 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-600">Package</p>
           <h1 className="text-3xl font-bold text-slate-900">{pkg.name}</h1>
           <p className="text-sm text-slate-600">
-            {pkg.country} • {pkg.region ?? "Global"} • {pkg.dataLimitMb ? `${Math.round(pkg.dataLimitMb / 1000)}GB` : "N/A"} •
+            {pkg.country?.name ?? "Unknown"} • {pkg.operator?.name ?? "Unknown operator"} •
+            {pkg.dataAmountMb ? `${Math.round(pkg.dataAmountMb / 1000)}GB` : "N/A"} •
             {pkg.validityDays ? `${pkg.validityDays} days` : "Flexible"}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge active={pkg.isActive} />
-            {pkg.tags.map((t) => (
-              <TagPill key={t.tagId} label={t.tag.name} />
-            ))}
           </div>
         </div>
         <form
@@ -78,12 +82,12 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
           <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
             <div className="rounded-lg bg-slate-50 px-3 py-2">
               <dt className="text-slate-600">Base price</dt>
-              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(pkg.priceCents, pkg.currency)}</dd>
+              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(pkg.priceCents, pkg.currencyCode)}</dd>
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
               <dt className="text-slate-600">Current selling price</dt>
               <dd className="text-lg font-semibold text-slate-900">
-                {pkg.sellingPriceCents ? formatCurrency(pkg.sellingPriceCents, pkg.currency) : "Set a price"}
+                {pkg.sellingPriceCents ? formatCurrency(pkg.sellingPriceCents, pkg.currencyCode) : "Set a price"}
               </dd>
             </div>
             <div className="rounded-lg bg-slate-50 px-3 py-2">
@@ -94,8 +98,8 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
               <dt className="text-slate-600">Profit / unit</dt>
               <dd className="text-lg font-semibold text-slate-900">
                 {pkg.sellingPriceCents
-                  ? formatCurrency((pkg.sellingPriceCents ?? 0) - pkg.priceCents, pkg.currency)
-                  : formatCurrency(0, pkg.currency)}
+                  ? formatCurrency((pkg.sellingPriceCents ?? 0) - pkg.priceCents, pkg.currencyCode)
+                  : formatCurrency(0, pkg.currencyCode)}
               </dd>
             </div>
           </dl>
@@ -110,7 +114,7 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
             }}
           >
             <label className="flex-1 text-sm font-medium text-slate-700">
-              Set selling price ({pkg.currency})
+              Set selling price ({pkg.currencyCode})
               <input
                 name="sellingPrice"
                 type="number"
@@ -129,31 +133,9 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
           <h3 className="text-lg font-semibold text-slate-900">Operations</h3>
           <div className="mt-3 space-y-3 text-sm text-slate-700">
             <p>External ID: {pkg.externalId}</p>
-            <p>Last synced: {pkg.lastSyncedAt ? formatDate(pkg.lastSyncedAt) : "—"}</p>
             <p>Last updated: {formatDate(pkg.updatedAt)}</p>
             <p>Deactivated at: {pkg.deactivatedAt ? formatDate(pkg.deactivatedAt) : "—"}</p>
           </div>
-          <form
-            className="mt-4 space-y-3"
-            action={async (formData) => {
-              "use server";
-              const raw = String(formData.get("tags") ?? "");
-              const tags = raw.split(",").map((t) => t.trim());
-              await saveTags(pkg.id, tags);
-            }}
-          >
-            <label className="text-sm font-medium text-slate-700">
-              Tags (comma separated)
-              <input
-                name="tags"
-                defaultValue={pkg.tags.map((t) => t.tag.name).join(", ")}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
-              />
-            </label>
-            <button type="submit" className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm">
-              Save tags
-            </button>
-          </form>
         </div>
       </div>
 
@@ -174,63 +156,23 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
             </div>
             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
               <dt className="text-slate-600">Total revenue</dt>
-              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(revenue, pkg.currency)}</dd>
+              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(revenue, pkg.currencyCode)}</dd>
             </div>
             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
               <dt className="text-slate-600">Total profit</dt>
-              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(profit, pkg.currency)}</dd>
+              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(profit, pkg.currencyCode)}</dd>
             </div>
           </dl>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-900">Internal notes</h3>
-          <p className="text-sm text-slate-600">Share context for ops teams.</p>
-          <form
-            className="mt-4 space-y-3"
-            action={async (formData) => {
-              "use server";
-              const body = String(formData.get("note") ?? "");
-              if (body.length > 0) {
-                await addNote(pkg.id, body);
-              }
-            }}
-          >
-            <textarea
-              name="note"
-              rows={3}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
-              placeholder="Add context or operational notes..."
-            />
-            <button type="submit" className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
-              Save note
-            </button>
-          </form>
-          <div className="mt-4 space-y-3">
-            {pkg.notes.length === 0 ? (
-              <p className="text-sm text-slate-500">No notes yet.</p>
-            ) : (
-              pkg.notes
-                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-                .map((note) => (
-                  <div key={note.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                    <p>{note.body}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDate(note.createdAt)}</p>
-                  </div>
-                ))
-            )}
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-lg font-semibold text-slate-900">Recent orders</h3>
           <div className="mt-3 space-y-2 text-sm text-slate-700">
-            {pkg.esimOrders.length === 0 ? (
+            {orders.length === 0 ? (
               <p className="text-sm text-slate-500">No orders yet.</p>
             ) : (
-              pkg.esimOrders
-                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+              orders
                 .slice(0, 6)
                 .map((order) => (
                   <div key={order.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
@@ -240,7 +182,7 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-slate-900">
-                        {order.totalCents ? formatCurrency(order.totalCents, pkg.currency) : "—"}
+                        {order.totalCents ? formatCurrency(order.totalCents, pkg.currencyCode) : "—"}
                       </p>
                       <p className="text-xs text-slate-500">Qty {order.quantity}</p>
                     </div>
@@ -248,7 +190,6 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
                 ))
             )}
           </div>
-        </div>
       </div>
     </div>
   );

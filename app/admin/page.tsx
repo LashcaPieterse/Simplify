@@ -21,16 +21,40 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
   const orders = await prisma.esimOrder.findMany({
     where: { createdAt: { gte: rangeStart } },
-    include: { package: true },
+    select: {
+      id: true,
+      packageId: true,
+      quantity: true,
+      totalCents: true,
+      currency: true,
+      createdAt: true,
+    },
   });
 
-  const packages = await prisma.airaloPackage.findMany();
-  const totalRevenue = orders.reduce((sum, order) => {
-    const selling = order.totalCents ?? (order.package?.sellingPriceCents ?? order.package?.priceCents ?? 0) * order.quantity;
-    return sum + selling;
-  }, 0);
+  const uuidRegex =
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  const packageIds = Array.from(new Set(orders.map((order) => order.packageId).filter(Boolean)));
+  const packageUuidIds = packageIds.filter((id) => uuidRegex.test(id));
+  const packageExternalIds = packageIds.filter((id) => !uuidRegex.test(id));
+
+  const packages = packageIds.length
+    ? await prisma.package.findMany({
+        where: {
+          OR: [
+            packageUuidIds.length ? { id: { in: packageUuidIds } } : undefined,
+            packageExternalIds.length ? { externalId: { in: packageExternalIds } } : undefined,
+          ].filter(Boolean) as Prisma.PackageWhereInput[],
+        },
+        include: { country: true },
+      })
+    : [];
+
+  const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
+  const packageByExternalId = new Map(packages.map((pkg) => [pkg.externalId, pkg]));
+  const totalRevenue = orders.reduce((sum, order) => sum + (order.totalCents ?? 0), 0);
   const totalCost = orders.reduce((sum, order) => {
-    const base = (order.package?.priceCents ?? 0) * order.quantity;
+    const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
+    const base = (pkg?.priceCents ?? 0) * order.quantity;
     return sum + base;
   }, 0);
   const totalOrders = orders.length;
@@ -38,8 +62,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
   const revenueByDate = orders.reduce<Record<string, number>>((acc, order) => {
     const key = order.createdAt.toISOString().slice(0, 10);
-    const amount = order.totalCents ?? (order.package?.sellingPriceCents ?? order.package?.priceCents ?? 0) * order.quantity;
-    acc[key] = (acc[key] ?? 0) + amount;
+    acc[key] = (acc[key] ?? 0) + (order.totalCents ?? 0);
     return acc;
   }, {});
 
@@ -48,8 +71,9 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     .map(([date, value]) => ({ label: date, value }));
 
   const revenueByCountry = orders.reduce<Record<string, number>>((acc, order) => {
-    const country = order.package?.country ?? "Unknown";
-    const amount = order.totalCents ?? (order.package?.sellingPriceCents ?? order.package?.priceCents ?? 0) * order.quantity;
+    const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
+    const country = pkg?.country?.name ?? "Unknown";
+    const amount = order.totalCents ?? 0;
     acc[country] = (acc[country] ?? 0) + amount;
     return acc;
   }, {});
@@ -60,9 +84,9 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     .map(([label, value]) => ({ label, value }));
 
   const revenueByPackage = orders.reduce<Record<string, { name: string; value: number }>>((acc, order) => {
-    const pkg = order.package;
+    const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
     if (!pkg) return acc;
-    const amount = order.totalCents ?? (pkg.sellingPriceCents ?? pkg.priceCents ?? 0) * order.quantity;
+    const amount = order.totalCents ?? 0;
     const key = pkg.id;
     const name = pkg.name;
     acc[key] = { name, value: (acc[key]?.value ?? 0) + amount };

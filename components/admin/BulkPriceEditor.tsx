@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/format";
 type PackageLite = {
   id: string;
   name: string;
-  region: string | null;
+  country: string | null;
   currency: string;
   priceCents: number;
   sellingPriceCents: number | null;
@@ -46,7 +46,7 @@ export function BulkPriceEditor({ packages }: { packages: PackageLite[] }) {
           <thead className="bg-slate-50">
             <tr>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">Name</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Region</th>
+              <th className="px-3 py-2 text-left font-semibold text-slate-700">Country</th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">Base</th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">Selling</th>
               <th className="px-3 py-2 text-left font-semibold text-slate-700">Margin</th>
@@ -59,7 +59,7 @@ export function BulkPriceEditor({ packages }: { packages: PackageLite[] }) {
               return (
                 <tr key={row.id}>
                   <td className="px-3 py-2 font-semibold text-slate-900">{row.name}</td>
-                  <td className="px-3 py-2">{row.region ?? "-"}</td>
+                  <td className="px-3 py-2">{row.country ?? "-"}</td>
                   <td className="px-3 py-2">{formatCurrency(row.priceCents, row.currency)}</td>
                   <td className="px-3 py-2">
                     <input

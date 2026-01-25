@@ -172,7 +172,6 @@ function normaliseQuantity(quantity?: number): number {
 }
 
 const ORDER_DETAILS_INCLUDE = {
-  package: true,
   profiles: {
     include: {
       usageSnapshots: {

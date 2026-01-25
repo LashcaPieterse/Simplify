@@ -5,24 +5,19 @@ import prisma from "@/lib/db/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 function buildWhere(searchParams: Record<string, string | string[] | undefined>) {
-  const { q, region, country, status } = searchParams;
-  const where: Prisma.AiraloPackageWhereInput = {};
+  const { q, country, status } = searchParams;
+  const where: Prisma.PackageWhereInput = {};
 
   if (typeof q === "string" && q.length > 0) {
     where.OR = [
       { name: { contains: q } },
       { externalId: { contains: q } },
-      { country: { contains: q } },
-      { region: { contains: q } },
+      { country: { name: { contains: q } } },
     ];
   }
 
-  if (typeof region === "string" && region.length > 0) {
-    where.region = { equals: region };
-  }
-
   if (typeof country === "string" && country.length > 0) {
-    where.country = { equals: country };
+    where.countryId = { equals: country };
   }
 
   if (typeof status === "string") {
@@ -45,28 +40,38 @@ export default async function PackagesPage({ searchParams = {} }: { searchParams
   const skip = (page - 1) * take;
   const where = buildWhere(searchParams);
 
+  const countries = await prisma.country.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
   const [packages, total] = await Promise.all([
-    prisma.airaloPackage.findMany({
+    prisma.package.findMany({
       where,
-      include: { tags: { include: { tag: true } } },
+      select: {
+        id: true,
+        name: true,
+        externalId: true,
+        dataAmountMb: true,
+        validityDays: true,
+        priceCents: true,
+        sellingPriceCents: true,
+        currencyCode: true,
+        isActive: true,
+        updatedAt: true,
+        country: { select: { name: true } },
+      },
       orderBy: { updatedAt: "desc" },
       take,
       skip,
     }),
-    prisma.airaloPackage.count({ where }),
+    prisma.package.count({ where }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / take));
-
-  const regions = await prisma.airaloPackage.groupBy({ by: ["region"], where, _count: true });
-  const countries = await prisma.airaloPackage.groupBy({ by: ["country"], where, _count: true });
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-600">Packages</p>
-          <h1 className="text-3xl font-bold text-slate-900">Airalo catalog</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Catalog packages</h1>
           <p className="text-sm text-slate-600">Search, filter, and manage eSIM SKUs.</p>
         </div>
         <Link
@@ -77,41 +82,25 @@ export default async function PackagesPage({ searchParams = {} }: { searchParams
         </Link>
       </div>
 
-      <form className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-4">
+      <form className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
         <input
           type="text"
           name="q"
-          placeholder="Search by name, country, region, ID"
+          placeholder="Search by name, country, ID"
           defaultValue={typeof searchParams.q === "string" ? searchParams.q : ""}
-          className="sm:col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+          className="sm:col-span-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
         />
-        <select
-          name="region"
-          defaultValue={typeof searchParams.region === "string" ? searchParams.region : ""}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
-        >
-          <option value="">All regions</option>
-          {regions
-            .filter((r) => r.region)
-            .map((r) => (
-              <option key={r.region} value={r.region ?? ""}>
-                {r.region}
-              </option>
-            ))}
-        </select>
         <select
           name="country"
           defaultValue={typeof searchParams.country === "string" ? searchParams.country : ""}
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
         >
           <option value="">All countries</option>
-          {countries
-            .filter((r) => r.country)
-            .map((r) => (
-              <option key={r.country} value={r.country ?? ""}>
-                {r.country}
-              </option>
-            ))}
+          {countries.map((country) => (
+            <option key={country.id} value={country.id}>
+              {country.name}
+            </option>
+          ))}
         </select>
         <select
           name="status"
@@ -136,13 +125,12 @@ export default async function PackagesPage({ searchParams = {} }: { searchParams
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Name</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Country</th>
-              <th className="px-4 py-3 text-left font-semibold text-slate-700">Region</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Data</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Validity</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Base price</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Selling price</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Margin</th>
-              <th className="px-4 py-3 text-left font-semibold text-slate-700">Last synced</th>
+              <th className="px-4 py-3 text-left font-semibold text-slate-700">Last updated</th>
               <th className="px-4 py-3 text-left font-semibold text-slate-700">Status</th>
             </tr>
           </thead>
@@ -155,16 +143,15 @@ export default async function PackagesPage({ searchParams = {} }: { searchParams
                   </Link>
                   <p className="text-xs text-slate-500">{pkg.externalId}</p>
                 </td>
-                <td className="px-4 py-3">{pkg.country ?? "-"}</td>
-                <td className="px-4 py-3">{pkg.region ?? "-"}</td>
-                <td className="px-4 py-3">{pkg.dataLimitMb ? `${Math.round(pkg.dataLimitMb / 1000)} GB` : "-"}</td>
+                <td className="px-4 py-3">{pkg.country?.name ?? "-"}</td>
+                <td className="px-4 py-3">{pkg.dataAmountMb ? `${Math.round(pkg.dataAmountMb / 1000)} GB` : "-"}</td>
                 <td className="px-4 py-3">{pkg.validityDays ? `${pkg.validityDays} days` : "-"}</td>
-                <td className="px-4 py-3">{formatCurrency(pkg.priceCents, pkg.currency)}</td>
+                <td className="px-4 py-3">{formatCurrency(pkg.priceCents, pkg.currencyCode)}</td>
                 <td className="px-4 py-3">
-                  {pkg.sellingPriceCents ? formatCurrency(pkg.sellingPriceCents, pkg.currency) : "—"}
+                  {pkg.sellingPriceCents ? formatCurrency(pkg.sellingPriceCents, pkg.currencyCode) : "—"}
                 </td>
                 <td className="px-4 py-3 font-semibold text-slate-900">{margin(pkg.priceCents, pkg.sellingPriceCents)}%</td>
-                <td className="px-4 py-3">{pkg.lastSyncedAt ? formatDate(pkg.lastSyncedAt) : "—"}</td>
+                <td className="px-4 py-3">{formatDate(pkg.updatedAt)}</td>
                 <td className="px-4 py-3">
                   <StatusBadge active={pkg.isActive} />
                 </td>
