@@ -1,4 +1,5 @@
 import { KpiCard } from "@/components/admin/KpiCard";
+import type { Prisma } from "@prisma/client";
 import { SimpleBarChart } from "@/components/admin/SimpleBarChart";
 import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
 import prisma from "@/lib/db/client";
