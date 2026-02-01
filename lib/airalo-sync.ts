@@ -14,10 +14,6 @@ export type AiraloCatalogEntry = {
   isActive?: boolean;
 };
 
-function entryHash(entry: AiraloCatalogEntry) {
-  return crypto.createHash("sha256").update(JSON.stringify(entry)).digest("hex");
-}
-
 async function loadCatalogFromDisk(): Promise<AiraloCatalogEntry[]> {
   const filePath = path.join(process.cwd(), "data", "airalo-packages.json");
   const contents = await fs.readFile(filePath, "utf-8");
