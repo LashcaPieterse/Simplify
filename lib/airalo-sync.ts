@@ -85,14 +85,13 @@ export async function runAiraloSyncJob(actorEmail?: string) {
   const existingByExternalId = new Map(existing.map((pkg) => [pkg.externalId, pkg]));
 
   const summary: SyncSummary = { created: [], updated: [], deactivated: [] };
-  let createdCount = 0;
+  const createdCount = 0;
   let updatedCount = 0;
 
   for (const entry of catalog) {
     const previous = existingByExternalId.get(entry.externalId);
     const currencyCode = entry.currencyCode ?? entry.currency ?? "USD";
     const normalizedEntry = { ...entry, currencyCode };
-    const nowHash = entryHash(normalizedEntry as AiraloCatalogEntry);
     const sellingPriceCents = entry.priceCents + Math.round(entry.priceCents * 0.2);
 
     if (!previous) {
