@@ -14,14 +14,15 @@ const UUID_REGEX =
 
 export default async function AccountReceiptsPage() {
   const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
 
-  if (!session?.user?.id) {
+  if (!userId) {
     redirect(`/auth/signin?callbackUrl=${encodeURIComponent("/account/receipts")}`);
   }
 
   const orders = await prisma.esimOrder.findMany({
     where: {
-      userId: session.user.id,
+      userId,
       paymentTransactionId: { not: null },
     },
     include: { payment: true },
@@ -111,7 +112,7 @@ export default async function AccountReceiptsPage() {
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-brand-500">Receipt email</p>
                 <p className="font-semibold text-brand-800">
-                  {order.receiptEmail ?? order.customerEmail ?? session.user.email ?? "--"}
+                  {order.receiptEmail ?? order.customerEmail ?? session?.user?.email ?? "--"}
                 </p>
                 <p className="text-xs text-brand-500">{receiptStatus}</p>
               </div>

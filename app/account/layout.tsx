@@ -12,12 +12,13 @@ export const metadata: Metadata = {
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions);
+  const user = session?.user;
 
-  if (!session?.user) {
+  if (!user) {
     redirect(`/auth/signin?callbackUrl=${encodeURIComponent("/account/esims")}`);
   }
 
-  const displayName = session.user.name ?? session.user.email ?? "Your account";
+  const displayName = user?.name ?? user?.email ?? "Your account";
 
   return (
     <div className="min-h-screen bg-sand-50">
@@ -26,8 +27,8 @@ export default async function AccountLayout({ children }: { children: React.Reac
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-500">Account</p>
             <h1 className="text-3xl font-bold text-brand-900">{displayName}</h1>
-            {session.user.email ? (
-              <p className="text-sm text-brand-600">Signed in as {session.user.email}</p>
+            {user?.email ? (
+              <p className="text-sm text-brand-600">Signed in as {user.email}</p>
             ) : null}
           </div>
         </div>

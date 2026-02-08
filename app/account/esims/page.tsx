@@ -14,13 +14,14 @@ const UUID_REGEX =
 
 export default async function AccountEsimsPage() {
   const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
 
-  if (!session?.user?.id) {
+  if (!userId) {
     redirect(`/auth/signin?callbackUrl=${encodeURIComponent("/account/esims")}`);
   }
 
   const orders = await prisma.esimOrder.findMany({
-    where: { userId: session.user.id },
+    where: { userId },
     include: {
       profiles: { orderBy: { createdAt: "desc" }, take: 1 },
     },

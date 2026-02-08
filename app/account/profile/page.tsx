@@ -9,13 +9,14 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountProfilePage() {
   const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
 
-  if (!session?.user?.id) {
+  if (!userId) {
     redirect(`/auth/signin?callbackUrl=${encodeURIComponent("/account/profile")}`);
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { name: true, email: true, phone: true, createdAt: true },
   });
 
