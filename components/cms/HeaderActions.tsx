@@ -87,7 +87,7 @@ export function HeaderActions() {
           <div className="my-2 h-px bg-brand-100" />
           <div className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-800">
             No eSIMs yet.{" "}
-            <Link href={"/plan" as Route} className="font-semibold text-brand-700 hover:text-brand-900">
+            <Link href={"/" as Route} className="font-semibold text-brand-700 hover:text-brand-900">
               Browse plans
             </Link>
           </div>

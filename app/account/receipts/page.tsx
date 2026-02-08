@@ -36,7 +36,7 @@ export default async function AccountReceiptsPage() {
           Completed purchases will show up here with their payment details.
         </p>
         <Link
-          href="/plan"
+          href="/"
           className="mt-5 inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-sm"
         >
           Browse plans
