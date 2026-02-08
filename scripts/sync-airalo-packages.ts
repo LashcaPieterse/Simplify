@@ -15,7 +15,7 @@ async function main() {
       [
         `Countries - created: ${result.countriesCreated}, updated: ${result.countriesUpdated}`,
         `Operators - created: ${result.operatorsCreated}, updated: ${result.operatorsUpdated}`,
-        `Packages - created: ${result.packagesCreated}, updated: ${result.packagesUpdated}, unchanged: ${result.packagesUnchanged}`,
+        `Packages - created: ${result.packagesCreated}, updated: ${result.packagesUpdated}, unchanged: ${result.packagesUnchanged}, deactivated: ${result.packagesDeactivated}`,
       ].join(" | "),
     );
   } finally {

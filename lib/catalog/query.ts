@@ -246,6 +246,7 @@ function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
     externalId: record.pkg.externalId,
     currency: record.pkg.currencyCode.toUpperCase(),
     priceCents: record.pkg.sellingPriceCents ?? record.pkg.priceCents,
+    isActive: record.pkg.isActive,
     dataLimitMb: record.pkg.dataAmountMb,
     validityDays: record.pkg.validityDays,
     region: null,
@@ -344,7 +345,15 @@ function applyPackageToProduct(
     null;
 
   const priceFromPackage = matchedRecord ? createPriceFromPackage(matchedRecord) : null;
-  const packageInfo = packageInfoFromSanity ?? (matchedRecord ? createPackageInfo(matchedRecord) : null);
+  let packageInfo: CatalogPackageInfo | null = null;
+  if (packageInfoFromSanity) {
+    packageInfo = {
+      ...packageInfoFromSanity,
+      isActive: matchedRecord ? matchedRecord.pkg.isActive : false,
+    };
+  } else if (matchedRecord) {
+    packageInfo = createPackageInfo(matchedRecord);
+  }
   const sanityPackagePrice = priceFromCatalogPackage(packageInfoFromSanity);
 
   const fallbackPrice: MoneyValue | null = product.price ??

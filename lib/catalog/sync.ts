@@ -36,6 +36,7 @@ export interface SyncAiraloPackagesOptions {
   client?: AiraloClient;
   logger?: SyncLogger;
   packagesOptions?: GetPackagesOptions;
+  allowDeactivation?: boolean;
   now?: Date;
 }
 
@@ -55,6 +56,7 @@ export interface SyncAiraloCatalogResult {
   packagesCreated: number;
   packagesUpdated: number;
   packagesUnchanged: number;
+  packagesDeactivated: number;
 }
 
 const DATA_AMOUNT_REGEX = /([\d.,]+)\s*(KB|MB|GB|TB)/i;
@@ -190,7 +192,7 @@ export async function syncAiraloPackages(
     created: result.packagesCreated,
     updated: result.packagesUpdated,
     unchanged: result.packagesUnchanged,
-    deactivated: 0,
+    deactivated: result.packagesDeactivated,
   };
 }
 
@@ -282,6 +284,8 @@ export async function syncAiraloCatalog(
   const packagesCreated = { count: 0 };
   const packagesUpdated = { count: 0 };
   const packagesUnchanged = { count: 0 };
+  const packagesDeactivated = { count: 0 };
+  const seenPackageExternalIds = new Set<string>();
 
   const countries = await fetchAllCountries();
 
@@ -374,6 +378,7 @@ export async function syncAiraloCatalog(
       for (const pkg of operator.packages ?? []) {
         const externalId = String(pkg.id ?? pkg.slug ?? pkg.title ?? "");
         if (!externalId) continue;
+        seenPackageExternalIds.add(externalId);
 
         const dataAmountMb = parseDataAmountToMb(
           pkg.data,
@@ -551,6 +556,37 @@ export async function syncAiraloCatalog(
     }
   }
 
+  const allowDeactivation =
+    typeof options.allowDeactivation === "boolean"
+      ? options.allowDeactivation
+      : !options.packagesOptions?.filter;
+
+  if (allowDeactivation && seenPackageExternalIds.size > 0) {
+    const activePackages = await db.package.findMany({
+      where: { isActive: true },
+      select: { id: true, externalId: true },
+    });
+    const missing = activePackages.filter(
+      (pkg) => !seenPackageExternalIds.has(pkg.externalId),
+    );
+
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < missing.length; i += CHUNK_SIZE) {
+      const chunkIds = missing.slice(i, i + CHUNK_SIZE).map((pkg) => pkg.id);
+      const result = await db.package.updateMany({
+        where: { id: { in: chunkIds } },
+        data: { isActive: false, deactivatedAt: now },
+      });
+      packagesDeactivated.count += result.count;
+    }
+
+    if (packagesDeactivated.count > 0) {
+      logger.warn(
+        `Deactivated ${packagesDeactivated.count} packages missing from the latest Airalo sync.`,
+      );
+    }
+  }
+
   return {
     countriesCreated: countriesCreated.count,
     countriesUpdated: countriesUpdated.count,
@@ -559,5 +595,6 @@ export async function syncAiraloCatalog(
     packagesCreated: packagesCreated.count,
     packagesUpdated: packagesUpdated.count,
     packagesUnchanged: packagesUnchanged.count,
+    packagesDeactivated: packagesDeactivated.count,
   };
 }

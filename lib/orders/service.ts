@@ -10,7 +10,7 @@ import {
 import type { Order as AiraloOrder } from "../airalo/schemas";
 import { resolveSharedTokenCache } from "../airalo/token-cache";
 import prismaClient from "../db/client";
-import { logOrderError, logOrderInfo } from "../observability/logging";
+import { logOrderError, logOrderInfo, logOrderWarn } from "../observability/logging";
 import {
   recordOrderMetrics,
   recordRateLimit,
@@ -519,6 +519,47 @@ function classifyAiraloBusinessReason(
   return null;
 }
 
+function shouldAutoDeactivatePackage(
+  businessCode: number | null,
+  classification: MetricsReason | null,
+): boolean {
+  if (businessCode !== null && INVALID_PACKAGE_ERROR_CODES.has(businessCode)) {
+    return true;
+  }
+
+  if (businessCode !== null && OUT_OF_STOCK_ERROR_CODES.has(businessCode)) {
+    return true;
+  }
+
+  return classification === "airalo_out_of_stock";
+}
+
+async function autoDeactivatePackage(
+  pkg: { id: string; externalId: string },
+  options: {
+    reason: string | null;
+    businessCode: number | null;
+    classification: MetricsReason | null;
+    prisma: PrismaDbClient;
+  },
+): Promise<void> {
+  const client = isPrismaClient(options.prisma) ? options.prisma : prismaClient;
+  const result = await client.package.updateMany({
+    where: { id: pkg.id, isActive: true },
+    data: { isActive: false, deactivatedAt: new Date() },
+  });
+
+  if (result.count > 0) {
+    logOrderWarn("catalog.package.auto_paused", {
+      packageId: pkg.id,
+      packageExternalId: pkg.externalId,
+      reason: options.reason,
+      airaloErrorCode: options.businessCode,
+      classification: options.classification,
+    });
+  }
+}
+
 function mapAiraloError(
   error: AiraloError,
   businessErrorOverride?: AiraloBusinessErrorInfo | null,
@@ -758,12 +799,28 @@ export async function createOrder(
         });
       }
 
-      const mapped = mapAiraloError(error, businessError);
       const classification = classifyAiraloBusinessReason(
         businessError,
         businessMessage ?? error.message,
         error.details.status,
       );
+
+      if (shouldAutoDeactivatePackage(businessError?.code ?? null, classification)) {
+        autoDeactivatePackage(pkg, {
+          reason: businessMessage ?? error.message,
+          businessCode: businessError?.code ?? null,
+          classification,
+          prisma: db,
+        }).catch((deactivationError) => {
+          logOrderWarn("catalog.package.auto_pause_failed", {
+            packageId: pkg.id,
+            packageExternalId: pkg.externalId,
+            error: deactivationError instanceof Error ? deactivationError.message : String(deactivationError),
+          });
+        });
+      }
+
+      const mapped = mapAiraloError(error, businessError);
 
       const metricsReason = isAiraloValidationError
         ? "validation_failed"

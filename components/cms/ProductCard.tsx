@@ -39,6 +39,8 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
   const providerBadge = product.provider?.badge ?? product.providerBadge;
   const providerName = product.provider?.title ?? product.package?.operator?.title;
   const packageTitle = product.package?.title ?? product.displayName;
+  const packageId = getCatalogPackageId(product.package);
+  const isUnavailable = !packageId;
 
   return (
     <article className={cn("flex items-start gap-4 rounded-2xl border border-brand-100/80 bg-white px-4 py-4 shadow-sm", className)}>
@@ -66,15 +68,21 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
         <p className="text-sm text-brand-600">{product.shortDescription}</p>
       </div>
       <div className="flex flex-col items-end gap-2 text-right">
+        {isUnavailable ? (
+          <span className="rounded-full bg-sand-100 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-sand-600">
+            Unavailable
+          </span>
+        ) : null}
         {typeof priceAmount === "number" ? (
           <p className="font-semibold text-brand-900">{formatPrice(priceAmount, priceCurrency)}</p>
         ) : null}
         <OrderButton
-          packageId={getCatalogPackageId(product.package)}
-          label={ctaLabel}
+          packageId={packageId}
+          label={isUnavailable ? "Unavailable" : ctaLabel}
           pendingLabel="Processing…"
           variant="ghost"
           size="sm"
+          disabled={isUnavailable}
         />
         {href ? (
           <Link href={href} className="text-[0.65rem] font-semibold uppercase text-brand-500 hover:text-brand-700">

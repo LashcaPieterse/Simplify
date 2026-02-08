@@ -197,6 +197,7 @@ export type CatalogPackageInfo = {
   title?: string;
   currency: string;
   priceCents: number;
+  isActive?: boolean;
   badge?: string | null;
   summary?: string | null;
   image?: ImageLike;
@@ -216,7 +217,7 @@ export type CatalogPackageInfo = {
 
 // Utility: pick a stable identifier from a catalog package reference.
 export function getCatalogPackageId(pkg?: CatalogPackageInfo | null): string | undefined {
-  if (!pkg) return undefined;
+  if (!pkg || pkg.isActive === false) return undefined;
   return pkg.externalId || pkg.id;
 }
 
