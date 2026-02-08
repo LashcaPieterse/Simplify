@@ -135,6 +135,8 @@ model EsimOrder {
   installation         EsimInstallationPayload?
   payment              PaymentTransaction?        @relation(fields: [paymentTransactionId], references: [id])
   paymentTransactionId String?
+  receiptEmail         String?                    @map("receipt_email")
+  receiptSentAt        DateTime?                  @map("receipt_sent_at")
   recoveryAttempts     EsimOrderRecoveryAttempt[]
 }
 

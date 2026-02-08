@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 import prismaClient from "../db/client";
+import { sendOrderReceipt } from "../notifications/receipts";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { createOrder } from "../orders/service";
 import type { CreateOrderOptions, CreateOrderResult } from "../orders/service";
@@ -400,7 +401,7 @@ export async function finaliseOrderFromCheckout(
 ): Promise<CreateOrderResult> {
   const db = options.prisma ?? prismaClient;
 
-  return db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const checkout = await tx.checkoutSession.findUnique({
       where: { id: checkoutId },
       include: {
@@ -493,6 +494,15 @@ export async function finaliseOrderFromCheckout(
 
     return order;
   });
+
+  sendOrderReceipt(result.orderId, { prisma: options.prisma ?? prismaClient }).catch((error) => {
+    logOrderError("payments.receipt.send_failed", {
+      orderId: result.orderId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+
+  return result;
 }
 
 export async function recordPaymentEvent(

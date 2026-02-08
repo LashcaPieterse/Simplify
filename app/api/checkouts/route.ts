@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 
 import { createCheckout } from "@/lib/payments/checkouts";
+import { authOptions } from "@/lib/auth/options";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +22,21 @@ function resolveBaseUrl(request: Request): string {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const rawBody = await request.json();
+    const session = await getServerSession(authOptions);
+    const payload =
+      rawBody && typeof rawBody === "object" && !Array.isArray(rawBody) ? { ...rawBody } : {};
+
+    if (typeof payload.customerEmail === "string") {
+      payload.customerEmail = payload.customerEmail.trim();
+    }
+
+    if (session?.user?.email && !payload.customerEmail) {
+      payload.customerEmail = session.user.email;
+    }
+
     const baseUrl = resolveBaseUrl(request);
-    const result = await createCheckout(body, { baseUrl });
+    const result = await createCheckout(payload, { baseUrl, userId: session?.user?.id });
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

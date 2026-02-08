@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 
 import { ensureOrderInstallation, OrderServiceError } from "@/lib/orders/service";
@@ -6,7 +6,8 @@ import prisma from "@/lib/db/client";
 import { pollUsageForProfile } from "@/lib/orders/usage";
 import { getTopUpPackages } from "@/lib/orders/topups";
 import { createCheckout } from "@/lib/payments/checkouts";
-import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth/options";
+import { getServerSession } from "next-auth";
 import InstallationInstructions from "@/components/esim/InstallationInstructions";
 
 type OrderPageParams = {
@@ -62,17 +63,18 @@ async function purchaseTopUp(
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const session = await getServerSession(authOptions);
 
   const checkout = await createCheckout(
     {
       packageId,
       quantity: 1,
-      customerEmail: customerEmail ?? undefined,
+      customerEmail: customerEmail ?? session?.user?.email ?? undefined,
       intent: "top-up",
       topUpForOrderId: orderIdentifier,
       topUpForIccid: profileIccid ?? undefined,
     },
-    { baseUrl },
+    { baseUrl, userId: session?.user?.id },
   );
 
   redirect(`/checkout/${checkout.checkoutId}`);
