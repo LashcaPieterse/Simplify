@@ -1,11 +1,12 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/components/utils";
 
-const NAV_ITEMS = [
+const NAV_ITEMS: Array<{ href: Route; label: string }> = [
   { href: "/account/esims", label: "My eSIMs" },
   { href: "/account/receipts", label: "Receipts" },
   { href: "/account/profile", label: "Profile" },
