@@ -132,7 +132,6 @@ type PackagesRawResponse = { data?: unknown };
 function isCountryTree(data: unknown): data is AiraloCountryNode[] {
   return (
     Array.isArray(data) &&
-    data.length > 0 &&
     data.every((country) => country !== null && typeof country === "object")
   );
 }
@@ -421,11 +420,36 @@ export class AiraloClient {
    */
   async getPackagesTree(options: GetPackagesOptions = {}): Promise<AiraloCountryNode[]> {
     const raw = await this.fetchPackagesRaw(options);
-    if (isCountryTree(raw?.data)) {
-      return raw.data;
+    const data = raw?.data;
+    if (isCountryTree(data)) {
+      return data;
     }
 
-    throw new Error("Unexpected Airalo response shape; expected an array of countries.");
+    if (data && typeof data === "object") {
+      const nestedCountries = (data as { countries?: unknown }).countries;
+      if (isCountryTree(nestedCountries)) {
+        return nestedCountries;
+      }
+
+      const nestedData = (data as { data?: unknown }).data;
+      if (isCountryTree(nestedData)) {
+        return nestedData;
+      }
+    }
+
+    const rootCountries = (raw as { countries?: unknown })?.countries;
+    if (isCountryTree(rootCountries)) {
+      return rootCountries;
+    }
+
+    const rootKeys =
+      raw && typeof raw === "object" ? Object.keys(raw as Record<string, unknown>) : [];
+    const dataKeys =
+      data && typeof data === "object" ? Object.keys(data as Record<string, unknown>) : [];
+
+    throw new Error(
+      `Unexpected Airalo response shape; expected an array of countries. rootKeys=${rootKeys.join(",")}, dataKeys=${dataKeys.join(",")}`,
+    );
   }
 
   async getOrderResponseById(orderId: string): Promise<OrderResponse> {
@@ -560,24 +584,56 @@ export class AiraloClient {
     }
 
     const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
-    const token = await this.getAccessToken();
+    const url = this.resolveUrl(path);
+    const maxAuthAttempts = 2;
 
-    const response = await this.executeWithRateLimitRetry(() =>
-      this.fetchFn(this.resolveUrl(path), {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+    for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
+      const token = await this.getAccessToken();
+
+      const response = await this.executeWithRateLimitRetry(() =>
+        this.fetchFn(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }),
+      );
+
+      if (response.ok) {
+        const parsed = await this.parseJson(response);
+        if (parsed && typeof parsed === "object") {
+          return parsed as PackagesRawResponse;
+        }
+
+        return { data: undefined };
+      }
+
+      const isUnauthorized = response.status === 401;
+      if (isUnauthorized && attempt < maxAuthAttempts) {
+        await this.clearCachedToken();
+        continue;
+      }
+
+      const bodyText = await response.text();
+      let body: unknown = bodyText;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        // keep raw body when parsing fails
+      }
+
+      throw new AiraloError(
+        `Packages request failed with status ${response.status}`,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          body,
         },
-      }),
-    );
-
-    const parsed = await this.parseJson(response);
-    if (parsed && typeof parsed === "object") {
-      return parsed as PackagesRawResponse;
+      );
     }
 
-    return { data: undefined };
+    throw new Error(`Failed to complete request to ${url}`);
   }
 
   async getSimPackages(iccid: string): Promise<Package[]> {
