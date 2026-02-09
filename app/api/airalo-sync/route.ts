@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { syncAiraloPackages } from "@/lib/catalog/sync";
@@ -19,6 +20,11 @@ function isAuthorized(request: NextRequest) {
   return headerToken === cronToken || queryToken === cronToken;
 }
 
+function fingerprint(value?: string | null): string | null {
+  if (!value) return null;
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
 async function notifyFailure(error: unknown) {
   const failureReason = error instanceof Error ? `${error.message}\n\n${error.stack ?? ""}` : String(error);
   const timestamp = new Date().toISOString();
@@ -32,12 +38,39 @@ async function notifyFailure(error: unknown) {
 
 export async function GET(request: NextRequest) {
   const startedAt = new Date();
+  const debugFlag = request.nextUrl.searchParams.get("debug");
+  const wantsDebug = debugFlag === "1" || debugFlag === "true";
 
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
+    if (wantsDebug) {
+      const clientId = process.env.AIRALO_CLIENT_ID ?? "";
+      const clientSecret = process.env.AIRALO_CLIENT_SECRET ?? "";
+      const databaseUrl = process.env.DATABASE_URL ?? "";
+
+      return NextResponse.json({
+        debug: true,
+        env: {
+          vercelEnv: process.env.VERCEL_ENV ?? null,
+          vercelUrl: process.env.VERCEL_URL ?? null,
+          nodeEnv: process.env.NODE_ENV ?? null,
+          airaloBaseUrl:
+            process.env.AIRALO_BASE_URL ?? "https://partners-api.airalo.com/v2",
+          airaloClientIdPresent: Boolean(clientId),
+          airaloClientSecretPresent: Boolean(clientSecret),
+          airaloClientIdLength: clientId.length,
+          airaloClientSecretLength: clientSecret.length,
+          airaloClientIdFingerprint: fingerprint(clientId),
+          airaloClientSecretFingerprint: fingerprint(clientSecret),
+          databaseUrlPresent: Boolean(databaseUrl),
+          cronTokenPresent: Boolean(process.env.AIRALO_SYNC_CRON_TOKEN),
+        },
+      });
+    }
+
     const result = await syncAiraloPackages({ logger: console });
 
     return NextResponse.json({
