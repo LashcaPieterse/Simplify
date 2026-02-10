@@ -187,6 +187,25 @@ test("AiraloClient merges include parameters for package requests", async () => 
   assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
 });
 
+test("AiraloClient fetches packages from the live API when env vars are configured", async () => {
+  const clientId = process.env.AIRALO_CLIENT_ID;
+  const clientSecret = process.env.AIRALO_CLIENT_SECRET;
+
+  assert.ok(clientId, "AIRALO_CLIENT_ID must be set for live Airalo API tests");
+  assert.ok(clientSecret, "AIRALO_CLIENT_SECRET must be set for live Airalo API tests");
+
+  const client = new AiraloClient({
+    clientId,
+    clientSecret,
+  });
+
+  const packages = await client.getPackages({ limit: 1 });
+
+  assert.ok(Array.isArray(packages));
+  assert.ok(packages.length > 0, "live Airalo API should return at least one package");
+  assert.ok(packages[0]?.id, "returned package should include an id");
+});
+
 
 test("AiraloClient sends OAuth token requests as form-urlencoded", async () => {
   const tokenCache = new MockTokenCache();
