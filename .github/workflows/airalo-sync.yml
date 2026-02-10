@@ -1,0 +1,87 @@
+name: Airalo Package Sync
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode: sync executes package sync, debug returns env diagnostics"
+        required: true
+        default: sync
+        type: choice
+        options:
+          - sync
+          - debug
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Airalo sync endpoint
+        env:
+          AIRALO_SYNC_URL: ${{ secrets.AIRALO_SYNC_URL }}
+          AIRALO_SYNC_CRON_TOKEN: ${{ secrets.AIRALO_SYNC_CRON_TOKEN }}
+          RUN_MODE: ${{ github.event.inputs.mode || 'sync' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$AIRALO_SYNC_URL" ]; then
+            echo "Missing AIRALO_SYNC_URL secret (e.g. https://simplify-pink.vercel.app/api/airalo-sync)"
+            exit 1
+          fi
+
+          if [ -z "$AIRALO_SYNC_CRON_TOKEN" ]; then
+            echo "Missing AIRALO_SYNC_CRON_TOKEN secret"
+            exit 1
+          fi
+
+          append_query() {
+            local url="$1"
+            local params="$2"
+            if [[ "$url" == *"?"* ]]; then
+              echo "${url}&${params}"
+            else
+              echo "${url}?${params}"
+            fi
+          }
+
+          request_url="$AIRALO_SYNC_URL"
+          if [ "$RUN_MODE" = "debug" ]; then
+            request_url="$(append_query "$request_url" "debug=1")"
+          fi
+
+          echo "Triggering Airalo sync mode=$RUN_MODE at $request_url"
+
+          response_file="$(mktemp)"
+          http_code="$(curl --silent --show-error \
+            --max-time 120 \
+            --retry 2 \
+            --retry-delay 5 \
+            -H "x-airalo-sync-key: $AIRALO_SYNC_CRON_TOKEN" \
+            -o "$response_file" \
+            -w "%{http_code}" \
+            "$request_url")"
+
+          if [[ "$http_code" =~ ^2 ]]; then
+            cat "$response_file"
+            echo
+            exit 0
+          fi
+
+          echo "Request failed with HTTP $http_code"
+          cat "$response_file"
+          echo
+
+          if [ "$RUN_MODE" = "sync" ]; then
+            debug_url="$(append_query "$AIRALO_SYNC_URL" "debug=1")"
+            echo "Attempting debug probe at $debug_url"
+            curl --silent --show-error \
+              --max-time 120 \
+              -H "x-airalo-sync-key: $AIRALO_SYNC_CRON_TOKEN" \
+              "$debug_url" || true
+            echo
+          fi
+
+          exit 1
