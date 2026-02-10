@@ -1,0 +1,34 @@
+name: Airalo Package Sync
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Airalo sync endpoint
+        env:
+          AIRALO_SYNC_URL: ${{ secrets.AIRALO_SYNC_URL }}
+          AIRALO_SYNC_CRON_TOKEN: ${{ secrets.AIRALO_SYNC_CRON_TOKEN }}
+        run: |
+          if [ -z "$AIRALO_SYNC_URL" ]; then
+            echo "Missing AIRALO_SYNC_URL secret (e.g. https://simplify-pink.vercel.app/api/airalo-sync)"
+            exit 1
+          fi
+
+          if [ -z "$AIRALO_SYNC_CRON_TOKEN" ]; then
+            echo "Missing AIRALO_SYNC_CRON_TOKEN secret"
+            exit 1
+          fi
+
+          echo "Triggering Airalo sync at $AIRALO_SYNC_URL"
+          curl --silent --show-error --fail-with-body \
+            --max-time 120 \
+            --retry 2 \
+            --retry-delay 5 \
+            -H "x-airalo-sync-key: $AIRALO_SYNC_CRON_TOKEN" \
+            "$AIRALO_SYNC_URL"
