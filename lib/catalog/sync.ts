@@ -166,18 +166,31 @@ export async function paginateAiraloPackages({
   return totalFetched;
 }
 
-function resolveAiraloClient(): AiraloClient {
-  const clientId = process.env.AIRALO_CLIENT_ID;
-  const clientSecret = process.env.AIRALO_CLIENT_SECRET;
 
-  if (!clientId || !clientSecret) {
-    throw new Error("AIRALO_CLIENT_ID and AIRALO_CLIENT_SECRET must be set");
+function requiredEnv(name: "AIRALO_CLIENT_ID" | "AIRALO_CLIENT_SECRET"): string {
+  const raw = process.env[name];
+  const value = raw?.trim();
+
+  if (!value) {
+    throw new Error(`${name} must be set`);
   }
+
+  return value;
+}
+
+function resolveAiraloClient(logger: Required<SyncLogger>): AiraloClient {
+  const clientId = requiredEnv("AIRALO_CLIENT_ID");
+  const clientSecret = requiredEnv("AIRALO_CLIENT_SECRET");
 
   return new AiraloClient({
     clientId,
     clientSecret,
     tokenCache: resolveSharedTokenCache(),
+    logger: {
+      info: logger.info,
+      warn: logger.warn,
+      error: logger.error,
+    },
   });
 }
 
@@ -274,8 +287,10 @@ export async function syncAiraloCatalog(
     ...options.logger,
   };
   const db = options.prisma ?? prismaClient;
-  const client = options.client ?? resolveAiraloClient();
+  const client = options.client ?? resolveAiraloClient(logger);
   const now = options.now ?? new Date();
+
+  logger.info("[airalo-sync] Starting catalog sync");
 
   const countriesCreated = { count: 0 };
   const countriesUpdated = { count: 0 };
@@ -288,6 +303,7 @@ export async function syncAiraloCatalog(
   const seenPackageExternalIds = new Set<string>();
 
   const countries = await fetchAllCountries();
+  logger.info(`[airalo-sync] Completed Airalo fetch stage with ${countries.length} merged countries`);
 
   for (const country of countries ?? []) {
     const countryCode =
@@ -586,6 +602,10 @@ export async function syncAiraloCatalog(
       );
     }
   }
+
+  logger.info(
+    `[airalo-sync] Sync summary countries(created=${countriesCreated.count}, updated=${countriesUpdated.count}) operators(created=${operatorsCreated.count}, updated=${operatorsUpdated.count}) packages(created=${packagesCreated.count}, updated=${packagesUpdated.count}, unchanged=${packagesUnchanged.count}, deactivated=${packagesDeactivated.count})`,
+  );
 
   return {
     countriesCreated: countriesCreated.count,

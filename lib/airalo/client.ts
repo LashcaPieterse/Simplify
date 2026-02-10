@@ -40,6 +40,14 @@ export interface AiraloClientOptions {
   tokenCache?: TokenCache;
   tokenExpiryBufferSeconds?: number;
   rateLimitRetry?: Partial<RateLimitRetryPolicy>;
+  logger?: AiraloClientLogger;
+}
+
+export interface AiraloClientLogger {
+  debug?: (message: string) => void;
+  info?: (message: string) => void;
+  warn?: (message: string) => void;
+  error?: (message: string) => void;
 }
 
 type FormValue = string | number | boolean | null | undefined;
@@ -271,6 +279,22 @@ interface RateLimitRetryPolicy {
   maxDelayMs: number;
 }
 
+function formatErrorBody(body: unknown): string {
+  if (body === undefined) {
+    return "undefined";
+  }
+
+  if (typeof body === "string") {
+    return body;
+  }
+
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
+}
+
 export class AiraloClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -279,6 +303,7 @@ export class AiraloClient {
   private readonly tokenCache: TokenCache;
   private readonly tokenExpiryBufferSeconds: number;
   private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
+  private readonly logger: AiraloClientLogger;
 
   private inFlightTokenRequest: Promise<string> | null = null;
 
@@ -294,6 +319,15 @@ export class AiraloClient {
       ...DEFAULT_RATE_LIMIT_RETRY_POLICY,
       ...options.rateLimitRetry,
     };
+    this.logger = options.logger ?? {};
+  }
+
+  private log(level: keyof AiraloClientLogger, message: string): void {
+    const target = this.logger[level];
+
+    if (target) {
+      target(message);
+    }
   }
 
   async getPackagesResponse(
@@ -589,6 +623,7 @@ export class AiraloClient {
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
       const token = await this.getAccessToken();
+      this.log("info", `[airalo-client] Fetching raw packages (attempt ${attempt}/${maxAuthAttempts})`);
 
       const response = await this.executeWithRateLimitRetry(() =>
         this.fetchFn(url, {
@@ -599,6 +634,8 @@ export class AiraloClient {
           },
         }),
       );
+
+      this.log("info", `[airalo-client] Raw packages request returned status ${response.status}`);
 
       if (response.ok) {
         const parsed = await this.parseJson(response);
@@ -611,6 +648,7 @@ export class AiraloClient {
 
       const isUnauthorized = response.status === 401;
       if (isUnauthorized && attempt < maxAuthAttempts) {
+        this.log("warn", "[airalo-client] Raw packages request unauthorized, clearing cached token");
         await this.clearCachedToken();
         continue;
       }
@@ -624,7 +662,7 @@ export class AiraloClient {
       }
 
       throw new AiraloError(
-        `Packages request failed with status ${response.status}`,
+        `Packages request failed with status ${response.status}: ${formatErrorBody(body)}`,
         {
           status: response.status,
           statusText: response.statusText,
@@ -750,6 +788,7 @@ export class AiraloClient {
     const maxAuthAttempts = requiresAuth ? 2 : 1;
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
+      this.log("info", `[airalo-client] Request ${path} started (attempt ${attempt}/${maxAuthAttempts})`);
       const response = await this.executeWithRateLimitRetry(async () => {
         const headers = await this.buildHeaders(init?.headers, requiresAuth);
         const initWithDefaults: RequestInit = {
@@ -761,6 +800,8 @@ export class AiraloClient {
         return this.fetchFn(url, initWithDefaults);
       });
 
+      this.log("info", `[airalo-client] Request ${path} returned status ${response.status}`);
+
       if (response.ok) {
         const parsedBody = await this.parseJson(response);
         return schema.parse(parsedBody);
@@ -770,6 +811,7 @@ export class AiraloClient {
       const shouldRetry = isUnauthorized && attempt < maxAuthAttempts;
 
       if (shouldRetry) {
+        this.log("warn", `[airalo-client] Request ${path} was unauthorized, clearing cached token`);
         await this.clearCachedToken();
         continue;
       }
@@ -807,7 +849,7 @@ export class AiraloClient {
       // keep the raw text when JSON parsing fails
     }
 
-    return new AiraloError(`Request to ${url} failed with status ${response.status}`, {
+    return new AiraloError(`Request to ${url} failed with status ${response.status}: ${formatErrorBody(body)}`, {
       status: response.status,
       statusText: response.statusText,
       body,
@@ -817,8 +859,11 @@ export class AiraloClient {
   private async getAccessToken(): Promise<string> {
     const cached = await this.tokenCache.get();
     if (cached && !this.isExpired(cached.expiresAt)) {
+      this.log("info", "[airalo-client] Using cached access token");
       return cached.token;
     }
+
+    this.log("info", "[airalo-client] Cached token unavailable or expired; requesting new token");
 
     if (!this.inFlightTokenRequest) {
       this.inFlightTokenRequest = this.requestAccessToken();
@@ -833,18 +878,21 @@ export class AiraloClient {
   }
 
   private async requestAccessToken(): Promise<string> {
-    const formData = new FormData();
-    formData.set("client_id", this.clientId);
-    formData.set("client_secret", this.clientSecret);
-    formData.set("grant_type", "client_credentials");
+    const body = new URLSearchParams();
+    body.set("client_id", this.clientId);
+    body.set("client_secret", this.clientSecret);
+    body.set("grant_type", "client_credentials");
+
+    this.log("info", `[airalo-client] Requesting token from ${this.baseUrl}/token`);
 
     const response = await this.executeWithRateLimitRetry(() =>
       this.fetchFn(`${this.baseUrl}/token`, {
         method: "POST",
         headers: {
           Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: formData,
+        body,
       }),
     );
 
@@ -857,8 +905,10 @@ export class AiraloClient {
         // keep as text when parsing fails
       }
 
+      this.log("error", `[airalo-client] Token request failed with status ${response.status}`);
+
       throw new AiraloError(
-        `Token request failed with status ${response.status}`,
+        `Token request failed with status ${response.status}: ${formatErrorBody(body)}`,
         {
           status: response.status,
           statusText: response.statusText,
@@ -883,6 +933,7 @@ export class AiraloClient {
     };
 
     await this.tokenCache.set(record);
+    this.log("info", `[airalo-client] Token acquired and cached for ${remainingSeconds}s`);
     recordTokenRefresh("airalo_client");
 
     return record.token;
@@ -932,11 +983,14 @@ export class AiraloClient {
         return response;
       }
 
+      this.log("warn", `[airalo-client] Retryable response status ${response.status} (attempt ${attempt}/${maxAttempts})`);
+
       if (attempt === maxAttempts) {
         return response;
       }
 
       const delayMs = this.calculateRetryDelay(attempt, response.headers);
+      this.log("warn", `[airalo-client] Waiting ${delayMs}ms before retry`);
       await this.delay(delayMs);
     }
 

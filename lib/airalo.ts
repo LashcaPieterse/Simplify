@@ -84,19 +84,25 @@ export class AiraloConfigurationError extends Error {
 
 let cachedClient: AiraloClient | null = null;
 
+
+function requiredEnv(name: "AIRALO_CLIENT_ID" | "AIRALO_CLIENT_SECRET"): string {
+  const raw = process.env[name];
+  const value = raw?.trim();
+
+  if (!value) {
+    throw new AiraloConfigurationError(`${name} must be configured to fetch SIM details.`);
+  }
+
+  return value;
+}
+
 function resolveClient(): AiraloClient {
   if (cachedClient) {
     return cachedClient;
   }
 
-  const clientId = process.env.AIRALO_CLIENT_ID;
-  const clientSecret = process.env.AIRALO_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new AiraloConfigurationError(
-      "AIRALO_CLIENT_ID and AIRALO_CLIENT_SECRET must be configured to fetch SIM details.",
-    );
-  }
+  const clientId = requiredEnv("AIRALO_CLIENT_ID");
+  const clientSecret = requiredEnv("AIRALO_CLIENT_SECRET");
 
   cachedClient = new AiraloClient({
     clientId,
