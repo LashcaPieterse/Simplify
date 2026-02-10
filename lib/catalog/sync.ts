@@ -166,13 +166,21 @@ export async function paginateAiraloPackages({
   return totalFetched;
 }
 
-function resolveAiraloClient(): AiraloClient {
-  const clientId = process.env.AIRALO_CLIENT_ID;
-  const clientSecret = process.env.AIRALO_CLIENT_SECRET;
 
-  if (!clientId || !clientSecret) {
-    throw new Error("AIRALO_CLIENT_ID and AIRALO_CLIENT_SECRET must be set");
+function requiredEnv(name: "AIRALO_CLIENT_ID" | "AIRALO_CLIENT_SECRET"): string {
+  const raw = process.env[name];
+  const value = raw?.trim();
+
+  if (!value) {
+    throw new Error(`${name} must be set`);
   }
+
+  return value;
+}
+
+function resolveAiraloClient(): AiraloClient {
+  const clientId = requiredEnv("AIRALO_CLIENT_ID");
+  const clientSecret = requiredEnv("AIRALO_CLIENT_SECRET");
 
   return new AiraloClient({
     clientId,

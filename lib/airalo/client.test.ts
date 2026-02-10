@@ -186,3 +186,46 @@ test("AiraloClient merges include parameters for package requests", async () => 
   const url = new URL(requestedUrl!);
   assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
 });
+
+
+test("AiraloClient sends OAuth token requests as form-urlencoded", async () => {
+  const tokenCache = new MockTokenCache();
+  let tokenContentType: string | null = null;
+  let tokenBody = "";
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/token")) {
+      const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+      tokenContentType = headers.get("Content-Type");
+      tokenBody = init?.body instanceof URLSearchParams ? init.body.toString() : String(init?.body ?? "");
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    if (target.includes("packages")) {
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await client.getPackages();
+
+  assert.equal(tokenContentType, "application/x-www-form-urlencoded");
+  assert.equal(
+    tokenBody,
+    "client_id=client-id&client_secret=client-secret&grant_type=client_credentials",
+  );
+});

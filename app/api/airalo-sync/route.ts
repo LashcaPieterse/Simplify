@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
       const clientId = process.env.AIRALO_CLIENT_ID ?? "";
       const clientSecret = process.env.AIRALO_CLIENT_SECRET ?? "";
       const databaseUrl = process.env.DATABASE_URL ?? "";
+      const trimmedClientId = clientId.trim();
+      const trimmedClientSecret = clientSecret.trim();
 
       return NextResponse.json({
         debug: true,
@@ -63,8 +65,13 @@ export async function GET(request: NextRequest) {
           airaloClientSecretPresent: Boolean(clientSecret),
           airaloClientIdLength: clientId.length,
           airaloClientSecretLength: clientSecret.length,
-          airaloClientIdFingerprint: fingerprint(clientId),
-          airaloClientSecretFingerprint: fingerprint(clientSecret),
+          airaloClientIdTrimmedLength: trimmedClientId.length,
+          airaloClientSecretTrimmedLength: trimmedClientSecret.length,
+          airaloClientIdHasOuterWhitespace: trimmedClientId.length !== clientId.length,
+          airaloClientSecretHasOuterWhitespace:
+            trimmedClientSecret.length !== clientSecret.length,
+          airaloClientIdFingerprint: fingerprint(trimmedClientId),
+          airaloClientSecretFingerprint: fingerprint(trimmedClientSecret),
           databaseUrlPresent: Boolean(databaseUrl),
           cronTokenPresent: Boolean(process.env.AIRALO_SYNC_CRON_TOKEN),
         },

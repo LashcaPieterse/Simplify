@@ -833,18 +833,19 @@ export class AiraloClient {
   }
 
   private async requestAccessToken(): Promise<string> {
-    const formData = new FormData();
-    formData.set("client_id", this.clientId);
-    formData.set("client_secret", this.clientSecret);
-    formData.set("grant_type", "client_credentials");
+    const body = new URLSearchParams();
+    body.set("client_id", this.clientId);
+    body.set("client_secret", this.clientSecret);
+    body.set("grant_type", "client_credentials");
 
     const response = await this.executeWithRateLimitRetry(() =>
       this.fetchFn(`${this.baseUrl}/token`, {
         method: "POST",
         headers: {
           Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: formData,
+        body,
       }),
     );
 
