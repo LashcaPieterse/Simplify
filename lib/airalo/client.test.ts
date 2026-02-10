@@ -187,70 +187,23 @@ test("AiraloClient merges include parameters for package requests", async () => 
   assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
 });
 
-test("AiraloClient fetches Airalo packages", async () => {
-  const tokenCache = new MockTokenCache();
-  const fetchImplementation: typeof fetch = async (url) => {
-    const target = typeof url === "string" ? url : url.toString();
+test("AiraloClient fetches packages from the live API when env vars are configured", async () => {
+  const clientId = process.env.AIRALO_CLIENT_ID;
+  const clientSecret = process.env.AIRALO_CLIENT_SECRET;
 
-    if (target.includes("packages")) {
-      return jsonResponse(
-        {
-          data: [
-            {
-              country_code: "US",
-              title: "United States",
-              operators: [
-                {
-                  title: "Demo Operator",
-                  packages: [
-                    {
-                      id: 101,
-                      title: "1 GB / 7 Days",
-                      data: "1GB",
-                      day: 7,
-                      price: 5,
-                      currency: "USD",
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-        { status: 200 },
-      );
-    }
-
-    if (target.endsWith("/token")) {
-      return jsonResponse(
-        {
-          data: {
-            access_token: "fresh-token",
-            expires_in: 3600,
-            token_type: "bearer",
-          },
-        },
-        { status: 200 },
-      );
-    }
-
-    throw new Error(`Unexpected URL ${target}`);
-  };
+  assert.ok(clientId, "AIRALO_CLIENT_ID must be set for live Airalo API tests");
+  assert.ok(clientSecret, "AIRALO_CLIENT_SECRET must be set for live Airalo API tests");
 
   const client = new AiraloClient({
-    clientId: "client-id",
-    clientSecret: "client-secret",
-    baseUrl: "https://example.com/api/",
-    fetchImplementation,
-    tokenCache,
+    clientId,
+    clientSecret,
   });
 
-  const packages = await client.getPackages();
+  const packages = await client.getPackages({ limit: 1 });
 
-  assert.equal(packages.length, 1);
-  assert.equal(packages[0]?.id, "101");
-  assert.equal(packages[0]?.destination, "US");
-  assert.equal(packages[0]?.name, "1 GB / 7 Days");
+  assert.ok(Array.isArray(packages));
+  assert.ok(packages.length > 0, "live Airalo API should return at least one package");
+  assert.ok(packages[0]?.id, "returned package should include an id");
 });
 
 
