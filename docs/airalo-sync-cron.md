@@ -1,24 +1,42 @@
 # Airalo package sync scheduler
 
-Vercel Cron is limited on the free plan, so the project now expects an **external ping-based scheduler** to trigger the `/api/airalo-sync` route (the `vercel.json` cron config has been removed to avoid deployment failures). Recommended options:
+This project supports triggering `/api/airalo-sync` from an external scheduler. We now include a **GitHub Actions hourly cron workflow** (`.github/workflows/airalo-sync.yml`) that pings the endpoint.
 
-- [cron-job.org](https://cron-job.org)
-- [Healthchecks.io / Dead Man's Snitch style checks](https://healthchecks.io)
-- Any uptime monitor that can perform authenticated HTTP requests
+## GitHub Actions setup (recommended)
 
-## Setup steps
-1. **Set a shared secret** for the sync endpoint (optional but recommended):
+1. **Set a shared secret in Vercel** for the sync endpoint:
+
    ```env
    AIRALO_SYNC_CRON_TOKEN=<random-secret>
    ```
 
-2. **Expose the sync URL** using either the header or query param token:
-   - Header: `x-airalo-sync-key: <random-secret>`
-   - Query param: `?key=<random-secret>`
+2. In GitHub, add these repository **Actions secrets**:
+   - `AIRALO_SYNC_URL` = `https://<your-domain>/api/airalo-sync`
+   - `AIRALO_SYNC_CRON_TOKEN` = same value as Vercel `AIRALO_SYNC_CRON_TOKEN`
 
-3. **Create the external cron job** to `GET https://<your-domain>/api/airalo-sync` hourly (or as needed), including the token from step 1.
+3. Ensure the workflow is enabled:
+   - File: `.github/workflows/airalo-sync.yml`
+   - Schedule: hourly (`7 * * * *`)
+   - Manual runs also supported via **Run workflow**.
 
-4. **Alerting**: failures already trigger an email to `pieterselashca@gmail.com` (override with `AIRALO_SYNC_ALERT_EMAIL`). Your cron provider can also notify you if the endpoint returns a non-2xx status.
+4. Verify it works:
+   - Trigger it manually once from the Actions tab.
+   - Confirm the job succeeds and `/api/airalo-sync` returns 200.
+
+## Endpoint auth contract
+
+The route accepts the sync token in either format:
+
+- Header: `x-airalo-sync-key: <random-secret>`
+- Query param: `?key=<random-secret>`
+
+If `AIRALO_SYNC_CRON_TOKEN` is set and the incoming token does not match, it returns `401 Unauthorized`.
+
+## Alerting
+
+Failures in the API sync route trigger an email to `pieterselashca@gmail.com` by default (override with `AIRALO_SYNC_ALERT_EMAIL`).
 
 ## Notes
+
+- If you use preview/staging environments, give each environment its own URL/token pair.
 - The route disconnects Prisma on completion to keep cold-start invocations lightweight.
