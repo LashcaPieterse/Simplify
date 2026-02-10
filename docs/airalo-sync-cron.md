@@ -75,3 +75,13 @@ Without notification settings enabled, failed runs will not automatically email 
 
 - If you use preview/staging environments, give each environment its own URL/token pair.
 - The route disconnects Prisma on completion to keep cold-start invocations lightweight.
+
+## Stale-package and price-change handling
+
+The sync endpoint now acts as the **single source of truth** for package availability and pricing:
+
+- Sync writes latest Airalo package details into Prisma (including updated prices).
+- Packages missing from the latest upstream dataset are automatically marked inactive (`isActive=false`).
+- After a successful sync, the route triggers `revalidatePath` for home/country/plan pages so static pages refresh without a full redeploy.
+
+This means a scheduler run updates what customers can buy without requiring Sanity edits or a deployment cycle.

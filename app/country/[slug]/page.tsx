@@ -14,7 +14,7 @@ import {
 import { urlForImage } from "@/lib/image";
 
 export const dynamic = "force-static";
-export const revalidate = false;
+export const revalidate = 300;
 
 export async function generateStaticParams() {
   const countries = await getCountriesList();

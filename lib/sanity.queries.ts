@@ -1,6 +1,7 @@
 import { groq } from "next-sanity";
 import { getSanityClient } from "./sanity.client";
 import { getCatalogProductSummaries } from "./catalog/query";
+import { prisma } from "./db/client";
 
 export { prisma } from "./db/client";
 import type { ImageLike } from "./image";
@@ -556,11 +557,15 @@ const postBySlugQuery = groq`
 `;
 
 function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
+  const externalId = pkg.externalId ?? pkg._id;
+  const priceCents = pkg.sellingPriceCents ?? pkg.priceCents ?? 0;
+  const currencyCode = pkg.currencyCode ?? "USD";
+
   return {
     _id: pkg._id,
     title: pkg.title ?? pkg.slug?.current ?? "Untitled package",
-    slug: pkg.slug?.current ?? pkg._id,
-    priceUSD: (pkg.priceCents ?? 0) / 100,
+    slug: pkg.slug?.current ?? externalId,
+    priceUSD: priceCents / 100,
     dataGB: pkg.dataAmountMb ? Math.round(pkg.dataAmountMb / 102.4) / 10 : 0,
     validityDays: pkg.validityDays ?? 0,
     hotspot: undefined,
@@ -575,24 +580,108 @@ function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
           logo: pkg.operator.image,
         }
       : undefined,
-    price: pkg.priceCents
+    price: priceCents
       ? {
-          amount: pkg.priceCents / 100,
-          currency: pkg.currencyCode ?? "USD",
+          amount: priceCents / 100,
+          currency: currencyCode,
           source: "airalo",
         }
       : null,
     package: {
       id: pkg._id,
-      externalId: pkg.externalId ?? pkg._id,
-      currency: pkg.currencyCode ?? "USD",
-      priceCents: pkg.priceCents ?? 0,
+      externalId,
+      currency: currencyCode,
+      priceCents,
+      isActive: true,
       dataLimitMb: pkg.dataAmountMb ?? null,
       validityDays: pkg.validityDays ?? null,
       region: null,
       lastSyncedAt: null,
       metadata: null,
     },
+  };
+}
+
+type LivePackageSnapshot = {
+  externalId: string;
+  isActive: boolean;
+  updatedAt: Date;
+  priceCents: number;
+  sellingPriceCents: number | null;
+  currencyCode: string;
+  dataAmountMb: number | null;
+  validityDays: number | null;
+};
+
+async function getLivePackageSnapshots(
+  packageDocs: CatalogPackageDoc[],
+): Promise<Map<string, LivePackageSnapshot>> {
+  const externalIds = Array.from(
+    new Set(packageDocs.map((pkg) => pkg.externalId).filter((id): id is string => Boolean(id))),
+  );
+
+  if (externalIds.length === 0) {
+    return new Map();
+  }
+
+  const records = await prisma.package.findMany({
+    where: { externalId: { in: externalIds } },
+    select: {
+      externalId: true,
+      isActive: true,
+      updatedAt: true,
+      priceCents: true,
+      sellingPriceCents: true,
+      currencyCode: true,
+      dataAmountMb: true,
+      validityDays: true,
+    },
+  });
+
+  return new Map(records.map((record) => [record.externalId, record]));
+}
+
+function applyLivePackageSnapshot(
+  pkg: CatalogPackageDoc,
+  snapshot?: LivePackageSnapshot,
+): PlanSummary {
+  const basePlan = mapCatalogPackageToPlan(pkg);
+
+  if (!snapshot) {
+    return {
+      ...basePlan,
+      package: basePlan.package ? { ...basePlan.package, isActive: false } : basePlan.package,
+    };
+  }
+
+  const livePriceCents = snapshot.sellingPriceCents ?? snapshot.priceCents;
+  const liveCurrencyCode = snapshot.currencyCode.toUpperCase();
+
+  return {
+    ...basePlan,
+    priceUSD: livePriceCents / 100,
+    dataGB:
+      typeof snapshot.dataAmountMb === "number"
+        ? Math.round(snapshot.dataAmountMb / 102.4) / 10
+        : basePlan.dataGB,
+    validityDays: snapshot.validityDays ?? basePlan.validityDays,
+    price: {
+      amount: livePriceCents / 100,
+      currency: liveCurrencyCode,
+      source: "airalo",
+      lastSyncedAt: snapshot.updatedAt.toISOString(),
+    },
+    package: basePlan.package
+      ? {
+          ...basePlan.package,
+          priceCents: livePriceCents,
+          currency: liveCurrencyCode,
+          isActive: snapshot.isActive,
+          dataLimitMb: snapshot.dataAmountMb,
+          validityDays: snapshot.validityDays,
+          lastSyncedAt: snapshot.updatedAt.toISOString(),
+        }
+      : basePlan.package,
   };
 }
 
@@ -632,20 +721,36 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
   try {
     const client = getSanityClient();
     const results = await client.fetch<CatalogCountryDoc[]>(countriesQuery);
+    const allPackages = (results ?? []).flatMap((country) => [country.primaryPackage, ...(country.packages ?? [])]);
+    const snapshots = await getLivePackageSnapshots(
+      allPackages.filter((pkg): pkg is CatalogPackageDoc => Boolean(pkg)),
+    );
+
     return (
       results
         // Ignore countries that do not have a slug to avoid generating invalid paths like "/country".
         ?.filter((country) => country.slug?.current)
-        .map((country) => ({
-          _id: country._id,
-          title: country.title,
-          slug: country.slug?.current ?? "",
-          badge: country.badge ?? null,
-          summary: country.summary ?? null,
-          coverImage: country.image,
-          featured: country.featured ?? false,
-          plan: country.primaryPackage ? mapCatalogPackageToPlan(country.primaryPackage) : undefined,
-        })) ?? []
+        .map((country) => {
+          const primaryPlan = country.primaryPackage
+            ? applyLivePackageSnapshot(
+                country.primaryPackage,
+                country.primaryPackage.externalId
+                  ? snapshots.get(country.primaryPackage.externalId)
+                  : undefined,
+              )
+            : undefined;
+
+          return {
+            _id: country._id,
+            title: country.title,
+            slug: country.slug?.current ?? "",
+            badge: country.badge ?? null,
+            summary: country.summary ?? null,
+            coverImage: country.image,
+            featured: country.featured ?? false,
+            plan: primaryPlan?.package?.isActive === false ? undefined : primaryPlan,
+          };
+        }) ?? []
     );
   } catch (error) {
     console.error("Failed to fetch countries from Sanity", error);
@@ -659,7 +764,24 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
     const country = await client.fetch<CatalogCountryDoc | null>(countryBySlugQuery, { slug });
     if (!country) return null;
 
-    const plans = (country.packages ?? []).map(mapCatalogPackageToPlan);
+    const snapshots = await getLivePackageSnapshots([
+      ...(country.packages ?? []),
+      ...(country.primaryPackage ? [country.primaryPackage] : []),
+    ]);
+
+    const plans = (country.packages ?? [])
+      .map((pkg) => applyLivePackageSnapshot(pkg, pkg.externalId ? snapshots.get(pkg.externalId) : undefined))
+      .filter((plan) => plan.package?.isActive !== false);
+
+    const primaryPlan = country.primaryPackage
+      ? applyLivePackageSnapshot(
+          country.primaryPackage,
+          country.primaryPackage.externalId
+            ? snapshots.get(country.primaryPackage.externalId)
+            : undefined,
+        )
+      : undefined;
+
     return {
       _id: country._id,
       title: country.title,
@@ -671,7 +793,7 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
       carriers: [],
       plans,
       productCard: undefined,
-      plan: country.primaryPackage ? mapCatalogPackageToPlan(country.primaryPackage) : undefined,
+      plan: primaryPlan?.package?.isActive === false ? undefined : primaryPlan,
     };
   } catch (error) {
     console.error(`Failed to fetch country '${slug}' from Sanity`, error);
@@ -683,7 +805,11 @@ export async function getPlansForCountry(slug: string): Promise<PlanDetail[]> {
   try {
     const client = getSanityClient();
     const packages = await client.fetch<CatalogPackageDoc[]>(plansForCountryQuery, { slug });
-    return (packages ?? []).map((pkg) => mapCatalogPackageToPlan(pkg) as PlanDetail);
+    const snapshots = await getLivePackageSnapshots(packages ?? []);
+
+    return (packages ?? [])
+      .map((pkg) => applyLivePackageSnapshot(pkg, pkg.externalId ? snapshots.get(pkg.externalId) : undefined))
+      .filter((plan) => plan.package?.isActive !== false) as PlanDetail[];
   } catch (error) {
     console.error(`Failed to fetch plans for country '${slug}' from Sanity`, error);
     return [];
@@ -695,7 +821,15 @@ export async function getPlanBySlug(slug: string): Promise<PlanDetail | null> {
     const client = getSanityClient();
     const pkg = await client.fetch<CatalogPackageDoc | null>(planBySlugQuery, { slug });
     if (!pkg) return null;
-    return mapCatalogPackageToPlan(pkg) as PlanDetail;
+
+    const snapshots = await getLivePackageSnapshots([pkg]);
+    const plan = applyLivePackageSnapshot(pkg, pkg.externalId ? snapshots.get(pkg.externalId) : undefined);
+
+    if (plan.package?.isActive === false) {
+      return null;
+    }
+
+    return plan as PlanDetail;
   } catch (error) {
     console.error(`Failed to fetch plan '${slug}' from Sanity`, error);
     return null;
