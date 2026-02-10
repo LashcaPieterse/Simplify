@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { syncAiraloPackages } from "@/lib/catalog/sync";
 import prisma from "@/lib/db/client";
@@ -95,6 +96,10 @@ export async function GET(request: NextRequest) {
     console.info("[airalo-sync][step-2/3] Starting Airalo sync job");
     const result = await syncAiraloPackages({ logger: console });
     console.info("[airalo-sync][step-3][packages] Sync completed", result);
+
+    revalidatePath("/");
+    revalidatePath("/country", "layout");
+    revalidatePath("/plan", "layout");
 
     return NextResponse.json({
       startedAt: startedAt.toISOString(),

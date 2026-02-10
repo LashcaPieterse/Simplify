@@ -8,7 +8,7 @@ import { getCatalogPackageId, getPlanBySlug, getPlanSlugs, getPosts } from "@/li
 import { urlForImage } from "@/lib/image";
 
 export const dynamic = "force-static";
-export const revalidate = false;
+export const revalidate = 300;
 
 export async function generateStaticParams() {
   const slugs = await getPlanSlugs();
