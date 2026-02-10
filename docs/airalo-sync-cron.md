@@ -16,17 +16,23 @@ This project supports triggering `/api/airalo-sync` from an external scheduler. 
    - `DATABASE_URL`
 
 3. In GitHub, add these repository **Actions secrets**:
-   - `AIRALO_SYNC_URL` = `https://<your-domain>/api/airalo-sync`
+   - `AIRALO_SYNC_URL` = `https://<your-production-domain>/api/airalo-sync` (example: `https://simplify-pink.vercel.app/api/airalo-sync`)
    - `AIRALO_SYNC_CRON_TOKEN` = same value as Vercel `AIRALO_SYNC_CRON_TOKEN`
 
-4. Ensure the workflow is enabled:
+   Use a stable production alias/custom domain, **not** a single deployment URL.
+
+4. Check debug output correctly:
+   - The debug field `vercelUrl` comes from Vercel runtime (`VERCEL_URL`) and usually points to the backing deployment host.
+   - It does **not** mean your GitHub secret is wrong as long as `AIRALO_SYNC_URL` targets your stable production domain.
+
+5. Ensure the workflow is enabled:
    - File: `.github/workflows/airalo-sync.yml`
    - Schedule: hourly (`7 * * * *`)
    - Manual runs supported via **Run workflow** with two modes:
      - `sync` (default): runs package sync
      - `debug`: calls `/api/airalo-sync?debug=1` and returns env diagnostics
 
-5. Verify it works:
+6. Verify it works:
    - Trigger it manually once from the Actions tab.
    - Confirm the job succeeds and `/api/airalo-sync` returns 200.
 
