@@ -10,16 +10,23 @@ This project supports triggering `/api/airalo-sync` from an external scheduler. 
    AIRALO_SYNC_CRON_TOKEN=<random-secret>
    ```
 
-2. In GitHub, add these repository **Actions secrets**:
+2. Ensure Airalo + database env vars are configured in Vercel for the same environment used by your URL:
+   - `AIRALO_CLIENT_ID`
+   - `AIRALO_CLIENT_SECRET`
+   - `DATABASE_URL`
+
+3. In GitHub, add these repository **Actions secrets**:
    - `AIRALO_SYNC_URL` = `https://<your-domain>/api/airalo-sync`
    - `AIRALO_SYNC_CRON_TOKEN` = same value as Vercel `AIRALO_SYNC_CRON_TOKEN`
 
-3. Ensure the workflow is enabled:
+4. Ensure the workflow is enabled:
    - File: `.github/workflows/airalo-sync.yml`
    - Schedule: hourly (`7 * * * *`)
-   - Manual runs also supported via **Run workflow**.
+   - Manual runs supported via **Run workflow** with two modes:
+     - `sync` (default): runs package sync
+     - `debug`: calls `/api/airalo-sync?debug=1` and returns env diagnostics
 
-4. Verify it works:
+5. Verify it works:
    - Trigger it manually once from the Actions tab.
    - Confirm the job succeeds and `/api/airalo-sync` returns 200.
 
@@ -32,9 +39,31 @@ The route accepts the sync token in either format:
 
 If `AIRALO_SYNC_CRON_TOKEN` is set and the incoming token does not match, it returns `401 Unauthorized`.
 
+## Troubleshooting failed manual runs
+
+If your Actions log shows `HTTP 500` and `{"error":"Airalo sync failed"}`:
+
+1. Run the workflow manually with `mode=debug`.
+2. Check debug JSON output for these fields:
+   - `airaloClientIdPresent`
+   - `airaloClientSecretPresent`
+   - `databaseUrlPresent`
+   - `cronTokenPresent`
+3. If any of those are false, fix Vercel env vars and redeploy.
+4. Check Vercel function logs for `/api/airalo-sync` to get the exact exception stack.
+
+The workflow also attempts a debug probe automatically after a failed `sync` run to speed up diagnosis.
+
 ## Alerting
 
 Failures in the API sync route trigger an email to `pieterselashca@gmail.com` by default (override with `AIRALO_SYNC_ALERT_EMAIL`).
+
+GitHub Actions job failures are visible in the **Actions** tab. To get personal notifications when the workflow fails:
+
+1. In GitHub, open your profile **Settings → Notifications** and enable email/web notifications for Actions failures.
+2. In the repository, ensure you are **Watching** (or at least receiving notifications for Actions in that repo).
+
+Without notification settings enabled, failed runs will not automatically email you.
 
 ## Notes
 
