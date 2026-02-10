@@ -587,6 +587,11 @@ export class AiraloClient {
     const url = this.resolveUrl(path);
     const maxAuthAttempts = 2;
 
+    console.info("[airalo-sync][step-3][packages] Requesting packages", {
+      path,
+      maxAuthAttempts,
+    });
+
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
       const token = await this.getAccessToken();
 
@@ -602,6 +607,9 @@ export class AiraloClient {
 
       if (response.ok) {
         const parsed = await this.parseJson(response);
+        console.info("[airalo-sync][step-3][packages] Packages request succeeded", {
+          status: response.status,
+        });
         if (parsed && typeof parsed === "object") {
           return parsed as PackagesRawResponse;
         }
@@ -611,6 +619,9 @@ export class AiraloClient {
 
       const isUnauthorized = response.status === 401;
       if (isUnauthorized && attempt < maxAuthAttempts) {
+        console.warn("[airalo-sync][step-3][packages] Unauthorized response, clearing cached token and retrying", {
+          attempt,
+        });
         await this.clearCachedToken();
         continue;
       }
@@ -833,6 +844,7 @@ export class AiraloClient {
   }
 
   private async requestAccessToken(): Promise<string> {
+    console.info("[airalo-sync][step-2][token] Requesting Airalo access token");
     const body = new URLSearchParams();
     body.set("client_id", this.clientId);
     body.set("client_secret", this.clientSecret);
@@ -850,6 +862,10 @@ export class AiraloClient {
     );
 
     if (!response.ok) {
+      console.error("[airalo-sync][step-2][token] Token request failed", {
+        status: response.status,
+        statusText: response.statusText,
+      });
       const bodyText = await response.text();
       let body: unknown = bodyText;
       try {
@@ -870,6 +886,10 @@ export class AiraloClient {
 
     const json = await this.parseJson(response);
     const parsed = TokenResponseSchema.parse(json);
+
+    console.info("[airalo-sync][step-2][token] Access token received", {
+      expiresInSeconds: parsed.data.expires_in,
+    });
 
     const remainingSeconds = Math.max(
       parsed.data.expires_in - this.tokenExpiryBufferSeconds,
