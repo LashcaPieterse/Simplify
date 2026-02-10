@@ -41,12 +41,26 @@ export async function GET(request: NextRequest) {
   const debugFlag = request.nextUrl.searchParams.get("debug");
   const wantsDebug = debugFlag === "1" || debugFlag === "true";
 
+  console.info("[airalo-sync][step-1][request] Incoming request", {
+    path: request.nextUrl.pathname,
+    debug: wantsDebug,
+    method: request.method,
+  });
+
   if (!isAuthorized(request)) {
+    console.warn("[airalo-sync][step-1][auth] Unauthorized request", {
+      path: request.nextUrl.pathname,
+      hasHeaderKey: Boolean(request.headers.get("x-airalo-sync-key")),
+      hasQueryKey: Boolean(request.nextUrl.searchParams.get("key")),
+    });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  console.info("[airalo-sync][step-1][auth] Authorization passed");
+
   try {
     if (wantsDebug) {
+      console.info("[airalo-sync][debug] Debug diagnostics requested");
       const clientId = process.env.AIRALO_CLIENT_ID ?? "";
       const clientSecret = process.env.AIRALO_CLIENT_SECRET ?? "";
       const databaseUrl = process.env.DATABASE_URL ?? "";
@@ -78,7 +92,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    console.info("[airalo-sync][step-2/3] Starting Airalo sync job");
     const result = await syncAiraloPackages({ logger: console });
+    console.info("[airalo-sync][step-3][packages] Sync completed", result);
 
     return NextResponse.json({
       startedAt: startedAt.toISOString(),

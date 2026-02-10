@@ -258,15 +258,27 @@ export async function syncAiraloCatalog(
     };
 
     while (true) {
-      const countriesPage = await client.getPackagesTree({
-        ...baseOptions,
-        page,
-        limit,
-      });
+      logger.info(`[airalo-sync][step-3][packages] Fetching package tree page ${page}`);
+
+      let countriesPage: AiraloCountryNode[];
+      try {
+        countriesPage = await client.getPackagesTree({
+          ...baseOptions,
+          page,
+          limit,
+        });
+      } catch (error) {
+        logger.error(
+          `[airalo-sync][step-3][packages] Failed to fetch package tree page ${page}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        throw error;
+      }
+
       logger.info(`Fetched ${countriesPage.length} countries from Airalo (page ${page})`);
       mergePage(countriesPage);
 
       if (countriesPage.length < limit) {
+        logger.info(`[airalo-sync][step-3][packages] Pagination complete at page ${page}`);
         break;
       }
 
