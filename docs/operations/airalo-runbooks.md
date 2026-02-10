@@ -86,6 +86,47 @@ Logs are emitted as JSON with the `service` field set to `order-service`. Key ev
 
 ## Runbooks
 
+### Airalo Catalog Sync Troubleshooting (Vercel)
+
+Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appears to run without updating package data.
+
+1. **Run endpoint diagnostics first**
+   - Open `GET /api/airalo-sync?debug=1` on the same deployment that is failing.
+   - If a cron token is configured, include `x-airalo-sync-key: <AIRALO_SYNC_CRON_TOKEN>` or add `?key=<AIRALO_SYNC_CRON_TOKEN>`.
+   - Confirm the response flags and lengths:
+     - `airaloClientIdPresent` = `true`
+     - `airaloClientSecretPresent` = `true`
+     - `databaseUrlPresent` = `true`
+     - `airaloBaseUrl` points to the expected API host
+
+2. **Validate Vercel environment scoping**
+   - In Vercel, verify all sync variables are set for the correct target environment (`Production`, `Preview`, or both).
+   - Required variables for sync:
+     - `AIRALO_CLIENT_ID`
+     - `AIRALO_CLIENT_SECRET`
+     - `DATABASE_URL`
+   - Recommended:
+     - `AIRALO_SYNC_CRON_TOKEN` (protect endpoint)
+     - `AIRALO_SYNC_ALERT_EMAIL` (failure notifications)
+     - `AIRALO_BASE_URL` (override default only when needed)
+
+3. **Force a fresh deployment after env changes**
+   - Vercel environment updates do not affect already-built deployments.
+   - Redeploy and then rerun `/api/airalo-sync?debug=1` to confirm new values are loaded.
+
+4. **Check authorization failures (`401`)**
+   - If `AIRALO_SYNC_CRON_TOKEN` is set, requests without a matching key are rejected.
+   - Verify scheduler configuration includes the same token in either header (`x-airalo-sync-key`) or query (`key`).
+
+5. **Inspect runtime failure signals (`500`)**
+   - Review Vercel function logs for `[airalo-sync] Failed to sync Airalo packages`.
+   - Confirm alert delivery is configured by setting `AIRALO_SYNC_ALERT_EMAIL` and mail provider secrets.
+   - Test database connectivity from the deployment environment (SSL/network rules, not just credentials).
+
+6. **Confirm sync is actually mutating data**
+   - After a successful run, inspect the package records in the database and verify `updatedAt` changes.
+   - If result payload indicates no changes repeatedly, compare local catalog fields with upstream values to detect mapping drift.
+
 ### Repeated 5xx Responses
 
 1. **Confirm the alert**: Check the `PublicApiFiveHundreds` alert in Alertmanager/Grafana.
