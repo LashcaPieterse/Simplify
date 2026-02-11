@@ -33,10 +33,27 @@ function passesLuhnCheck(value: string): boolean {
   return sum % 10 === 0;
 }
 
+function hasValidLength(value: string): boolean {
+  return value.length >= MIN_ICCID_LENGTH && value.length <= MAX_ICCID_LENGTH;
+}
+
+/**
+ * ICCID values from upstream providers are sometimes operationally valid while
+ * not passing a strict Luhn checksum. We therefore use a lenient validation
+ * gate for UI/API flow control and avoid blocking instruction/QR lookups.
+ */
 export function isValidIccid(value: string | null | undefined): boolean {
   const normalized = normalizeIccid(value);
 
-  if (normalized.length < MIN_ICCID_LENGTH || normalized.length > MAX_ICCID_LENGTH) {
+  return hasValidLength(normalized);
+}
+
+export function isStrictlyValidIccid(
+  value: string | null | undefined,
+): boolean {
+  const normalized = normalizeIccid(value);
+
+  if (!hasValidLength(normalized)) {
     return false;
   }
 
