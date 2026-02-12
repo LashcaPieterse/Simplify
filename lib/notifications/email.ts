@@ -48,6 +48,16 @@ export async function sendEmail({
 
   if (!response.ok) {
     const payload = await response.text();
+    const isUnverifiedDomain =
+      response.status == 403 && payload.toLowerCase().includes("domain is not verified");
+
+    if (isUnverifiedDomain) {
+      console.warn(
+        "Email alert skipped because ALERT_EMAIL_FROM domain is not verified in Resend",
+      );
+      return { id: null, skipped: true };
+    }
+
     throw new Error(`Failed to send email alert: ${response.status} ${payload}`);
   }
 
