@@ -265,6 +265,11 @@ const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
   maxDelayMs: 10_000,
 };
 
+function normalizeBaseUrl(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.replace(/\/+$/, "");
+}
+
 interface RateLimitRetryPolicy {
   maxRetries: number;
   baseDelayMs: number;
@@ -285,7 +290,7 @@ export class AiraloClient {
   constructor(options: AiraloClientOptions) {
     this.clientId = options.clientId;
     this.clientSecret = options.clientSecret;
-    this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.fetchFn = options.fetchImplementation ?? fetch;
     this.tokenCache = options.tokenCache ?? new MemoryTokenCache();
     this.tokenExpiryBufferSeconds =
