@@ -3,6 +3,7 @@ import prisma from "../db/client";
 export interface TokenCacheRecord {
   token: string;
   expiresAt: number;
+  tokenType?: string;
 }
 
 export interface TokenCache {
