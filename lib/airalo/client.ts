@@ -286,6 +286,7 @@ export class AiraloClient {
   private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
 
   private inFlightTokenRequest: Promise<string> | null = null;
+  private tokenType = "Bearer";
 
   constructor(options: AiraloClientOptions) {
     this.clientId = options.clientId;
@@ -605,7 +606,7 @@ export class AiraloClient {
           method: "GET",
           headers: {
             Accept: "application/json",
-            Authorization: `Bearer ${token}`,
+            Authorization: `${this.tokenType} ${token}`,
           },
         }),
       );
@@ -808,7 +809,7 @@ export class AiraloClient {
 
     if (requiresAuth && !resolvedHeaders.has("Authorization")) {
       const token = await this.getAccessToken();
-      resolvedHeaders.set("Authorization", `Bearer ${token}`);
+      resolvedHeaders.set("Authorization", `${this.tokenType} ${token}`);
     }
 
     return resolvedHeaders;
@@ -833,7 +834,8 @@ export class AiraloClient {
   private async getAccessToken(): Promise<string> {
     const cached = await this.tokenCache.get();
     if (cached && !this.isExpired(cached.expiresAt)) {
-      return cached.token;
+      this.tokenType = this.normalizeTokenType(cached.tokenType);
+      return cached.token.trim();
     }
 
     if (!this.inFlightTokenRequest) {
@@ -903,15 +905,24 @@ export class AiraloClient {
 
     const expiresAt = Date.now() + remainingSeconds * 1000;
 
+    const token = parsed.data.access_token.trim();
+    this.tokenType = this.normalizeTokenType(parsed.data.token_type);
+
     const record: TokenCacheRecord = {
-      token: parsed.data.access_token,
+      token,
       expiresAt,
+      tokenType: this.tokenType,
     };
 
     await this.tokenCache.set(record);
     recordTokenRefresh("airalo_client");
 
     return record.token;
+  }
+
+  private normalizeTokenType(tokenType: string | undefined): string {
+    const normalized = tokenType?.trim();
+    return normalized && normalized.length > 0 ? normalized : "Bearer";
   }
 
   private isExpired(expiresAt: number): boolean {

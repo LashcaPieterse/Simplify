@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { syncAiraloPackages } from "@/lib/catalog/sync";
-import prisma from "@/lib/db/client";
 import { sendEmail } from "@/lib/notifications/email";
 
 const ALERT_RECIPIENT = process.env.AIRALO_SYNC_ALERT_EMAIL ?? "pieterselashca@gmail.com";
@@ -116,7 +115,5 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ error: "Airalo sync failed" }, { status: 500 });
-  } finally {
-    await prisma.$disconnect();
   }
 }
