@@ -922,7 +922,16 @@ export class AiraloClient {
 
   private normalizeTokenType(tokenType: string | undefined): string {
     const normalized = tokenType?.trim();
-    return normalized && normalized.length > 0 ? normalized : "Bearer";
+    if (!normalized) {
+      return "Bearer";
+    }
+
+    if (normalized.toLowerCase() === "bearer") {
+      // Some providers return lowercase `bearer`; normalize to canonical casing.
+      return "Bearer";
+    }
+
+    return normalized;
   }
 
   private isExpired(expiresAt: number): boolean {
