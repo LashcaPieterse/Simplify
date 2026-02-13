@@ -89,7 +89,42 @@ test("AiraloClient clears the cached token and retries once after a 401", async 
   assert.equal(packageCalls, 2, "should retry the packages request exactly once");
   assert.deepEqual(packages, []);
   assert.equal(tokenCache.clearCount, 1, "should purge the cached token once");
-  assert.deepEqual(authHeaders, ["Bearer stale-token", "Bearer fresh-token"]);
+  assert.deepEqual(authHeaders, ["Bearer stale-token", "bearer fresh-token"]);
+});
+
+test("AiraloClient honors the token_type returned by the token endpoint", async () => {
+  const tokenCache = new MockTokenCache();
+  let capturedAuthHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Token" } },
+        { status: 200 },
+      );
+    }
+
+    if (target.includes("packages")) {
+      capturedAuthHeader = authHeader(init);
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await client.getPackages();
+
+  assert.equal(capturedAuthHeader, "Token fresh-token");
 });
 
 test("AiraloClient honors the token_type returned by the token endpoint", async () => {
