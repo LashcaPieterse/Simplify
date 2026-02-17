@@ -242,6 +242,7 @@ interface AiraloUnauthorizedDetails {
   metaCode?: string | number;
   meta?: Record<string, unknown>;
   bodySnippet?: string;
+  authRejected?: boolean;
 }
 
 export interface AiraloErrorDetails {
@@ -667,6 +668,29 @@ export class AiraloClient {
         // keep raw body when parsing fails
       }
 
+      if (response.status === 401) {
+        const unauthorizedDetails = await this.parseUnauthorizedDetailsFromBody(body);
+
+        if (unauthorizedDetails.authRejected) {
+          console.error(
+            "[airalo-sync][step-3][packages] Access token was rejected after refresh; check AIRALO_CLIENT_ID/AIRALO_CLIENT_SECRET credentials and account permissions for /v2/packages",
+            {
+              tokenType: this.tokenType,
+              ...unauthorizedDetails,
+            },
+          );
+        }
+
+        throw new AiraloError(
+          `Packages request failed with status 401${unauthorizedDetails.metaMessage ? `: ${unauthorizedDetails.metaMessage}` : ""}`,
+          {
+            status: response.status,
+            statusText: response.statusText,
+            body,
+          },
+        );
+      }
+
       throw new AiraloError(
         `Packages request failed with status ${response.status}`,
         {
@@ -1025,7 +1049,10 @@ export class AiraloClient {
 
   private async parseUnauthorizedDetails(response: Response): Promise<AiraloUnauthorizedDetails> {
     const body = await this.tryParseResponseBody(response);
+    return this.parseUnauthorizedDetailsFromBody(body);
+  }
 
+  private parseUnauthorizedDetailsFromBody(body: unknown): AiraloUnauthorizedDetails {
     if (!body || typeof body !== "object") {
       return {
         bodySnippet: this.stringifyForLog(body),
@@ -1040,15 +1067,17 @@ export class AiraloClient {
     }
 
     const metaRecord = meta as { message?: unknown; code?: unknown } & Record<string, unknown>;
+    const metaMessage = typeof metaRecord.message === "string" ? metaRecord.message : undefined;
+
     return {
       meta: metaRecord,
-      metaMessage:
-        typeof metaRecord.message === "string" ? metaRecord.message : undefined,
+      metaMessage,
       metaCode:
         typeof metaRecord.code === "string" || typeof metaRecord.code === "number"
           ? metaRecord.code
           : undefined,
       bodySnippet: this.stringifyForLog(body),
+      authRejected: Boolean(metaMessage && /authentication failed|verify your client_id and client_secret/i.test(metaMessage)),
     };
   }
 
