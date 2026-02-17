@@ -240,6 +240,8 @@ interface AiraloRequestOptions<T> {
 interface AiraloUnauthorizedDetails {
   metaMessage?: string;
   metaCode?: string | number;
+  meta?: Record<string, unknown>;
+  bodySnippet?: string;
 }
 
 export interface AiraloErrorDetails {
@@ -1023,24 +1025,44 @@ export class AiraloClient {
 
   private async parseUnauthorizedDetails(response: Response): Promise<AiraloUnauthorizedDetails> {
     const body = await this.tryParseResponseBody(response);
+
     if (!body || typeof body !== "object") {
-      return {};
+      return {
+        bodySnippet: this.stringifyForLog(body),
+      };
     }
 
     const meta = (body as { meta?: unknown }).meta;
     if (!meta || typeof meta !== "object") {
-      return {};
+      return {
+        bodySnippet: this.stringifyForLog(body),
+      };
     }
 
-    const metaRecord = meta as { message?: unknown; code?: unknown };
+    const metaRecord = meta as { message?: unknown; code?: unknown } & Record<string, unknown>;
     return {
+      meta: metaRecord,
       metaMessage:
         typeof metaRecord.message === "string" ? metaRecord.message : undefined,
       metaCode:
         typeof metaRecord.code === "string" || typeof metaRecord.code === "number"
           ? metaRecord.code
           : undefined,
+      bodySnippet: this.stringifyForLog(body),
     };
+  }
+
+  private stringifyForLog(value: unknown): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    try {
+      const text = typeof value === "string" ? value : JSON.stringify(value);
+      return text.length > 500 ? `${text.slice(0, 500)}...` : text;
+    } catch {
+      return undefined;
+    }
   }
 
   private async tryParseResponseBody(response: Response): Promise<unknown> {
