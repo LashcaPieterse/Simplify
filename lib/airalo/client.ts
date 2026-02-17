@@ -417,10 +417,6 @@ export class AiraloClient {
   }
 
   private buildPackagesRequestInit(token: string): RequestInit {
-    const body = new URLSearchParams();
-    body.set("client_id", this.clientId);
-    body.set("client_secret", this.clientSecret);
-
     const headers: Record<string, string> = {
       Accept: "application/json",
       Authorization: `${this.tokenType} ${token}`,
@@ -433,7 +429,6 @@ export class AiraloClient {
     return {
       method: "GET",
       headers,
-      body,
     };
   }
 

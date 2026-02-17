@@ -324,7 +324,6 @@ test("AiraloClient sends client credentials for package sync requests", async ()
     expiresAt: Date.now() + 60_000,
   });
   const requestedUrls: string[] = [];
-  const packageRequestBodies: string[] = [];
   const packageRequestCronHeaders: Array<string | null> = [];
   let packageCalls = 0;
 
@@ -336,9 +335,6 @@ test("AiraloClient sends client credentials for package sync requests", async ()
       requestedUrls.push(target);
       const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
       packageRequestCronHeaders.push(headers.get("x-airalo-sync-key"));
-      packageRequestBodies.push(
-        init?.body instanceof URLSearchParams ? init.body.toString() : String(init?.body ?? ""),
-      );
 
       if (packageCalls === 1) {
         return jsonResponse(
@@ -385,8 +381,6 @@ test("AiraloClient sends client credentials for package sync requests", async ()
   assert.equal(first.searchParams.get("page"), "1");
   assert.equal(first.searchParams.get("limit"), "100");
   assert.deepEqual(packageRequestCronHeaders, ["cron-token", "cron-token"]);
-  assert.equal(packageRequestBodies[0], "client_id=client-id&client_secret=client-secret");
-  assert.equal(packageRequestBodies[1], "client_id=client-id&client_secret=client-secret");
 });
 
 test("AiraloClient can include client credentials on package requests when enabled", async () => {

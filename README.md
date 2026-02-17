@@ -103,6 +103,5 @@ npx tsx scripts/sync-airalo-packages.ts
 Sync package requests now always send:
 - query params: `limit`, `page`, `client_id`, `client_secret`
 - header: `Authorization: Bearer <token>` and `x-airalo-sync-key` when `AIRALO_SYNC_CRON_TOKEN` is set
-- request body: `client_id` and `client_secret` (form-encoded)
 
 > Recommended cadence: execute the script every 60 minutes via cron or a background worker to keep pricing and availability fresh while respecting upstream rate limits.
