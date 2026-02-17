@@ -127,42 +127,7 @@ test("AiraloClient honors the token_type returned by the token endpoint", async 
   assert.equal(capturedAuthHeader, "Token fresh-token");
 });
 
-test("AiraloClient honors the token_type returned by the token endpoint", async () => {
-  const tokenCache = new MockTokenCache();
-  let capturedAuthHeader: string | null = null;
-
-  const fetchImplementation: typeof fetch = async (url, init) => {
-    const target = typeof url === "string" ? url : url.toString();
-
-    if (target.endsWith("/token")) {
-      return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Token" } },
-        { status: 200 },
-      );
-    }
-
-    if (target.includes("packages")) {
-      capturedAuthHeader = authHeader(init);
-      return jsonResponse({ data: [] }, { status: 200 });
-    }
-
-    throw new Error(`Unexpected URL ${target}`);
-  };
-
-  const client = new AiraloClient({
-    clientId: "client-id",
-    clientSecret: "client-secret",
-    baseUrl: "https://example.com/api/",
-    fetchImplementation,
-    tokenCache,
-  });
-
-  await client.getPackages();
-
-  assert.equal(capturedAuthHeader, "Token fresh-token");
-});
-
-test("AiraloClient canonicalizes lowercase bearer token_type", async () => {
+test("AiraloClient preserves non-canonical bearer casing from token_type", async () => {
   const tokenCache = new MockTokenCache();
   let capturedAuthHeader: string | null = null;
 
@@ -194,7 +159,64 @@ test("AiraloClient canonicalizes lowercase bearer token_type", async () => {
 
   await client.getPackages();
 
-  assert.equal(capturedAuthHeader, "Bearer fresh-token");
+  assert.equal(capturedAuthHeader, "bearer fresh-token");
+});
+
+test("AiraloClient retries with alternate bearer casing before failing", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "stale-token",
+    expiresAt: Date.now() + 60_000,
+  });
+  const authHeaders: Array<string | null> = [];
+  let packageCalls = 0;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      packageCalls++;
+      const header = authHeader(init);
+      authHeaders.push(header);
+
+      if (packageCalls === 1) {
+        return jsonResponse({ error: "unauthorized-stale" }, { status: 401 });
+      }
+
+      if (packageCalls === 2 && header === "bearer fresh-token") {
+        return jsonResponse({ error: "unauthorized-casing" }, { status: 401 });
+      }
+
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const packages = await client.getPackages();
+
+  assert.deepEqual(packages, []);
+  assert.equal(packageCalls, 3, "should attempt stale token, refreshed token, then alternate casing");
+  assert.equal(tokenCache.clearCount, 1, "should only clear cache once before fallback casing retry");
+  assert.deepEqual(authHeaders, [
+    "Bearer stale-token",
+    "bearer fresh-token",
+    "Bearer fresh-token",
+  ]);
 });
 
 test("AiraloClient surfaces an AiraloError when retries are exhausted", async () => {
@@ -242,7 +264,7 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
     return true;
   });
 
-  assert.equal(packageCalls, 2, "should stop after a single retry");
+  assert.equal(packageCalls, 3, "should stop after stale token retry plus alternate bearer casing retry");
   assert.equal(tokenCache.clearCount, 1, "should only purge the cached token once");
 });
 
