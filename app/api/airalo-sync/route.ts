@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { syncAiraloPackages } from "@/lib/catalog/sync";
+import { AiraloClient, AiraloError } from "@/lib/airalo/client";
+import { resolveSharedTokenCache } from "@/lib/airalo/token-cache";
 import { sendEmail } from "@/lib/notifications/email";
 
 const ALERT_RECIPIENT = process.env.AIRALO_SYNC_ALERT_EMAIL ?? "pieterselashca@gmail.com";
@@ -40,6 +42,9 @@ export async function GET(request: NextRequest) {
   const startedAt = new Date();
   const debugFlag = request.nextUrl.searchParams.get("debug");
   const wantsDebug = debugFlag === "1" || debugFlag === "true";
+  const wantsProbe = wantsDebug
+    && (request.nextUrl.searchParams.get("probe") === "1"
+      || request.nextUrl.searchParams.get("probe") === "true");
 
   console.info("[airalo-sync][step-1][request] Incoming request", {
     path: request.nextUrl.pathname,
@@ -67,6 +72,39 @@ export async function GET(request: NextRequest) {
       const trimmedClientId = clientId.trim();
       const trimmedClientSecret = clientSecret.trim();
 
+      let probe: Record<string, unknown> | undefined;
+      if (wantsProbe) {
+        console.info("[airalo-sync][debug] Running live Airalo auth probe");
+        const airaloClient = new AiraloClient({
+          clientId: trimmedClientId,
+          clientSecret: trimmedClientSecret,
+          tokenCache: resolveSharedTokenCache(),
+        });
+
+        try {
+          await airaloClient.getPackages({ limit: 1, page: 1 });
+          probe = {
+            attempted: true,
+            packageRequestAuthorized: true,
+          };
+        } catch (error) {
+          const details = error instanceof AiraloError ? error.details : undefined;
+          probe = {
+            attempted: true,
+            packageRequestAuthorized: false,
+            errorType: error instanceof Error ? error.name : typeof error,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            status: details?.status,
+            statusText: details?.statusText,
+            responseBody: details?.body,
+            likelyCause:
+              details?.status === 401
+                ? "Access token could be minted but was rejected by /packages. Verify AIRALO_CLIENT_ID/AIRALO_CLIENT_SECRET values and ensure this partner account has /v2/packages permissions in the current environment."
+                : undefined,
+          };
+        }
+      }
+
       return NextResponse.json({
         debug: true,
         env: {
@@ -89,6 +127,7 @@ export async function GET(request: NextRequest) {
           databaseUrlPresent: Boolean(databaseUrl),
           cronTokenPresent: Boolean(process.env.AIRALO_SYNC_CRON_TOKEN),
         },
+        probe,
       });
     }
 
