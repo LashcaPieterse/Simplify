@@ -40,6 +40,8 @@ export interface AiraloClientOptions {
   tokenCache?: TokenCache;
   tokenExpiryBufferSeconds?: number;
   rateLimitRetry?: Partial<RateLimitRetryPolicy>;
+  sendClientCredentialsWithPackages?: boolean;
+  syncCronToken?: string;
 }
 
 type FormValue = string | number | boolean | null | undefined;
@@ -292,6 +294,8 @@ export class AiraloClient {
   private readonly tokenCache: TokenCache;
   private readonly tokenExpiryBufferSeconds: number;
   private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
+  private readonly sendClientCredentialsWithPackages: boolean;
+  private readonly syncCronToken: string | null;
 
   private inFlightTokenRequest: Promise<string> | null = null;
   private tokenType = "Bearer";
@@ -308,38 +312,16 @@ export class AiraloClient {
       ...DEFAULT_RATE_LIMIT_RETRY_POLICY,
       ...options.rateLimitRetry,
     };
+    this.sendClientCredentialsWithPackages =
+      options.sendClientCredentialsWithPackages ??
+      process.env.AIRALO_PACKAGES_SEND_CREDENTIALS === "true";
+    this.syncCronToken = options.syncCronToken ?? process.env.AIRALO_SYNC_CRON_TOKEN ?? null;
   }
 
   async getPackagesResponse(
     options: GetPackagesOptions = {},
   ): Promise<PackagesResponse> {
-    const searchParams = new URLSearchParams();
-    this.applyPackageFilters(searchParams, options.filter);
-
-    const includeParam = this.resolvePackageIncludes(options);
-    if (includeParam) {
-      searchParams.set("include", includeParam);
-    }
-
-    if (options.limit !== undefined && options.limit !== null) {
-      searchParams.set("limit", String(options.limit));
-    }
-
-    if (options.page !== undefined && options.page !== null) {
-      searchParams.set("page", String(options.page));
-    }
-
-    if (options.extraParams) {
-      Object.entries(options.extraParams).forEach(([key, value]) => {
-        if (value === undefined || value === null) {
-          return;
-        }
-
-        searchParams.set(key, String(value));
-      });
-    }
-
-    const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+    const path = this.buildPackagesPath(options);
 
     return this.request({
       path,
@@ -392,6 +374,85 @@ export class AiraloClient {
     }
 
     return includes.join(",");
+  }
+
+  private buildPackagesPath(
+    options: GetPackagesOptions,
+    includeClientCredentials = this.sendClientCredentialsWithPackages,
+  ): string {
+    const searchParams = new URLSearchParams();
+    this.applyPackageFilters(searchParams, options.filter);
+
+    const includeParam = this.resolvePackageIncludes(options);
+    if (includeParam) {
+      searchParams.set("include", includeParam);
+    }
+
+    if (options.limit !== undefined && options.limit !== null) {
+      searchParams.set("limit", String(options.limit));
+    }
+
+    if (options.page !== undefined && options.page !== null) {
+      searchParams.set("page", String(options.page));
+    }
+
+    if (options.extraParams) {
+      Object.entries(options.extraParams).forEach(([key, value]) => {
+        if (value === undefined || value === null) {
+          return;
+        }
+
+        searchParams.set(key, String(value));
+      });
+    }
+
+    if (includeClientCredentials) {
+      // Some Airalo partner configurations still require client credentials on package browse
+      // requests in addition to Bearer authorization.
+      searchParams.set("client_id", this.clientId);
+      searchParams.set("client_secret", this.clientSecret);
+    }
+
+    return `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
+  }
+
+  private buildPackagesRequestInit(token: string): RequestInit {
+    const body = new URLSearchParams();
+    body.set("client_id", this.clientId);
+    body.set("client_secret", this.clientSecret);
+
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      Authorization: `${this.tokenType} ${token}`,
+    };
+
+    if (this.syncCronToken) {
+      headers["x-airalo-sync-key"] = this.syncCronToken;
+    }
+
+    return {
+      method: "GET",
+      headers,
+      body,
+    };
+  }
+
+  private sanitizePackagesPathForLog(path: string): string {
+    const [basePath, query = ""] = path.split("?", 2);
+    if (!query) {
+      return path;
+    }
+
+    const searchParams = new URLSearchParams(query);
+    if (searchParams.has("client_secret")) {
+      searchParams.set("client_secret", "[REDACTED]");
+    }
+    if (searchParams.has("client_id")) {
+      searchParams.set("client_id", "[REDACTED]");
+    }
+
+    const serialized = searchParams.toString();
+    return serialized ? `${basePath}?${serialized}` : basePath;
   }
 
   private formatIncludeParam(include?: string | string[] | null): string | null {
@@ -571,41 +632,19 @@ export class AiraloClient {
    * Fetch packages without strict schema validation so we can tolerate upstream shape changes.
    */
   private async fetchPackagesRaw(options: GetPackagesOptions = {}): Promise<PackagesRawResponse> {
-    const searchParams = new URLSearchParams();
-    this.applyPackageFilters(searchParams, options.filter);
-
-    const includeParam = this.resolvePackageIncludes(options);
-    if (includeParam) {
-      searchParams.set("include", includeParam);
-    }
-
-    if (options.limit !== undefined && options.limit !== null) {
-      searchParams.set("limit", String(options.limit));
-    }
-
-    if (options.page !== undefined && options.page !== null) {
-      searchParams.set("page", String(options.page));
-    }
-
-    if (options.extraParams) {
-      Object.entries(options.extraParams).forEach(([key, value]) => {
-        if (value === undefined || value === null) {
-          return;
-        }
-
-        searchParams.set(key, String(value));
-      });
-    }
-
-    const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
-    const url = this.resolveUrl(path);
-    const maxAuthAttempts = 3;
+    const maxAuthAttempts = 4;
     let attemptedBearerCaseFallback = false;
     let preserveTokenTypeForNextAttempt = false;
+    let includeClientCredentials = true;
+    let attemptedCredentialsFallback = true;
+
+    let path = this.buildPackagesPath(options, includeClientCredentials);
+    let url = this.resolveUrl(path);
 
     console.info("[airalo-sync][step-3][packages] Requesting packages", {
-      path,
+      path: this.sanitizePackagesPathForLog(path),
       maxAuthAttempts,
+      includeClientCredentials,
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
@@ -613,13 +652,7 @@ export class AiraloClient {
       preserveTokenTypeForNextAttempt = false;
 
       const response = await this.executeWithRateLimitRetry(() =>
-        this.fetchFn(url, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            Authorization: `${this.tokenType} ${token}`,
-          },
-        }),
+        this.fetchFn(url, this.buildPackagesRequestInit(token)),
       );
 
       if (response.ok) {
@@ -637,6 +670,23 @@ export class AiraloClient {
       const isUnauthorized = response.status === 401;
       if (isUnauthorized && attempt < maxAuthAttempts) {
         const unauthorizedDetails = await this.parseUnauthorizedDetails(response.clone());
+
+        if (!attemptedCredentialsFallback && unauthorizedDetails.authRejected) {
+          includeClientCredentials = true;
+          attemptedCredentialsFallback = true;
+          path = this.buildPackagesPath(options, includeClientCredentials);
+          url = this.resolveUrl(path);
+          await this.clearCachedToken();
+          console.warn(
+            "[airalo-sync][step-3][packages] Unauthorized response indicates credential mismatch; retrying with client credential query fallback",
+            {
+              attempt,
+              path: this.sanitizePackagesPathForLog(path),
+              ...unauthorizedDetails,
+            },
+          );
+          continue;
+        }
 
         if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
           attemptedBearerCaseFallback = true;
@@ -676,6 +726,8 @@ export class AiraloClient {
             "[airalo-sync][step-3][packages] Access token was rejected after refresh; check AIRALO_CLIENT_ID/AIRALO_CLIENT_SECRET credentials and account permissions for /v2/packages",
             {
               tokenType: this.tokenType,
+              includeClientCredentials,
+              attemptedCredentialsFallback,
               ...unauthorizedDetails,
             },
           );
@@ -703,6 +755,7 @@ export class AiraloClient {
 
     throw new Error(`Failed to complete request to ${url}`);
   }
+
 
   async getSimPackages(iccid: string): Promise<Package[]> {
     const response = await this.getSimPackagesResponse(iccid);

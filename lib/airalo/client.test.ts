@@ -89,7 +89,7 @@ test("AiraloClient clears the cached token and retries once after a 401", async 
   assert.equal(packageCalls, 2, "should retry the packages request exactly once");
   assert.deepEqual(packages, []);
   assert.equal(tokenCache.clearCount, 1, "should purge the cached token once");
-  assert.deepEqual(authHeaders, ["Bearer stale-token", "bearer fresh-token"]);
+  assert.deepEqual(authHeaders, ["Bearer stale-token", "Bearer fresh-token"]);
 });
 
 test("AiraloClient honors the token_type returned by the token endpoint", async () => {
@@ -127,7 +127,7 @@ test("AiraloClient honors the token_type returned by the token endpoint", async 
   assert.equal(capturedAuthHeader, "Token fresh-token");
 });
 
-test("AiraloClient preserves non-canonical bearer casing from token_type", async () => {
+test("AiraloClient normalizes bearer token_type casing", async () => {
   const tokenCache = new MockTokenCache();
   let capturedAuthHeader: string | null = null;
 
@@ -159,10 +159,10 @@ test("AiraloClient preserves non-canonical bearer casing from token_type", async
 
   await client.getPackages();
 
-  assert.equal(capturedAuthHeader, "bearer fresh-token");
+  assert.equal(capturedAuthHeader, "Bearer fresh-token");
 });
 
-test("AiraloClient retries with alternate bearer casing before failing", async () => {
+test("AiraloClient retries with alternate bearer casing after a second 401", async () => {
   const tokenCache = new MockTokenCache({
     token: "stale-token",
     expiresAt: Date.now() + 60_000,
@@ -182,7 +182,7 @@ test("AiraloClient retries with alternate bearer casing before failing", async (
         return jsonResponse({ error: "unauthorized-stale" }, { status: 401 });
       }
 
-      if (packageCalls === 2 && header === "bearer fresh-token") {
+      if (packageCalls === 2) {
         return jsonResponse({ error: "unauthorized-casing" }, { status: 401 });
       }
 
@@ -214,8 +214,8 @@ test("AiraloClient retries with alternate bearer casing before failing", async (
   assert.equal(tokenCache.clearCount, 1, "should only clear cache once before fallback casing retry");
   assert.deepEqual(authHeaders, [
     "Bearer stale-token",
-    "bearer fresh-token",
     "Bearer fresh-token",
+    "bearer fresh-token",
   ]);
 });
 
@@ -264,8 +264,8 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
     return true;
   });
 
-  assert.equal(packageCalls, 3, "should stop after stale token retry plus alternate bearer casing retry");
-  assert.equal(tokenCache.clearCount, 1, "should only purge the cached token once");
+  assert.equal(packageCalls, 4, "should stop after stale token retry, alternate casing retry, and final retry");
+  assert.equal(tokenCache.clearCount, 2, "should purge cached token before each retry that requests a fresh token");
 });
 
 test("AiraloClient merges include parameters for package requests", async () => {
@@ -314,6 +314,119 @@ test("AiraloClient merges include parameters for package requests", async () => 
   assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
 });
 
+
+
+
+
+test("AiraloClient sends client credentials for package sync requests", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "stale-token",
+    expiresAt: Date.now() + 60_000,
+  });
+  const requestedUrls: string[] = [];
+  const packageRequestBodies: string[] = [];
+  const packageRequestCronHeaders: Array<string | null> = [];
+  let packageCalls = 0;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      packageCalls += 1;
+      requestedUrls.push(target);
+      const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+      packageRequestCronHeaders.push(headers.get("x-airalo-sync-key"));
+      packageRequestBodies.push(
+        init?.body instanceof URLSearchParams ? init.body.toString() : String(init?.body ?? ""),
+      );
+
+      if (packageCalls === 1) {
+        return jsonResponse(
+          {
+            data: [],
+            meta: {
+              message:
+                "Authentication failed. This could be due to an expired token, please generate a new token. If the issue persists, verify your client_id and client_secret are correct.",
+            },
+          },
+          { status: 401 },
+        );
+      }
+
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+    syncCronToken: "cron-token",
+  });
+
+  await client.getPackages({ limit: 100, page: 1 });
+
+  assert.equal(packageCalls, 2);
+  const first = new URL(requestedUrls[0]!);
+  const second = new URL(requestedUrls[1]!);
+  assert.equal(first.searchParams.get("client_id"), "client-id");
+  assert.equal(second.searchParams.get("client_id"), "client-id");
+  assert.equal(first.searchParams.get("page"), "1");
+  assert.equal(first.searchParams.get("limit"), "100");
+  assert.deepEqual(packageRequestCronHeaders, ["cron-token", "cron-token"]);
+  assert.equal(packageRequestBodies[0], "client_id=client-id&client_secret=client-secret");
+  assert.equal(packageRequestBodies[1], "client_id=client-id&client_secret=client-secret");
+});
+
+test("AiraloClient can include client credentials on package requests when enabled", async () => {
+  const tokenCache = new MockTokenCache();
+  let requestedUrl: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      requestedUrl = target;
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+    sendClientCredentialsWithPackages: true,
+  });
+
+  await client.getPackages({ limit: 1, page: 1 });
+
+  assert(requestedUrl, "packages request should have been issued");
+  const url = new URL(requestedUrl!);
+  assert.equal(url.searchParams.get("client_id"), "client-id");
+  assert.equal(url.searchParams.get("client_secret"), "client-secret");
+});
 test("AiraloClient fetches packages from the live API when env vars are configured", async () => {
   const clientId = process.env.AIRALO_CLIENT_ID;
   const clientSecret = process.env.AIRALO_CLIENT_SECRET;
