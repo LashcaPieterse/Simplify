@@ -89,6 +89,9 @@ The Airalo catalog can be synchronized into the local database with a dedicated 
 ```
 AIRALO_CLIENT_ID=<airalo-client-id>
 AIRALO_CLIENT_SECRET=<airalo-client-secret>
+# Optional: force credential passthrough on every /packages request.
+# The client also auto-retries with credential passthrough after an auth-rejected 401.
+AIRALO_PACKAGES_SEND_CREDENTIALS=true
 ```
 
 Then run the sync script:
@@ -96,5 +99,9 @@ Then run the sync script:
 ```bash
 npx tsx scripts/sync-airalo-packages.ts
 ```
+
+Sync package requests now always send:
+- query params: `limit`, `page`, `client_id`, `client_secret`
+- header: `Authorization: Bearer <token>` and `x-airalo-sync-key` when `AIRALO_SYNC_CRON_TOKEN` is set
 
 > Recommended cadence: execute the script every 60 minutes via cron or a background worker to keep pricing and availability fresh while respecting upstream rate limits.
