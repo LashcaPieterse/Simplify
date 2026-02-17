@@ -40,6 +40,7 @@ export interface AiraloClientOptions {
   tokenCache?: TokenCache;
   tokenExpiryBufferSeconds?: number;
   rateLimitRetry?: Partial<RateLimitRetryPolicy>;
+  sendClientCredentialsWithPackages?: boolean;
 }
 
 type FormValue = string | number | boolean | null | undefined;
@@ -292,6 +293,7 @@ export class AiraloClient {
   private readonly tokenCache: TokenCache;
   private readonly tokenExpiryBufferSeconds: number;
   private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
+  private readonly sendClientCredentialsWithPackages: boolean;
 
   private inFlightTokenRequest: Promise<string> | null = null;
   private tokenType = "Bearer";
@@ -308,6 +310,9 @@ export class AiraloClient {
       ...DEFAULT_RATE_LIMIT_RETRY_POLICY,
       ...options.rateLimitRetry,
     };
+    this.sendClientCredentialsWithPackages =
+      options.sendClientCredentialsWithPackages ??
+      process.env.AIRALO_PACKAGES_SEND_CREDENTIALS === "true";
   }
 
   async getPackagesResponse(
@@ -337,6 +342,14 @@ export class AiraloClient {
 
         searchParams.set(key, String(value));
       });
+    }
+
+    if (this.sendClientCredentialsWithPackages) {
+      // Some Airalo partner configurations still require client credentials on package browse
+      // requests in addition to bearer tokens (common in Postman collections using form-data).
+      // We send them as query params because GET request bodies are not consistently honored.
+      searchParams.set("client_id", this.clientId);
+      searchParams.set("client_secret", this.clientSecret);
     }
 
     const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
@@ -595,6 +608,11 @@ export class AiraloClient {
 
         searchParams.set(key, String(value));
       });
+    }
+
+    if (this.sendClientCredentialsWithPackages) {
+      searchParams.set("client_id", this.clientId);
+      searchParams.set("client_secret", this.clientSecret);
     }
 
     const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
