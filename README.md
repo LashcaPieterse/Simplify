@@ -89,6 +89,9 @@ The Airalo catalog can be synchronized into the local database with a dedicated 
 ```
 AIRALO_CLIENT_ID=<airalo-client-id>
 AIRALO_CLIENT_SECRET=<airalo-client-secret>
+# Optional compatibility mode for partner accounts where /packages requires
+# client_id/client_secret in addition to Bearer authorization.
+AIRALO_PACKAGES_SEND_CREDENTIALS=true
 ```
 
 Then run the sync script:

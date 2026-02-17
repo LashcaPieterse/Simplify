@@ -314,6 +314,46 @@ test("AiraloClient merges include parameters for package requests", async () => 
   assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
 });
 
+
+
+test("AiraloClient can include client credentials on package requests when enabled", async () => {
+  const tokenCache = new MockTokenCache();
+  let requestedUrl: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      requestedUrl = target;
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+    sendClientCredentialsWithPackages: true,
+  });
+
+  await client.getPackages({ limit: 1, page: 1 });
+
+  assert(requestedUrl, "packages request should have been issued");
+  const url = new URL(requestedUrl!);
+  assert.equal(url.searchParams.get("client_id"), "client-id");
+  assert.equal(url.searchParams.get("client_secret"), "client-secret");
+});
 test("AiraloClient fetches packages from the live API when env vars are configured", async () => {
   const clientId = process.env.AIRALO_CLIENT_ID;
   const clientSecret = process.env.AIRALO_CLIENT_SECRET;
