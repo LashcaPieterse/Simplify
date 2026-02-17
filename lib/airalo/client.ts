@@ -41,7 +41,6 @@ export interface AiraloClientOptions {
   tokenExpiryBufferSeconds?: number;
   rateLimitRetry?: Partial<RateLimitRetryPolicy>;
   sendClientCredentialsWithPackages?: boolean;
-  syncCronToken?: string;
 }
 
 type FormValue = string | number | boolean | null | undefined;
@@ -295,7 +294,6 @@ export class AiraloClient {
   private readonly tokenExpiryBufferSeconds: number;
   private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
   private readonly sendClientCredentialsWithPackages: boolean;
-  private readonly syncCronToken: string | null;
 
   private inFlightTokenRequest: Promise<string> | null = null;
   private tokenType = "Bearer";
@@ -315,7 +313,6 @@ export class AiraloClient {
     this.sendClientCredentialsWithPackages =
       options.sendClientCredentialsWithPackages ??
       process.env.AIRALO_PACKAGES_SEND_CREDENTIALS === "true";
-    this.syncCronToken = options.syncCronToken ?? process.env.AIRALO_SYNC_CRON_TOKEN ?? null;
   }
 
   async getPackagesResponse(
@@ -421,10 +418,6 @@ export class AiraloClient {
       Accept: "application/json",
       Authorization: `${this.tokenType} ${token}`,
     };
-
-    if (this.syncCronToken) {
-      headers["x-airalo-sync-key"] = this.syncCronToken;
-    }
 
     return {
       method: "GET",
@@ -630,8 +623,8 @@ export class AiraloClient {
     const maxAuthAttempts = 4;
     let attemptedBearerCaseFallback = false;
     let preserveTokenTypeForNextAttempt = false;
-    let includeClientCredentials = true;
-    let attemptedCredentialsFallback = true;
+    let includeClientCredentials = this.sendClientCredentialsWithPackages;
+    let attemptedCredentialsFallback = includeClientCredentials;
 
     let path = this.buildPackagesPath(options, includeClientCredentials);
     let url = this.resolveUrl(path);

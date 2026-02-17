@@ -100,8 +100,10 @@ Then run the sync script:
 npx tsx scripts/sync-airalo-packages.ts
 ```
 
-Sync package requests now always send:
-- query params: `limit`, `page`, `client_id`, `client_secret`
-- header: `Authorization: Bearer <token>` and `x-airalo-sync-key` when `AIRALO_SYNC_CRON_TOKEN` is set
+Sync package requests default to:
+- query params: `limit`, `page` (plus optional filters/include)
+- headers: `Accept: application/json` and `Authorization: Bearer <token>`
+
+If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
 
 > Recommended cadence: execute the script every 60 minutes via cron or a background worker to keep pricing and availability fresh while respecting upstream rate limits.
