@@ -89,8 +89,8 @@ The Airalo catalog can be synchronized into the local database with a dedicated 
 ```
 AIRALO_CLIENT_ID=<airalo-client-id>
 AIRALO_CLIENT_SECRET=<airalo-client-secret>
-# Optional compatibility mode for partner accounts where /packages requires
-# client_id/client_secret in addition to Bearer authorization.
+# Optional: force credential passthrough on every /packages request.
+# The client also auto-retries with credential passthrough after an auth-rejected 401.
 AIRALO_PACKAGES_SEND_CREDENTIALS=true
 ```
 
