@@ -237,6 +237,14 @@ interface AiraloRequestOptions<T> {
   requiresAuth?: boolean;
 }
 
+interface AiraloUnauthorizedDetails {
+  metaMessage?: string;
+  metaCode?: string | number;
+  meta?: Record<string, unknown>;
+  bodySnippet?: string;
+  authRejected?: boolean;
+}
+
 export interface AiraloErrorDetails {
   status: number;
   statusText: string;
@@ -628,6 +636,8 @@ export class AiraloClient {
 
       const isUnauthorized = response.status === 401;
       if (isUnauthorized && attempt < maxAuthAttempts) {
+        const unauthorizedDetails = await this.parseUnauthorizedDetails(response.clone());
+
         if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
           attemptedBearerCaseFallback = true;
           preserveTokenTypeForNextAttempt = true;
@@ -636,6 +646,7 @@ export class AiraloClient {
             {
               attempt,
               tokenType: this.tokenType,
+              ...unauthorizedDetails,
             },
           );
           continue;
@@ -643,6 +654,7 @@ export class AiraloClient {
 
         console.warn("[airalo-sync][step-3][packages] Unauthorized response, clearing cached token and retrying", {
           attempt,
+          ...unauthorizedDetails,
         });
         await this.clearCachedToken();
         continue;
@@ -654,6 +666,29 @@ export class AiraloClient {
         body = JSON.parse(bodyText);
       } catch {
         // keep raw body when parsing fails
+      }
+
+      if (response.status === 401) {
+        const unauthorizedDetails = await this.parseUnauthorizedDetailsFromBody(body);
+
+        if (unauthorizedDetails.authRejected) {
+          console.error(
+            "[airalo-sync][step-3][packages] Access token was rejected after refresh; check AIRALO_CLIENT_ID/AIRALO_CLIENT_SECRET credentials and account permissions for /v2/packages",
+            {
+              tokenType: this.tokenType,
+              ...unauthorizedDetails,
+            },
+          );
+        }
+
+        throw new AiraloError(
+          `Packages request failed with status 401${unauthorizedDetails.metaMessage ? `: ${unauthorizedDetails.metaMessage}` : ""}`,
+          {
+            status: response.status,
+            statusText: response.statusText,
+            body,
+          },
+        );
       }
 
       throw new AiraloError(
@@ -1009,6 +1044,66 @@ export class AiraloClient {
         statusText: response.statusText,
         body: text,
       });
+    }
+  }
+
+  private async parseUnauthorizedDetails(response: Response): Promise<AiraloUnauthorizedDetails> {
+    const body = await this.tryParseResponseBody(response);
+    return this.parseUnauthorizedDetailsFromBody(body);
+  }
+
+  private parseUnauthorizedDetailsFromBody(body: unknown): AiraloUnauthorizedDetails {
+    if (!body || typeof body !== "object") {
+      return {
+        bodySnippet: this.stringifyForLog(body),
+      };
+    }
+
+    const meta = (body as { meta?: unknown }).meta;
+    if (!meta || typeof meta !== "object") {
+      return {
+        bodySnippet: this.stringifyForLog(body),
+      };
+    }
+
+    const metaRecord = meta as { message?: unknown; code?: unknown } & Record<string, unknown>;
+    const metaMessage = typeof metaRecord.message === "string" ? metaRecord.message : undefined;
+
+    return {
+      meta: metaRecord,
+      metaMessage,
+      metaCode:
+        typeof metaRecord.code === "string" || typeof metaRecord.code === "number"
+          ? metaRecord.code
+          : undefined,
+      bodySnippet: this.stringifyForLog(body),
+      authRejected: Boolean(metaMessage && /authentication failed|verify your client_id and client_secret/i.test(metaMessage)),
+    };
+  }
+
+  private stringifyForLog(value: unknown): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    try {
+      const text = typeof value === "string" ? value : JSON.stringify(value);
+      return text.length > 500 ? `${text.slice(0, 500)}...` : text;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async tryParseResponseBody(response: Response): Promise<unknown> {
+    const text = await response.text();
+    if (!text) {
+      return undefined;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
     }
   }
 
