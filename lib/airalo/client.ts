@@ -286,6 +286,7 @@ export class AiraloClient {
   private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
 
   private inFlightTokenRequest: Promise<string> | null = null;
+  private tokenType = "Bearer";
 
   constructor(options: AiraloClientOptions) {
     this.clientId = options.clientId;
@@ -590,7 +591,9 @@ export class AiraloClient {
 
     const path = `/packages${searchParams.size ? `?${searchParams.toString()}` : ""}`;
     const url = this.resolveUrl(path);
-    const maxAuthAttempts = 2;
+    const maxAuthAttempts = 3;
+    let attemptedBearerCaseFallback = false;
+    let preserveTokenTypeForNextAttempt = false;
 
     console.info("[airalo-sync][step-3][packages] Requesting packages", {
       path,
@@ -598,14 +601,15 @@ export class AiraloClient {
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      const token = await this.getAccessToken();
+      const token = await this.getAccessToken(preserveTokenTypeForNextAttempt);
+      preserveTokenTypeForNextAttempt = false;
 
       const response = await this.executeWithRateLimitRetry(() =>
         this.fetchFn(url, {
           method: "GET",
           headers: {
             Accept: "application/json",
-            Authorization: `Bearer ${token}`,
+            Authorization: `${this.tokenType} ${token}`,
           },
         }),
       );
@@ -624,6 +628,19 @@ export class AiraloClient {
 
       const isUnauthorized = response.status === 401;
       if (isUnauthorized && attempt < maxAuthAttempts) {
+        if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
+          attemptedBearerCaseFallback = true;
+          preserveTokenTypeForNextAttempt = true;
+          console.warn(
+            "[airalo-sync][step-3][packages] Unauthorized response after token refresh, retrying with alternate bearer scheme casing",
+            {
+              attempt,
+              tokenType: this.tokenType,
+            },
+          );
+          continue;
+        }
+
         console.warn("[airalo-sync][step-3][packages] Unauthorized response, clearing cached token and retrying", {
           attempt,
         });
@@ -763,11 +780,18 @@ export class AiraloClient {
     requiresAuth = true,
   }: AiraloRequestOptions<T>): Promise<T> {
     const url = this.resolveUrl(path);
-    const maxAuthAttempts = requiresAuth ? 2 : 1;
+    const maxAuthAttempts = requiresAuth ? 3 : 1;
+    let attemptedBearerCaseFallback = false;
+    let preserveTokenTypeForNextAttempt = false;
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
       const response = await this.executeWithRateLimitRetry(async () => {
-        const headers = await this.buildHeaders(init?.headers, requiresAuth);
+        const headers = await this.buildHeaders(
+          init?.headers,
+          requiresAuth,
+          preserveTokenTypeForNextAttempt,
+        );
+        preserveTokenTypeForNextAttempt = false;
         const initWithDefaults: RequestInit = {
           method: "GET",
           ...init,
@@ -786,6 +810,12 @@ export class AiraloClient {
       const shouldRetry = isUnauthorized && attempt < maxAuthAttempts;
 
       if (shouldRetry) {
+        if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
+          attemptedBearerCaseFallback = true;
+          preserveTokenTypeForNextAttempt = true;
+          continue;
+        }
+
         await this.clearCachedToken();
         continue;
       }
@@ -799,6 +829,7 @@ export class AiraloClient {
   private async buildHeaders(
     headers: RequestInit["headers"],
     requiresAuth: boolean,
+    preserveTokenType = false,
   ): Promise<Headers> {
     const resolvedHeaders = new Headers(headers);
 
@@ -807,8 +838,8 @@ export class AiraloClient {
     }
 
     if (requiresAuth && !resolvedHeaders.has("Authorization")) {
-      const token = await this.getAccessToken();
-      resolvedHeaders.set("Authorization", `Bearer ${token}`);
+      const token = await this.getAccessToken(preserveTokenType);
+      resolvedHeaders.set("Authorization", `${this.tokenType} ${token}`);
     }
 
     return resolvedHeaders;
@@ -830,10 +861,13 @@ export class AiraloClient {
     });
   }
 
-  private async getAccessToken(): Promise<string> {
+  private async getAccessToken(preserveTokenType = false): Promise<string> {
     const cached = await this.tokenCache.get();
     if (cached && !this.isExpired(cached.expiresAt)) {
-      return cached.token;
+      if (!preserveTokenType) {
+        this.tokenType = this.normalizeTokenType(cached.tokenType);
+      }
+      return cached.token.trim();
     }
 
     if (!this.inFlightTokenRequest) {
@@ -903,15 +937,38 @@ export class AiraloClient {
 
     const expiresAt = Date.now() + remainingSeconds * 1000;
 
+    const token = parsed.data.access_token.trim();
+    this.tokenType = this.normalizeTokenType(parsed.data.token_type);
+
     const record: TokenCacheRecord = {
-      token: parsed.data.access_token,
+      token,
       expiresAt,
+      tokenType: this.tokenType,
     };
 
     await this.tokenCache.set(record);
     recordTokenRefresh("airalo_client");
 
     return record.token;
+  }
+
+  private normalizeTokenType(tokenType: string | undefined): string {
+    const normalized = tokenType?.trim();
+    return normalized && normalized.length > 0 ? normalized : "Bearer";
+  }
+
+  private toggleBearerTokenTypeCase(): boolean {
+    if (this.tokenType === "Bearer") {
+      this.tokenType = "bearer";
+      return true;
+    }
+
+    if (this.tokenType === "bearer") {
+      this.tokenType = "Bearer";
+      return true;
+    }
+
+    return false;
   }
 
   private isExpired(expiresAt: number): boolean {

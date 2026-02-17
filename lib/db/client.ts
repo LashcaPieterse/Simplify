@@ -19,8 +19,9 @@ function resolvePrismaDatasourceUrl(): string | undefined {
       return rawUrl;
     }
 
-    const connectionLimit = process.env.PRISMA_CONNECTION_LIMIT ?? (process.env.NODE_ENV === 'production' ? '1' : undefined);
-    if (connectionLimit && !url.searchParams.has('connection_limit')) {
+    const connectionLimit =
+      process.env.PRISMA_CONNECTION_LIMIT ?? (process.env.NODE_ENV === 'production' ? '1' : undefined);
+    if (connectionLimit) {
       url.searchParams.set('connection_limit', connectionLimit);
     }
 
