@@ -237,6 +237,13 @@ interface AiraloRequestOptions<T> {
   requiresAuth?: boolean;
 }
 
+interface AiraloUnauthorizedDetails {
+  metaMessage?: string;
+  metaCode?: string | number;
+  meta?: Record<string, unknown>;
+  bodySnippet?: string;
+}
+
 export interface AiraloErrorDetails {
   status: number;
   statusText: string;
@@ -628,6 +635,8 @@ export class AiraloClient {
 
       const isUnauthorized = response.status === 401;
       if (isUnauthorized && attempt < maxAuthAttempts) {
+        const unauthorizedDetails = await this.parseUnauthorizedDetails(response.clone());
+
         if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
           attemptedBearerCaseFallback = true;
           preserveTokenTypeForNextAttempt = true;
@@ -636,6 +645,7 @@ export class AiraloClient {
             {
               attempt,
               tokenType: this.tokenType,
+              ...unauthorizedDetails,
             },
           );
           continue;
@@ -643,6 +653,7 @@ export class AiraloClient {
 
         console.warn("[airalo-sync][step-3][packages] Unauthorized response, clearing cached token and retrying", {
           attempt,
+          ...unauthorizedDetails,
         });
         await this.clearCachedToken();
         continue;
@@ -1009,6 +1020,61 @@ export class AiraloClient {
         statusText: response.statusText,
         body: text,
       });
+    }
+  }
+
+  private async parseUnauthorizedDetails(response: Response): Promise<AiraloUnauthorizedDetails> {
+    const body = await this.tryParseResponseBody(response);
+
+    if (!body || typeof body !== "object") {
+      return {
+        bodySnippet: this.stringifyForLog(body),
+      };
+    }
+
+    const meta = (body as { meta?: unknown }).meta;
+    if (!meta || typeof meta !== "object") {
+      return {
+        bodySnippet: this.stringifyForLog(body),
+      };
+    }
+
+    const metaRecord = meta as { message?: unknown; code?: unknown } & Record<string, unknown>;
+    return {
+      meta: metaRecord,
+      metaMessage:
+        typeof metaRecord.message === "string" ? metaRecord.message : undefined,
+      metaCode:
+        typeof metaRecord.code === "string" || typeof metaRecord.code === "number"
+          ? metaRecord.code
+          : undefined,
+      bodySnippet: this.stringifyForLog(body),
+    };
+  }
+
+  private stringifyForLog(value: unknown): string | undefined {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    try {
+      const text = typeof value === "string" ? value : JSON.stringify(value);
+      return text.length > 500 ? `${text.slice(0, 500)}...` : text;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async tryParseResponseBody(response: Response): Promise<unknown> {
+    const text = await response.text();
+    if (!text) {
+      return undefined;
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
     }
   }
 
