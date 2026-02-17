@@ -121,6 +121,7 @@ class PrismaTokenCache implements TokenCache {
     return {
       token: record.token,
       expiresAt: record.expiresAt.getTime(),
+      tokenType: record.tokenType ?? undefined,
     };
   }
 
@@ -131,10 +132,12 @@ class PrismaTokenCache implements TokenCache {
         key: this.key,
         token: record.token,
         expiresAt: new Date(record.expiresAt),
+        tokenType: record.tokenType ?? null,
       },
       update: {
         token: record.token,
         expiresAt: new Date(record.expiresAt),
+        tokenType: record.tokenType ?? null,
       },
     });
   }
