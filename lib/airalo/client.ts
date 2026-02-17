@@ -954,7 +954,19 @@ export class AiraloClient {
 
   private normalizeTokenType(tokenType: string | undefined): string {
     const normalized = tokenType?.trim();
-    return normalized && normalized.length > 0 ? normalized : "Bearer";
+
+    if (!normalized || normalized.length === 0) {
+      return "Bearer";
+    }
+
+    // Airalo has historically returned both "Bearer" and "bearer".
+    // Some gateway layers are strict about the canonical header scheme casing,
+    // so we normalize bearer-like values to "Bearer".
+    if (normalized.toLowerCase() === "bearer") {
+      return "Bearer";
+    }
+
+    return normalized;
   }
 
   private toggleBearerTokenTypeCase(): boolean {
