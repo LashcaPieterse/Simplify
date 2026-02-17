@@ -318,20 +318,27 @@ test("AiraloClient merges include parameters for package requests", async () => 
 
 
 
-test("AiraloClient retries packages with client credential fallback after authRejected 401", async () => {
+test("AiraloClient sends client credentials for package sync requests", async () => {
   const tokenCache = new MockTokenCache({
     token: "stale-token",
     expiresAt: Date.now() + 60_000,
   });
   const requestedUrls: string[] = [];
+  const packageRequestBodies: string[] = [];
+  const packageRequestCronHeaders: Array<string | null> = [];
   let packageCalls = 0;
 
-  const fetchImplementation: typeof fetch = async (url) => {
+  const fetchImplementation: typeof fetch = async (url, init) => {
     const target = typeof url === "string" ? url : url.toString();
 
     if (target.includes("packages")) {
       packageCalls += 1;
       requestedUrls.push(target);
+      const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+      packageRequestCronHeaders.push(headers.get("x-airalo-sync-key"));
+      packageRequestBodies.push(
+        init?.body instanceof URLSearchParams ? init.body.toString() : String(init?.body ?? ""),
+      );
 
       if (packageCalls === 1) {
         return jsonResponse(
@@ -365,17 +372,23 @@ test("AiraloClient retries packages with client credential fallback after authRe
     baseUrl: "https://example.com/api/",
     fetchImplementation,
     tokenCache,
+    syncCronToken: "cron-token",
   });
 
-  await client.getPackages({ limit: 1, page: 1 });
+  await client.getPackages({ limit: 100, page: 1 });
 
   assert.equal(packageCalls, 2);
   const first = new URL(requestedUrls[0]!);
   const second = new URL(requestedUrls[1]!);
-  assert.equal(first.searchParams.get("client_id"), null);
+  assert.equal(first.searchParams.get("client_id"), "client-id");
   assert.equal(second.searchParams.get("client_id"), "client-id");
-  assert.equal(second.searchParams.get("client_secret"), "client-secret");
+  assert.equal(first.searchParams.get("page"), "1");
+  assert.equal(first.searchParams.get("limit"), "100");
+  assert.deepEqual(packageRequestCronHeaders, ["cron-token", "cron-token"]);
+  assert.equal(packageRequestBodies[0], "client_id=client-id&client_secret=client-secret");
+  assert.equal(packageRequestBodies[1], "client_id=client-id&client_secret=client-secret");
 });
+
 test("AiraloClient can include client credentials on package requests when enabled", async () => {
   const tokenCache = new MockTokenCache();
   let requestedUrl: string | null = null;
