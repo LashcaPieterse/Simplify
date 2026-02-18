@@ -651,7 +651,23 @@ export class AiraloClient {
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      const token = await this.getAccessToken(preserveTokenTypeForNextAttempt);
+      let token: string;
+      if (HARDCODED_SYNC_TEST_TOKEN) {
+        this.tokenType = "Bearer";
+        token = HARDCODED_SYNC_TEST_TOKEN;
+        console.info("[airalo-sync][step-3][packages] Using hardcoded test token for packages request", {
+          attempt,
+          hardcodedToken: true,
+        });
+      } else {
+        console.info("[airalo-sync][step-3][packages] Requesting fresh access token before packages request", {
+          attempt,
+          cacheBypass: true,
+        });
+        token = await this.getFreshAccessToken(preserveTokenTypeForNextAttempt);
+        preserveTokenTypeForNextAttempt = false;
+      }
+
       preserveTokenTypeForNextAttempt = false;
 
       console.info("[airalo-sync][step-3][packages] Using access token for request", {
@@ -956,6 +972,11 @@ export class AiraloClient {
       statusText: response.statusText,
       body,
     });
+  }
+
+  private async getFreshAccessToken(preserveTokenType = false): Promise<string> {
+    await this.clearCachedToken();
+    return this.getAccessToken(preserveTokenType);
   }
 
   private async getAccessToken(preserveTokenType = false): Promise<string> {
