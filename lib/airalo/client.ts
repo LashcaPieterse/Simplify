@@ -267,6 +267,7 @@ export class AiraloError extends Error {
 // Docs currently reference /v2/token (no /api prefix).
 const DEFAULT_BASE_URL =
   process.env.AIRALO_BASE_URL ?? "https://partners-api.airalo.com/v2";
+const LOG_FULL_TOKEN = process.env.AIRALO_LOG_FULL_TOKEN === "true";
 // Pad token expiry to avoid using near-expired tokens; Airalo issues short-lived tokens.
 const DEFAULT_TOKEN_BUFFER_SECONDS = 60;
 const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
@@ -473,6 +474,7 @@ export class AiraloClient {
     length: number;
     fingerprint: string;
     jwt: { iat?: string; exp?: string; iss?: string; aud?: string | string[] } | null;
+    full?: string;
   } {
     const trimmed = token.trim();
     if (!trimmed) {
@@ -487,6 +489,7 @@ export class AiraloClient {
       length: trimmed.length,
       fingerprint: createHash("sha256").update(trimmed).digest("hex").slice(0, 12),
       jwt: this.parseJwtForLog(trimmed),
+      ...(LOG_FULL_TOKEN ? { full: trimmed } : {}),
     };
   }
 
