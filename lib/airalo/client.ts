@@ -673,7 +673,8 @@ export class AiraloClient {
     let attemptedBearerCaseFallback = false;
     let preserveTokenTypeForNextAttempt = false;
     let includeClientCredentials = this.sendClientCredentialsWithPackages;
-    let attemptedCredentialsFallback = includeClientCredentials;
+    let attemptedCredentialsAdditionFallback = includeClientCredentials;
+    let attemptedCredentialsRemovalFallback = !includeClientCredentials;
 
     let path = this.buildPackagesPath(options, includeClientCredentials);
     let url = this.resolveUrl(path);
@@ -718,14 +719,31 @@ export class AiraloClient {
       if (isUnauthorized && attempt < maxAuthAttempts) {
         const unauthorizedDetails = await this.parseUnauthorizedDetails(response.clone());
 
-        if (!attemptedCredentialsFallback && unauthorizedDetails.authRejected) {
+        if (!attemptedCredentialsAdditionFallback && unauthorizedDetails.authRejected) {
           includeClientCredentials = true;
-          attemptedCredentialsFallback = true;
+          attemptedCredentialsAdditionFallback = true;
           path = this.buildPackagesPath(options, includeClientCredentials);
           url = this.resolveUrl(path);
           await this.clearCachedToken();
           console.warn(
             "[airalo-sync][step-3][packages] Unauthorized response indicates credential mismatch; retrying with client credential query fallback",
+            {
+              attempt,
+              path: this.sanitizePackagesPathForLog(path),
+              ...unauthorizedDetails,
+            },
+          );
+          continue;
+        }
+
+        if (!attemptedCredentialsRemovalFallback && unauthorizedDetails.authRejected) {
+          includeClientCredentials = false;
+          attemptedCredentialsRemovalFallback = true;
+          path = this.buildPackagesPath(options, includeClientCredentials);
+          url = this.resolveUrl(path);
+          await this.clearCachedToken();
+          console.warn(
+            "[airalo-sync][step-3][packages] Unauthorized response indicates credential query passthrough may be rejected; retrying without client credential query params",
             {
               attempt,
               path: this.sanitizePackagesPathForLog(path),
@@ -779,7 +797,8 @@ export class AiraloClient {
                 .digest("hex")
                 .slice(0, 12),
               includeClientCredentials,
-              attemptedCredentialsFallback,
+              attemptedCredentialsAdditionFallback,
+              attemptedCredentialsRemovalFallback,
               ...unauthorizedDetails,
             },
           );
