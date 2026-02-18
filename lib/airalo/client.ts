@@ -266,7 +266,6 @@ export class AiraloError extends Error {
 // Docs currently reference /v2/token (no /api prefix).
 const DEFAULT_BASE_URL =
   process.env.AIRALO_BASE_URL ?? "https://partners-api.airalo.com/v2";
-const HARDCODED_SYNC_TEST_TOKEN = process.env.AIRALO_SYNC_TEST_TOKEN?.trim();
 // Pad token expiry to avoid using near-expired tokens; Airalo issues short-lived tokens.
 const DEFAULT_TOKEN_BUFFER_SECONDS = 60;
 const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
@@ -299,8 +298,8 @@ export class AiraloClient {
   private tokenType = "Bearer";
 
   constructor(options: AiraloClientOptions) {
-    this.clientId = options.clientId;
-    this.clientSecret = options.clientSecret;
+    this.clientId = options.clientId.trim();
+    this.clientSecret = options.clientSecret.trim();
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.fetchFn = options.fetchImplementation ?? fetch;
     this.tokenCache = options.tokenCache ?? new MemoryTokenCache();
@@ -652,23 +651,11 @@ export class AiraloClient {
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      let token: string;
-      if (HARDCODED_SYNC_TEST_TOKEN) {
-        this.tokenType = "Bearer";
-        token = HARDCODED_SYNC_TEST_TOKEN;
-        console.info("[airalo-sync][step-3][packages] Using hardcoded test token for packages request", {
-          attempt,
-          hardcodedToken: true,
-        });
-      } else {
-        console.info("[airalo-sync][step-3][packages] Requesting fresh access token before packages request", {
-          attempt,
-          cacheBypass: true,
-        });
-        token = await this.getFreshAccessToken(preserveTokenTypeForNextAttempt);
-        preserveTokenTypeForNextAttempt = false;
-      }
-
+      console.info("[airalo-sync][step-3][packages] Requesting fresh access token before packages request", {
+        attempt,
+        cacheBypass: true,
+      });
+      const token = await this.getFreshAccessToken(preserveTokenTypeForNextAttempt);
       preserveTokenTypeForNextAttempt = false;
 
       console.info("[airalo-sync][step-3][packages] Using access token for request", {
@@ -1014,7 +1001,7 @@ export class AiraloClient {
 
   private async requestAccessToken(): Promise<string> {
     console.info("[airalo-sync][step-2][token] Requesting Airalo access token");
-    const body = new FormData();
+    const body = new URLSearchParams();
     body.set("client_id", this.clientId);
     body.set("client_secret", this.clientSecret);
     body.set("grant_type", "client_credentials");
@@ -1024,6 +1011,7 @@ export class AiraloClient {
         method: "POST",
         headers: {
           Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body,
       }),
