@@ -273,10 +273,6 @@ const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
   baseDelayMs: 500,
   maxDelayMs: 10_000,
 };
-const HARDCODED_SYNC_TEST_TOKEN =
-  "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxOTUyMiIsImp0aSI6IjdhZmEyZDczZWZlODkxM2U0NTMyMmNlZDA4M2FiZDkxYTE4ZDc3YjdjYTAwM2EzNzMzMDU0YWQ4ZWU0ZjgwNTdlMTJiYzFjNGEyMzNmMjNjIiwiaWF0IjoxNzcxNDAxMzY4LjE2NTAzMywibmJmIjoxNzcxNDAxMzY4LjE2NTAzNSwiZXhwIjoxNzcxNDg3NzY4LjE2MjU1LCJzdWIiOiIiLCJzY29wZXMiOltdfQ.rVpLx1wNjv2jQnjqGlOcJgZVul4m5mIFn1LmsM-MJHAvzeKjhurgN8mosPqkS6lInYUoA487LgwOtR392jel5iU71F86-L60H9ogdKN5dxhHodGvSuIJnn46qnW8dkQp1NzWU1GWwbpUrYNpms8yraozZh32qtjA8i_ygn3BPh1-pAkioSM55qe9Q0Lrp47IMgE0tL2RPLfc02moY1z9UwKV9NjC5smBG-brWLGTmlBedVEJPEZYcUFwdIOAA2aHze0H418sOOYI_s-Vbftr5OmjF80htsjSizdJOt49w94L2xyJX44daxxQzhr3moGp86k-6EIcTwPU3_Z9WBxoQ5cMQztfbIZ2is2VQbGd2WSwFSqojrJBdyArmkE6oQ0n5zIPbljeatGHUqK3vmlolVPLZ4jn6cpCIuHl716-ZsZLHB-7akjJ2uNR0lxBLNz0VAkNStdF3ke3nyTHEArInkE4-sjKHxUiwCjpTmFZEnDNKkrb9nyly63LgfmCIponk1-You1NnszBVT8ljHoxzhWoA31Xtpcdy5-0IOQqrgeqMl1Yokp8jnYZZDEij-KHOs_ofMeXswU-HM5hj6bqd-P6NI90i-GWjKYPy-ZKviQYfs0WBVWCoRKNQxbx4jRZxYX1vleotGH8FPfHP7HYIcO2sSaDLMSTTkUCoYpF5QA";
-
-
 function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim();
   return trimmed.replace(/\/+$/, "");
@@ -989,7 +985,18 @@ export class AiraloClient {
       if (!preserveTokenType) {
         this.tokenType = this.normalizeTokenType(cached.tokenType);
       }
+      console.info("[airalo-sync][step-2][token] Using cached access token", {
+        expiresAt: new Date(cached.expiresAt).toISOString(),
+        tokenType: this.tokenType,
+        token: this.formatTokenForLog(cached.token),
+      });
       return cached.token.trim();
+    }
+
+    if (cached && this.isExpired(cached.expiresAt)) {
+      console.info("[airalo-sync][step-2][token] Cached token expired; requesting new token", {
+        expiresAt: new Date(cached.expiresAt).toISOString(),
+      });
     }
 
     if (!this.inFlightTokenRequest) {
@@ -1006,7 +1013,7 @@ export class AiraloClient {
 
   private async requestAccessToken(): Promise<string> {
     console.info("[airalo-sync][step-2][token] Requesting Airalo access token");
-    const body = new URLSearchParams();
+    const body = new FormData();
     body.set("client_id", this.clientId);
     body.set("client_secret", this.clientSecret);
     body.set("grant_type", "client_credentials");
@@ -1016,7 +1023,6 @@ export class AiraloClient {
         method: "POST",
         headers: {
           Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded",
         },
         body,
       }),
