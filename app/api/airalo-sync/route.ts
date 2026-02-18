@@ -170,7 +170,6 @@ export async function GET(request: NextRequest) {
           airaloSyncTestTokenPresent: Boolean(process.env.AIRALO_SYNC_TEST_TOKEN),
           airaloSyncTestTokenFingerprint: fingerprint(process.env.AIRALO_SYNC_TEST_TOKEN?.trim()),
           tokenProbeHint: "Add ?debug=1&token=1 to request and return a fresh full access token for Postman testing.",
-          fullTokenLogHint: "Set AIRALO_LOG_FULL_TOKEN=true to include full tokens in standard sync logs (sensitive).",
         },
       });
     }
