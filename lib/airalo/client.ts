@@ -443,6 +443,22 @@ export class AiraloClient {
     return serialized ? `${basePath}?${serialized}` : basePath;
   }
 
+  private formatTokenForLog(token: string): { preview: string; length: number } {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      return { preview: "[EMPTY]", length: 0 };
+    }
+
+    if (trimmed.length <= 12) {
+      return { preview: trimmed, length: trimmed.length };
+    }
+
+    return {
+      preview: `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`,
+      length: trimmed.length,
+    };
+  }
+
   private formatIncludeParam(include?: string | string[] | null): string | null {
     if (!include) {
       return null;
@@ -638,6 +654,12 @@ export class AiraloClient {
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
       const token = await this.getAccessToken(preserveTokenTypeForNextAttempt);
       preserveTokenTypeForNextAttempt = false;
+
+      console.info("[airalo-sync][step-3][packages] Using access token for request", {
+        attempt,
+        tokenType: this.tokenType,
+        token: this.formatTokenForLog(token),
+      });
 
       const response = await this.executeWithRateLimitRetry(() =>
         this.fetchFn(url, this.buildPackagesRequestInit(token)),
