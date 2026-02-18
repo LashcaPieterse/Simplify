@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import type { ZodType, ZodTypeDef } from "zod";
 import {
   OrderResponseSchema,
@@ -442,19 +443,50 @@ export class AiraloClient {
     return serialized ? `${basePath}?${serialized}` : basePath;
   }
 
-  private formatTokenForLog(token: string): { preview: string; length: number } {
+  private parseJwtForLog(token: string): { iat?: string; exp?: string; iss?: string; aud?: string | string[] } | null {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      return null;
+    }
+
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+        iat?: number;
+        exp?: number;
+        iss?: string;
+        aud?: string | string[];
+      };
+
+      return {
+        iat: typeof payload.iat === "number" ? new Date(payload.iat * 1000).toISOString() : undefined,
+        exp: typeof payload.exp === "number" ? new Date(payload.exp * 1000).toISOString() : undefined,
+        iss: typeof payload.iss === "string" ? payload.iss : undefined,
+        aud: typeof payload.aud === "string" || Array.isArray(payload.aud) ? payload.aud : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private formatTokenForLog(token: string): {
+    preview: string;
+    length: number;
+    fingerprint: string;
+    jwt: { iat?: string; exp?: string; iss?: string; aud?: string | string[] } | null;
+  } {
     const trimmed = token.trim();
     if (!trimmed) {
-      return { preview: "[EMPTY]", length: 0 };
+      return { preview: "[EMPTY]", length: 0, fingerprint: "[EMPTY]", jwt: null };
     }
 
-    if (trimmed.length <= 12) {
-      return { preview: trimmed, length: trimmed.length };
-    }
+    const preview =
+      trimmed.length <= 12 ? trimmed : `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
 
     return {
-      preview: `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`,
+      preview,
       length: trimmed.length,
+      fingerprint: createHash("sha256").update(trimmed).digest("hex").slice(0, 12),
+      jwt: this.parseJwtForLog(trimmed),
     };
   }
 
@@ -736,9 +768,14 @@ export class AiraloClient {
 
         if (unauthorizedDetails.authRejected) {
           console.error(
-            "[airalo-sync][step-3][packages] Access token was rejected after refresh; check AIRALO_CLIENT_ID/AIRALO_CLIENT_SECRET credentials and account permissions for /v2/packages",
+            "[airalo-sync][step-3][packages] Access token was rejected after refresh; check AIRALO_CLIENT_ID/AIRALO_CLIENT_SECRET credentials, AIRALO_BASE_URL environment, and account permissions for /v2/packages",
             {
               tokenType: this.tokenType,
+              baseUrl: this.baseUrl,
+              clientIdFingerprint: createHash("sha256")
+                .update(this.clientId)
+                .digest("hex")
+                .slice(0, 12),
               includeClientCredentials,
               attemptedCredentialsFallback,
               ...unauthorizedDetails,
@@ -1045,6 +1082,13 @@ export class AiraloClient {
 
     console.info("[airalo-sync][step-2][token] Access token received", {
       expiresInSeconds: parsed.data.expires_in,
+      tokenType: parsed.data.token_type,
+      token: this.formatTokenForLog(parsed.data.access_token),
+      baseUrl: this.baseUrl,
+      clientIdFingerprint: createHash("sha256")
+        .update(this.clientId)
+        .digest("hex")
+        .slice(0, 12),
     });
 
     const remainingSeconds = Math.max(

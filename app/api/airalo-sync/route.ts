@@ -9,6 +9,66 @@ const ALERT_RECIPIENT = process.env.AIRALO_SYNC_ALERT_EMAIL ?? "pieterselashca@g
 
 export const dynamic = "force-dynamic";
 
+interface TokenProbeResult {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  body: unknown;
+  token: string | null;
+}
+
+async function requestFreshTokenForDebug(): Promise<TokenProbeResult> {
+  const clientId = (process.env.AIRALO_CLIENT_ID ?? "").trim();
+  const clientSecret = (process.env.AIRALO_CLIENT_SECRET ?? "").trim();
+  const baseUrl = (process.env.AIRALO_BASE_URL ?? "https://partners-api.airalo.com/v2").trim().replace(/\/+$/, "");
+
+  if (!clientId || !clientSecret) {
+    return {
+      ok: false,
+      status: 500,
+      statusText: "Missing credentials",
+      body: { error: "AIRALO_CLIENT_ID/AIRALO_CLIENT_SECRET are not configured" },
+      token: null,
+    };
+  }
+
+  const body = new URLSearchParams();
+  body.set("client_id", clientId);
+  body.set("client_secret", clientSecret);
+  body.set("grant_type", "client_credentials");
+
+  const response = await fetch(`${baseUrl}/token`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+
+  const text = await response.text();
+  let parsed: unknown = text;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // keep raw text when JSON parsing fails
+  }
+
+  const token =
+    parsed && typeof parsed === "object" && "data" in parsed
+      ? (((parsed as { data?: { access_token?: unknown } }).data?.access_token as string | undefined) ?? null)
+      : null;
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    statusText: response.statusText,
+    body: parsed,
+    token,
+  };
+}
+
+
 function isAuthorized(request: NextRequest) {
   const cronToken = process.env.AIRALO_SYNC_CRON_TOKEN;
 
@@ -66,6 +126,25 @@ export async function GET(request: NextRequest) {
       const databaseUrl = process.env.DATABASE_URL ?? "";
       const trimmedClientId = clientId.trim();
       const trimmedClientSecret = clientSecret.trim();
+      const wantsTokenProbe =
+        request.nextUrl.searchParams.get("token") === "1" ||
+        request.nextUrl.searchParams.get("token") === "true";
+
+      if (wantsTokenProbe) {
+        const probe = await requestFreshTokenForDebug();
+        console.warn("[airalo-sync][debug][token-probe] Fresh token probe requested; logging full token for Postman validation", {
+          status: probe.status,
+          statusText: probe.statusText,
+          token: probe.token,
+        });
+
+        return NextResponse.json({
+          debug: true,
+          tokenProbe: probe,
+          warning:
+            "This response includes a full access token for manual Postman validation. Treat it as sensitive and rotate if shared.",
+        });
+      }
 
       return NextResponse.json({
         debug: true,
@@ -90,6 +169,7 @@ export async function GET(request: NextRequest) {
           cronTokenPresent: Boolean(process.env.AIRALO_SYNC_CRON_TOKEN),
           airaloSyncTestTokenPresent: Boolean(process.env.AIRALO_SYNC_TEST_TOKEN),
           airaloSyncTestTokenFingerprint: fingerprint(process.env.AIRALO_SYNC_TEST_TOKEN?.trim()),
+          tokenProbeHint: "Add ?debug=1&token=1 to request and return a fresh full access token for Postman testing.",
         },
       });
     }
