@@ -273,7 +273,6 @@ const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
   baseDelayMs: 500,
   maxDelayMs: 10_000,
 };
-
 function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim();
   return trimmed.replace(/\/+$/, "");
@@ -441,6 +440,22 @@ export class AiraloClient {
 
     const serialized = searchParams.toString();
     return serialized ? `${basePath}?${serialized}` : basePath;
+  }
+
+  private formatTokenForLog(token: string): { preview: string; length: number } {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      return { preview: "[EMPTY]", length: 0 };
+    }
+
+    if (trimmed.length <= 12) {
+      return { preview: trimmed, length: trimmed.length };
+    }
+
+    return {
+      preview: `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`,
+      length: trimmed.length,
+    };
   }
 
   private formatIncludeParam(include?: string | string[] | null): string | null {
@@ -638,6 +653,12 @@ export class AiraloClient {
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
       const token = await this.getAccessToken(preserveTokenTypeForNextAttempt);
       preserveTokenTypeForNextAttempt = false;
+
+      console.info("[airalo-sync][step-3][packages] Using access token for request", {
+        attempt,
+        tokenType: this.tokenType,
+        token: this.formatTokenForLog(token),
+      });
 
       const response = await this.executeWithRateLimitRetry(() =>
         this.fetchFn(url, this.buildPackagesRequestInit(token)),
@@ -943,7 +964,18 @@ export class AiraloClient {
       if (!preserveTokenType) {
         this.tokenType = this.normalizeTokenType(cached.tokenType);
       }
+      console.info("[airalo-sync][step-2][token] Using cached access token", {
+        expiresAt: new Date(cached.expiresAt).toISOString(),
+        tokenType: this.tokenType,
+        token: this.formatTokenForLog(cached.token),
+      });
       return cached.token.trim();
+    }
+
+    if (cached && this.isExpired(cached.expiresAt)) {
+      console.info("[airalo-sync][step-2][token] Cached token expired; requesting new token", {
+        expiresAt: new Date(cached.expiresAt).toISOString(),
+      });
     }
 
     if (!this.inFlightTokenRequest) {
@@ -960,7 +992,7 @@ export class AiraloClient {
 
   private async requestAccessToken(): Promise<string> {
     console.info("[airalo-sync][step-2][token] Requesting Airalo access token");
-    const body = new URLSearchParams();
+    const body = new FormData();
     body.set("client_id", this.clientId);
     body.set("client_secret", this.clientSecret);
     body.set("grant_type", "client_credentials");
@@ -970,7 +1002,6 @@ export class AiraloClient {
         method: "POST",
         headers: {
           Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded",
         },
         body,
       }),

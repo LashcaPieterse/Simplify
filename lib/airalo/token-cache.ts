@@ -28,8 +28,14 @@ export class MemoryTokenCache implements TokenCache {
   }
 }
 
-const TOKEN_CACHE_KEY = "airalo:access_token";
+const TOKEN_CACHE_KEY_PREFIX = "airalo:access_token";
 
+
+function buildTokenCacheKey(): string {
+  const clientId = process.env.AIRALO_CLIENT_ID?.trim() ?? "unknown-client";
+  const baseUrl = (process.env.AIRALO_BASE_URL?.trim() ?? "https://partners-api.airalo.com/v2").replace(/\/+$/, "");
+  return `${TOKEN_CACHE_KEY_PREFIX}:${clientId}:${baseUrl}`;
+}
 class RestRedisTokenCache implements TokenCache {
   constructor(private readonly client: RestRedisClient, private readonly key: string) {}
 
@@ -155,17 +161,17 @@ function isUpstashRedisConfigured(): boolean {
 function createKvCache(): TokenCache {
   const url = process.env.KV_REST_API_URL!;
   const token = process.env.KV_REST_API_TOKEN!;
-  return new RestRedisTokenCache(new RestRedisClient(url, token), TOKEN_CACHE_KEY);
+  return new RestRedisTokenCache(new RestRedisClient(url, token), buildTokenCacheKey());
 }
 
 function createUpstashRedisCache(): TokenCache {
   const url = process.env.UPSTASH_REDIS_REST_URL!;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN!;
-  return new RestRedisTokenCache(new RestRedisClient(url, token), TOKEN_CACHE_KEY);
+  return new RestRedisTokenCache(new RestRedisClient(url, token), buildTokenCacheKey());
 }
 
 function createPrismaCache(): TokenCache {
-  return new PrismaTokenCache(TOKEN_CACHE_KEY);
+  return new PrismaTokenCache(buildTokenCacheKey());
 }
 
 const globalTokenCache = globalThis as typeof globalThis & {
