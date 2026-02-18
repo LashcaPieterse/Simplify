@@ -299,8 +299,8 @@ export class AiraloClient {
   private tokenType = "Bearer";
 
   constructor(options: AiraloClientOptions) {
-    this.clientId = options.clientId;
-    this.clientSecret = options.clientSecret;
+    this.clientId = options.clientId.trim();
+    this.clientSecret = options.clientSecret.trim();
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.fetchFn = options.fetchImplementation ?? fetch;
     this.tokenCache = options.tokenCache ?? new MemoryTokenCache();
@@ -1014,7 +1014,7 @@ export class AiraloClient {
 
   private async requestAccessToken(): Promise<string> {
     console.info("[airalo-sync][step-2][token] Requesting Airalo access token");
-    const body = new FormData();
+    const body = new URLSearchParams();
     body.set("client_id", this.clientId);
     body.set("client_secret", this.clientSecret);
     body.set("grant_type", "client_credentials");
@@ -1024,6 +1024,7 @@ export class AiraloClient {
         method: "POST",
         headers: {
           Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
         },
         body,
       }),
