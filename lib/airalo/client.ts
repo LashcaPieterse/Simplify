@@ -273,6 +273,9 @@ const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
   baseDelayMs: 500,
   maxDelayMs: 10_000,
 };
+const HARDCODED_SYNC_TEST_TOKEN =
+  "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxOTUyMiIsImp0aSI6IjdhZmEyZDczZWZlODkxM2U0NTMyMmNlZDA4M2FiZDkxYTE4ZDc3YjdjYTAwM2EzNzMzMDU0YWQ4ZWU0ZjgwNTdlMTJiYzFjNGEyMzNmMjNjIiwiaWF0IjoxNzcxNDAxMzY4LjE2NTAzMywibmJmIjoxNzcxNDAxMzY4LjE2NTAzNSwiZXhwIjoxNzcxNDg3NzY4LjE2MjU1LCJzdWIiOiIiLCJzY29wZXMiOltdfQ.rVpLx1wNjv2jQnjqGlOcJgZVul4m5mIFn1LmsM-MJHAvzeKjhurgN8mosPqkS6lInYUoA487LgwOtR392jel5iU71F86-L60H9ogdKN5dxhHodGvSuIJnn46qnW8dkQp1NzWU1GWwbpUrYNpms8yraozZh32qtjA8i_ygn3BPh1-pAkioSM55qe9Q0Lrp47IMgE0tL2RPLfc02moY1z9UwKV9NjC5smBG-brWLGTmlBedVEJPEZYcUFwdIOAA2aHze0H418sOOYI_s-Vbftr5OmjF80htsjSizdJOt49w94L2xyJX44daxxQzhr3moGp86k-6EIcTwPU3_Z9WBxoQ5cMQztfbIZ2is2VQbGd2WSwFSqojrJBdyArmkE6oQ0n5zIPbljeatGHUqK3vmlolVPLZ4jn6cpCIuHl716-ZsZLHB-7akjJ2uNR0lxBLNz0VAkNStdF3ke3nyTHEArInkE4-sjKHxUiwCjpTmFZEnDNKkrb9nyly63LgfmCIponk1-You1NnszBVT8ljHoxzhWoA31Xtpcdy5-0IOQqrgeqMl1Yokp8jnYZZDEij-KHOs_ofMeXswU-HM5hj6bqd-P6NI90i-GWjKYPy-ZKviQYfs0WBVWCoRKNQxbx4jRZxYX1vleotGH8FPfHP7HYIcO2sSaDLMSTTkUCoYpF5QA";
+
 
 function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim();
@@ -652,11 +655,23 @@ export class AiraloClient {
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      console.info("[airalo-sync][step-3][packages] Requesting fresh access token before packages request", {
-        attempt,
-        cacheBypass: true,
-      });
-      const token = await this.getFreshAccessToken(preserveTokenTypeForNextAttempt);
+      let token: string;
+      if (HARDCODED_SYNC_TEST_TOKEN) {
+        this.tokenType = "Bearer";
+        token = HARDCODED_SYNC_TEST_TOKEN;
+        console.info("[airalo-sync][step-3][packages] Using hardcoded test token for packages request", {
+          attempt,
+          hardcodedToken: true,
+        });
+      } else {
+        console.info("[airalo-sync][step-3][packages] Requesting fresh access token before packages request", {
+          attempt,
+          cacheBypass: true,
+        });
+        token = await this.getFreshAccessToken(preserveTokenTypeForNextAttempt);
+        preserveTokenTypeForNextAttempt = false;
+      }
+
       preserveTokenTypeForNextAttempt = false;
 
       console.info("[airalo-sync][step-3][packages] Using access token for request", {
