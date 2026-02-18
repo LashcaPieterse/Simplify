@@ -266,6 +266,7 @@ export class AiraloError extends Error {
 // Docs currently reference /v2/token (no /api prefix).
 const DEFAULT_BASE_URL =
   process.env.AIRALO_BASE_URL ?? "https://partners-api.airalo.com/v2";
+const HARDCODED_SYNC_TEST_TOKEN = process.env.AIRALO_SYNC_TEST_TOKEN?.trim();
 // Pad token expiry to avoid using near-expired tokens; Airalo issues short-lived tokens.
 const DEFAULT_TOKEN_BUFFER_SECONDS = 60;
 const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
