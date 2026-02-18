@@ -88,6 +88,8 @@ export async function GET(request: NextRequest) {
           airaloClientSecretFingerprint: fingerprint(trimmedClientSecret),
           databaseUrlPresent: Boolean(databaseUrl),
           cronTokenPresent: Boolean(process.env.AIRALO_SYNC_CRON_TOKEN),
+          airaloSyncTestTokenPresent: Boolean(process.env.AIRALO_SYNC_TEST_TOKEN),
+          airaloSyncTestTokenFingerprint: fingerprint(process.env.AIRALO_SYNC_TEST_TOKEN?.trim()),
         },
       });
     }
