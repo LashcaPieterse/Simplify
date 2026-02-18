@@ -652,7 +652,11 @@ export class AiraloClient {
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      const token = await this.getAccessToken(preserveTokenTypeForNextAttempt);
+      console.info("[airalo-sync][step-3][packages] Requesting fresh access token before packages request", {
+        attempt,
+        cacheBypass: true,
+      });
+      const token = await this.getFreshAccessToken(preserveTokenTypeForNextAttempt);
       preserveTokenTypeForNextAttempt = false;
 
       console.info("[airalo-sync][step-3][packages] Using access token for request", {
@@ -957,6 +961,11 @@ export class AiraloClient {
       statusText: response.statusText,
       body,
     });
+  }
+
+  private async getFreshAccessToken(preserveTokenType = false): Promise<string> {
+    await this.clearCachedToken();
+    return this.getAccessToken(preserveTokenType);
   }
 
   private async getAccessToken(preserveTokenType = false): Promise<string> {
