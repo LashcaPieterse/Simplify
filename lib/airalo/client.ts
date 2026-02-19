@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import type { ZodType, ZodTypeDef } from "zod";
 import {
   OrderResponseSchema,
@@ -1039,7 +1039,10 @@ export class AiraloClient {
   }
 
   private async requestAccessToken(): Promise<string> {
-    console.info("[airalo-sync][step-2][token] Requesting Airalo access token");
+    const tokenRequestId = randomUUID();
+    console.info("[airalo-sync][step-2][token] Requesting Airalo access token", {
+      tokenRequestId,
+    });
     const body = new URLSearchParams();
     body.set("client_id", this.clientId);
     body.set("client_secret", this.clientSecret);
@@ -1048,9 +1051,13 @@ export class AiraloClient {
     const response = await this.executeWithRateLimitRetry(() =>
       this.fetchFn(`${this.baseUrl}/token`, {
         method: "POST",
+        cache: "no-store",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/x-www-form-urlencoded",
+          "Cache-Control": "no-cache, no-store, max-age=0",
+          Pragma: "no-cache",
+          "X-Airalo-Token-Request-Id": tokenRequestId,
         },
         body,
       }),
@@ -1083,6 +1090,7 @@ export class AiraloClient {
     const parsed = TokenResponseSchema.parse(json);
 
     console.info("[airalo-sync][step-2][token] Access token received", {
+      tokenRequestId,
       expiresInSeconds: parsed.data.expires_in,
       tokenType: parsed.data.token_type,
       token: this.formatTokenForLog(parsed.data.access_token),

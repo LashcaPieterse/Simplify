@@ -39,9 +39,13 @@ async function requestFreshTokenForDebug(): Promise<TokenProbeResult> {
 
   const response = await fetch(`${baseUrl}/token`, {
     method: "POST",
+    cache: "no-store",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
+      "Cache-Control": "no-cache, no-store, max-age=0",
+      Pragma: "no-cache",
+      "X-Airalo-Debug-Token-Probe": String(Date.now()),
     },
     body,
   });
