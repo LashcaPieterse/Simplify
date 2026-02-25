@@ -424,6 +424,71 @@ test("AiraloClient can include client credentials on package requests when enabl
   assert.equal(url.searchParams.get("client_id"), "client-id");
   assert.equal(url.searchParams.get("client_secret"), "client-secret");
 });
+
+test("AiraloClient retries package sync without client credential query params when passthrough is rejected", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "stale-token",
+    expiresAt: Date.now() + 60_000,
+  });
+  const requestedUrls: string[] = [];
+  let packageCalls = 0;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      packageCalls += 1;
+      requestedUrls.push(target);
+
+      if (packageCalls === 1) {
+        return jsonResponse(
+          {
+            data: [],
+            meta: {
+              message:
+                "Authentication failed. This could be due to an expired token, please generate a new token. If the issue persists, verify your client_id and client_secret are correct.",
+            },
+          },
+          { status: 401 },
+        );
+      }
+
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+    sendClientCredentialsWithPackages: true,
+  });
+
+  await client.getPackages({ limit: 10, page: 2 });
+
+  assert.equal(packageCalls, 2);
+  const first = new URL(requestedUrls[0]!);
+  const second = new URL(requestedUrls[1]!);
+
+  assert.equal(first.searchParams.get("client_id"), "client-id");
+  assert.equal(first.searchParams.get("client_secret"), "client-secret");
+  assert.equal(second.searchParams.get("client_id"), null);
+  assert.equal(second.searchParams.get("client_secret"), null);
+  assert.equal(second.searchParams.get("limit"), "10");
+  assert.equal(second.searchParams.get("page"), "2");
+});
+
 test("AiraloClient fetches packages from the live API when env vars are configured", async () => {
   const clientId = process.env.AIRALO_CLIENT_ID;
   const clientSecret = process.env.AIRALO_CLIENT_SECRET;
