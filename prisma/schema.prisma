@@ -76,6 +76,10 @@ model Package {
   fairUsagePolicy    String?  @map("fair_usage_policy")
   imageUrl           String?  @map("image_url")
   metadata           Json?    @default(dbgenerated("'{}'::jsonb"))
+  sourcePriceDecimal Decimal? @db.Decimal(12, 4) @map("source_price_decimal")
+  sellPriceDecimal   Decimal? @db.Decimal(12, 4) @map("sell_price_decimal")
+  lastSyncedAt       DateTime? @map("last_synced_at")
+  sourceHash         String?  @map("source_hash")
   isActive           Boolean  @default(true) @map("is_active")
   deactivatedAt      DateTime? @map("deactivated_at")
   createdAt          DateTime @default(now()) @map("created_at")
@@ -84,6 +88,104 @@ model Package {
   @@index([countryId])
   @@index([operatorId])
   @@map("packages")
+}
+
+model SyncRun {
+  id             String         @id @default(cuid())
+  startedAt      DateTime       @default(now()) @map("started_at")
+  finishedAt     DateTime?      @map("finished_at")
+  status         String
+  source         String         @default("airalo")
+  triggeredBy    String         @default("system") @map("triggered_by")
+  version        String?
+  notes          String?
+  errorSummary   String?        @map("error_summary")
+  insertedCount  Int            @default(0) @map("inserted_count")
+  updatedCount   Int            @default(0) @map("updated_count")
+  skippedCount   Int            @default(0) @map("skipped_count")
+  warningCount   Int            @default(0) @map("warning_count")
+  failureCount   Int            @default(0) @map("failure_count")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  items          SyncRunItem[]
+  snapshots      EntitySnapshot[]
+  pricingAudits  PricingAudit[]
+
+  @@index([startedAt])
+  @@index([status])
+  @@map("sync_runs")
+}
+
+model SyncRunItem {
+  id           String   @id @default(cuid())
+  run          SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId        String   @map("run_id")
+  entityType   String   @map("entity_type")
+  entityKey    String   @map("entity_key")
+  action       String
+  beforeHash   String?  @map("before_hash")
+  afterHash    String?  @map("after_hash")
+  diffJson     Json?    @map("diff_json")
+  warningFlags String[] @default([]) @map("warning_flags")
+  errorText    String?  @map("error_text")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([runId, entityType])
+  @@index([entityType, entityKey])
+  @@unique([runId, entityType, entityKey])
+  @@map("sync_run_items")
+}
+
+model EntitySnapshot {
+  id             String   @id @default(cuid())
+  run            SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId          String   @map("run_id")
+  entityType     String   @map("entity_type")
+  entityKey      String   @map("entity_key")
+  rawPayloadJson Json     @map("raw_payload_json")
+  normalizedJson Json     @map("normalized_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([runId, entityType])
+  @@index([entityType, entityKey, createdAt])
+  @@map("entity_snapshots")
+}
+
+model PricingAudit {
+  id              String    @id @default(cuid())
+  packageAiraloId String    @map("package_airalo_id")
+  run             SyncRun?  @relation(fields: [runId], references: [id], onDelete: SetNull)
+  runId           String?   @map("run_id")
+  sourcePrice     Decimal   @db.Decimal(12, 4) @map("source_price")
+  dbPrice         Decimal?  @db.Decimal(12, 4) @map("db_price")
+  publishedPrice  Decimal?  @db.Decimal(12, 4) @map("published_price")
+  currency        String
+  deltaAbs        Decimal   @db.Decimal(12, 4) @map("delta_abs")
+  deltaPct        Decimal   @db.Decimal(8, 4) @map("delta_pct")
+  severity        String
+  status          String    @default("open")
+  resolutionNotes String?   @map("resolution_notes")
+  resolvedBy      String?   @map("resolved_by")
+  resolvedAt      DateTime? @map("resolved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([packageAiraloId])
+  @@index([status, severity])
+  @@index([runId])
+  @@map("pricing_audits")
+}
+
+model PublishingState {
+  packageAiraloId   String   @id @map("package_airalo_id")
+  sanityDocumentId  String?  @map("sanity_document_id")
+  publishedAt       DateTime? @map("published_at")
+  publishedPrice    Decimal? @db.Decimal(12, 4) @map("published_price")
+  publishedCurrency String?  @map("published_currency")
+  lastSeenAt        DateTime @default(now()) @map("last_seen_at")
+
+  @@index([lastSeenAt])
+  @@map("publishing_state")
 }
 
 model AiraloPackage {

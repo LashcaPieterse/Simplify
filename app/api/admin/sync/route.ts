@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { runAiraloSyncJob } from "@/lib/airalo-sync";
+import { requireAdminApiSession } from "@/lib/admin/guards";
+import { runSyncAuditJob } from "@/lib/sync-audit/sync-job";
 
 export async function POST(request: NextRequest) {
-  const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-  const session = await verifySessionToken(token);
+  const session = await requireAdminApiSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await runAiraloSyncJob(session.email);
+  const result = await runSyncAuditJob({
+    triggeredBy: session.email,
+    continueOnError: true,
+    notes: "Manual sync run from admin portal",
+  });
+
   return NextResponse.json(result);
 }
