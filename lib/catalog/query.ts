@@ -135,10 +135,50 @@ type PackageMetadata = {
 
 type PackageRecord = {
   pkg: Prisma.PackageGetPayload<{
-    include: { operator: true; country: true };
+    select: typeof CATALOG_PACKAGE_SELECT;
   }>;
   metadata: PackageMetadata | null;
 };
+
+const CATALOG_PACKAGE_SELECT = {
+  id: true,
+  externalId: true,
+  name: true,
+  status: true,
+  simType: true,
+  isRechargeable: true,
+  networkTypes: true,
+  voiceMinutes: true,
+  sms: true,
+  apn: true,
+  iccid: true,
+  smdpAddress: true,
+  qrCodeData: true,
+  qrCodeUrl: true,
+  activationCode: true,
+  topupParentId: true,
+  dataAmountMb: true,
+  validityDays: true,
+  isUnlimited: true,
+  priceCents: true,
+  sellingPriceCents: true,
+  currencyCode: true,
+  netPriceJson: true,
+  rrpPriceJson: true,
+  shortInfo: true,
+  qrInstallation: true,
+  manualInstallation: true,
+  isFairUsagePolicy: true,
+  fairUsagePolicy: true,
+  imageUrl: true,
+  metadata: true,
+  isActive: true,
+  deactivatedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  operator: true,
+  country: true,
+} as const satisfies Prisma.PackageSelect;
 
 type PackageMaps = {
   bySku: Map<string, PackageRecord>;
@@ -416,7 +456,7 @@ export async function getCatalogProductSummaries(
     (() =>
       prisma.package.findMany({
         where: { isActive: true },
-        include: { operator: true, country: true },
+        select: CATALOG_PACKAGE_SELECT,
         orderBy: { updatedAt: "desc" },
       }));
 
