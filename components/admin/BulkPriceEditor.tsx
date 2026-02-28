@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveBulkPrices } from "@/app/admin/operations/actions";
+import { saveBulkPrices } from "@/app/(admin)/admin/operations/actions";
 import { formatCurrency } from "@/lib/format";
 
 type PackageLite = {

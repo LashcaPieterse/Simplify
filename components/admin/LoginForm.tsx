@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { loginAdmin } from "@/app/admin/login/actions";
+import { loginAdmin } from "@/app/(admin-auth)/admin/login/actions";
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
