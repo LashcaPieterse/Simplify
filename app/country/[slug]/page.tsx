@@ -104,14 +104,15 @@ export default async function CountryPage({ params }: CountryPageProps) {
 }
 
 function PlanCard({ plan }: { plan: PlanDetail }) {
-  const hasLivePrice = plan.price?.source === "airalo" && typeof plan.price.amount === "number";
+  const livePrice = plan.price?.source === "airalo" ? plan.price : null;
+  const hasLivePrice = Boolean(livePrice && typeof livePrice.amount === "number");
   const formattedPrice = hasLivePrice
     ? new Intl.NumberFormat("en-US", {
         style: "currency",
-        currency: plan.price.currency ?? "USD",
-        minimumFractionDigits: plan.price.amount % 1 !== 0 ? 2 : 0,
+        currency: livePrice?.currency ?? "USD",
+        minimumFractionDigits: (livePrice?.amount ?? 0) % 1 !== 0 ? 2 : 0,
         maximumFractionDigits: 2
-      }).format(plan.price.amount)
+      }).format(livePrice?.amount ?? 0)
     : "Unavailable";
 
   return (
