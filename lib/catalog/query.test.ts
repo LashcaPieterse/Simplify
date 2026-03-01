@@ -3,6 +3,46 @@ import test from "node:test";
 
 import { getCatalogProductSummaries } from "./query";
 
+type TestPackage = {
+  id: string;
+  externalId: string;
+  name: string;
+  status: string | null;
+  simType: string | null;
+  isRechargeable: boolean | null;
+  networkTypes: string[];
+  voiceMinutes: number | null;
+  sms: number | null;
+  apn: string | null;
+  iccid: string | null;
+  smdpAddress: string | null;
+  qrCodeData: string | null;
+  qrCodeUrl: string | null;
+  activationCode: string | null;
+  topupParentId: string | null;
+  dataAmountMb: number | null;
+  validityDays: number | null;
+  isUnlimited: boolean;
+  priceCents: number;
+  sellingPriceCents: number | null;
+  currencyCode: string;
+  netPriceJson: unknown;
+  rrpPriceJson: unknown;
+  shortInfo: string | null;
+  qrInstallation: string | null;
+  manualInstallation: string | null;
+  isFairUsagePolicy: boolean | null;
+  fairUsagePolicy: string | null;
+  imageUrl: string | null;
+  metadata: unknown;
+  isActive: boolean;
+  deactivatedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  operator: null;
+  country: { id: string; name: string; slug: string };
+};
+
 test("getCatalogProductSummaries returns unavailable when no DB match exists", async () => {
   const sanityProducts = [
     {
@@ -105,7 +145,7 @@ test("getCatalogProductSummaries does not fall back to country matches", async (
         updatedAt: new Date(),
         operator: null,
         country: { id: "country-1", name: "Malaysia", slug: "malaysia" },
-      } as any,
+      } as TestPackage,
     ],
   });
 
