@@ -650,6 +650,8 @@ function applyLivePackageSnapshot(
   if (!snapshot) {
     return {
       ...basePlan,
+      priceUSD: 0,
+      price: null,
       package: basePlan.package ? { ...basePlan.package, isActive: false } : basePlan.package,
     };
   }

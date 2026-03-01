@@ -359,16 +359,6 @@ function toCatalogPackageInfo(pkg?: CatalogPackageDoc | null): CatalogPackageInf
   };
 }
 
-function priceFromCatalogPackage(pkg?: CatalogPackageInfo | null): MoneyValue | null {
-  if (!pkg || typeof pkg.priceCents !== "number") return null;
-
-  return {
-    amount: centsToAmount(pkg.priceCents),
-    currency: pkg.currency,
-    source: "sanity",
-  };
-}
-
 function applyPackageToProduct(
   product: SanityCatalogProduct,
   maps: PackageMaps,
@@ -394,24 +384,8 @@ function applyPackageToProduct(
   } else if (matchedRecord) {
     packageInfo = createPackageInfo(matchedRecord);
   }
-  const sanityPackagePrice = priceFromCatalogPackage(packageInfoFromSanity);
-
-  const fallbackPrice: MoneyValue | null = product.price ??
-    (typeof product.priceUSD === "number"
-      ? {
-          amount: product.priceUSD,
-          currency: "USD",
-          source: "sanity" as const,
-        }
-      : null);
-
-  const price = priceFromPackage ?? sanityPackagePrice ?? fallbackPrice;
-  const priceUSD =
-    price && price.currency === "USD"
-      ? price.amount
-      : typeof product.priceUSD === "number"
-        ? product.priceUSD
-        : price?.amount ?? 0;
+  const price = priceFromPackage ?? null;
+  const priceUSD = price?.currency === "USD" ? price.amount : 0;
 
   const provider = product.provider ?? buildProviderInfo(product, packageInfo);
   const slugs = product.slugs ?? buildSlugs(product);

@@ -34,8 +34,9 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
 }) {
   const imageUrl = product.coverImage ? urlForImage(product.coverImage)?.width(240).height(160).url() : null;
   const href = getEsimProductHref(product);
-  const priceAmount = product.price?.amount ?? product.priceUSD;
-  const priceCurrency = product.price?.currency ?? "USD";
+  const livePrice = product.price?.source === "airalo" ? product.price : null;
+  const priceAmount = livePrice?.amount;
+  const priceCurrency = livePrice?.currency ?? "USD";
   const providerBadge = product.provider?.badge ?? product.providerBadge;
   const providerName = product.provider?.title ?? product.package?.operator?.title;
   const packageTitle = product.package?.title ?? product.displayName;

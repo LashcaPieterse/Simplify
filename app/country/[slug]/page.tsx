@@ -104,6 +104,16 @@ export default async function CountryPage({ params }: CountryPageProps) {
 }
 
 function PlanCard({ plan }: { plan: PlanDetail }) {
+  const hasLivePrice = plan.price?.source === "airalo" && typeof plan.price.amount === "number";
+  const formattedPrice = hasLivePrice
+    ? new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: plan.price.currency ?? "USD",
+        minimumFractionDigits: plan.price.amount % 1 !== 0 ? 2 : 0,
+        maximumFractionDigits: 2
+      }).format(plan.price.amount)
+    : "Unavailable";
+
   return (
     <div className="flex h-full flex-col justify-between rounded-3xl border border-brand-100/80 bg-white p-6 shadow-card">
       <div className="flex items-center justify-between">
@@ -135,14 +145,7 @@ function PlanCard({ plan }: { plan: PlanDetail }) {
         </li>
       </ul>
       <div className="mt-6 space-y-3">
-        <p className="text-2xl font-semibold text-brand-900">
-          {new Intl.NumberFormat("en-US", {
-            style: "currency",
-            currency: "USD",
-            minimumFractionDigits: plan.priceUSD % 1 !== 0 ? 2 : 0,
-            maximumFractionDigits: 2
-          }).format(plan.priceUSD)}
-        </p>
+        <p className="text-2xl font-semibold text-brand-900">{formattedPrice}</p>
         <OrderButton
           packageId={getCatalogPackageId(plan.package)}
           label="Get this plan"

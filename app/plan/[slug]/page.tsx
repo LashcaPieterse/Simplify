@@ -36,6 +36,8 @@ export default async function PlanPage({ params }: PlanPageProps) {
     ? plan.provider.title.toLowerCase().replace(/\s+/g, "")
     : "simplify";
 
+  const hasLivePrice = plan.price?.source === "airalo" && typeof plan.price.amount === "number";
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-16 lg:px-10">
       <div className="rounded-[2rem] border border-brand-100/80 bg-white p-10 shadow-card">
@@ -68,12 +70,14 @@ export default async function PlanPage({ params }: PlanPageProps) {
               <Image src={providerLogo} alt={plan.provider?.title ?? "Carrier"} width={64} height={64} className="rounded-full" />
             ) : null}
             <p className="text-3xl font-semibold text-brand-900">
-              {new Intl.NumberFormat("en-US", {
-                style: "currency",
-                currency: "USD",
-                minimumFractionDigits: plan.priceUSD % 1 !== 0 ? 2 : 0,
-                maximumFractionDigits: 2
-              }).format(plan.priceUSD)}
+              {hasLivePrice
+                ? new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: plan.price.currency ?? "USD",
+                    minimumFractionDigits: plan.price.amount % 1 !== 0 ? 2 : 0,
+                    maximumFractionDigits: 2
+                  }).format(plan.price.amount)
+                : "Unavailable"}
             </p>
             <OrderButton
               packageId={getCatalogPackageId(plan.package)}
