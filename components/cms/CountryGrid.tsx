@@ -8,6 +8,8 @@ const mapCountryToProductCard = (country: CountryGridSection["countries"][number
   const imageUrl = country.coverImage ? urlForImage(country.coverImage)?.width(360).height(240).url() ?? null : null;
   const plan = country.plan;
 
+  const livePrice = plan?.price?.source === "airalo" ? plan.price : null;
+
   return {
     id: country._id,
     title: country.title,
@@ -21,8 +23,8 @@ const mapCountryToProductCard = (country: CountryGridSection["countries"][number
       alt: `${country.title} cover`
     },
     price:
-      typeof plan?.priceUSD === "number"
-        ? { amount: plan.priceUSD, currency: "USD" }
+      typeof livePrice?.amount === "number"
+        ? { amount: livePrice.amount, currency: livePrice.currency ?? "USD" }
         : { label: "Multiple plans" }
   };
 };

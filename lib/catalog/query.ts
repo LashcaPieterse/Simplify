@@ -182,7 +182,6 @@ const CATALOG_PACKAGE_SELECT = {
 
 type PackageMaps = {
   bySku: Map<string, PackageRecord>;
-  byDestination: Map<string, PackageRecord>;
 };
 
 function normalizeKey(value?: string | null): string | null {
@@ -226,7 +225,6 @@ function parsePackageMetadata(pkg: PackageRecord["pkg"]): PackageMetadata | null
 
 function buildPackageMaps(packages: PackageRecord["pkg"][]): PackageMaps {
   const bySku = new Map<string, PackageRecord>();
-  const byDestination = new Map<string, PackageRecord>();
 
   for (const pkg of packages) {
     const metadata = parsePackageMetadata(pkg);
@@ -237,33 +235,9 @@ function buildPackageMaps(packages: PackageRecord["pkg"][]): PackageMaps {
       bySku.set(skuKey, record);
     }
 
-    const destinationKeys = new Set<string>();
-    const destination = normalizeKey(metadata?.destination ?? null);
-    const destinationName = normalizeKey(metadata?.destinationName ?? null);
-    const countrySlug = normalizeKey(pkg.country?.slug ?? null);
-    const countryName = normalizeKey(pkg.country?.name ?? null);
-
-    if (destination) {
-      destinationKeys.add(destination);
-    }
-    if (destinationName) {
-      destinationKeys.add(destinationName);
-    }
-    if (countrySlug) {
-      destinationKeys.add(countrySlug);
-    }
-    if (countryName) {
-      destinationKeys.add(countryName);
-    }
-
-    destinationKeys.forEach((key) => {
-      if (key && !byDestination.has(key)) {
-        byDestination.set(key, record);
-      }
-    });
   }
 
-  return { bySku, byDestination };
+  return { bySku };
 }
 
 function centsToAmount(cents: number): number {
@@ -363,16 +337,10 @@ function applyPackageToProduct(
   product: SanityCatalogProduct,
   maps: PackageMaps,
 ): EsimProductSummary {
-  const productSlug = normalizeKey(product.slug);
-  const countrySlug = normalizeKey(product.country?.slug ?? null);
   const packageSlug = normalizeKey(product.package?.externalId ?? product.slugs?.plan ?? null);
   const packageInfoFromSanity = toCatalogPackageInfo(product.package);
 
-  const matchedRecord =
-    (packageSlug && maps.bySku.get(packageSlug)) ||
-    (productSlug && maps.bySku.get(productSlug)) ||
-    (countrySlug && maps.byDestination.get(countrySlug)) ||
-    null;
+  const matchedRecord = packageSlug ? maps.bySku.get(packageSlug) ?? null : null;
 
   const priceFromPackage = matchedRecord ? createPriceFromPackage(matchedRecord) : null;
   let packageInfo: CatalogPackageInfo | null = null;

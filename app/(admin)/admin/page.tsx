@@ -4,6 +4,7 @@ import { SimpleBarChart } from "@/components/admin/SimpleBarChart";
 import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
 import prisma from "@/lib/db/client";
 import { formatCurrency } from "@/lib/format";
+import { getCatalogMismatches } from "@/lib/catalog/mismatches";
 
 function dateRangeFromParams(range?: string) {
   const now = new Date();
@@ -19,6 +20,8 @@ function dateRangeFromParams(range?: string) {
 export default async function AdminDashboard({ searchParams }: { searchParams?: Record<string, string | string[]> }) {
   const rangeKey = typeof searchParams?.range === "string" ? searchParams?.range : "30d";
   const rangeStart = dateRangeFromParams(rangeKey);
+
+  const mismatches = await getCatalogMismatches();
 
   const orders = await prisma.esimOrder.findMany({
     where: { createdAt: { gte: rangeStart } },
@@ -126,6 +129,42 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         <KpiCard label="Total profit" value={formatCurrency(totalRevenue - totalCost, "USD")} helper="Selling - wholesale" tone="success" />
         <KpiCard label="Total orders" value={`${totalOrders}`} helper={rangeKey === "7d" ? "Last 7 days" : "Last 30 days"} />
         <KpiCard label="Average order value" value={formatCurrency(Math.round(averageOrderValue), "USD")} helper="Blended" />
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Catalog mismatches</h3>
+            <p className="text-sm text-slate-600">
+              Products missing a live DB package or mapped to inactive packages.
+            </p>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${mismatches.length ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+            {mismatches.length ? `${mismatches.length} issues` : "All clear"}
+          </span>
+        </div>
+        {mismatches.length ? (
+          <div className="mt-4 space-y-3 text-sm">
+            {mismatches.slice(0, 8).map((entry) => (
+              <div key={entry.productId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
+                <div>
+                  <p className="font-semibold text-slate-900">{entry.productName}</p>
+                  <p className="text-xs text-slate-500">
+                    package={entry.packageExternalId ?? "none"} • {entry.reason.replace(/_/g, " ")}
+                  </p>
+                </div>
+                <div className="text-xs text-slate-500">
+                  {entry.packageUpdatedAt ? `db updated ${entry.packageUpdatedAt.toISOString().slice(0, 10)}` : "no db record"}
+                </div>
+              </div>
+            ))}
+            {mismatches.length > 8 ? (
+              <p className="text-xs text-slate-500">Showing 8 of {mismatches.length}. Fix the package references in Sanity.</p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-600">No mismatches detected.</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">

@@ -211,8 +211,9 @@ export function Hero({ hero, tagline, highlightedProducts, allProducts, fallback
 function HeroCountryCard({ country }: { country: CountrySummary }) {
   const imageUrl = country.coverImage ? urlForImage(country.coverImage)?.width(240).height(160).url() : null;
   const plan = country.plan;
-  const priceAmount = plan?.price?.amount ?? plan?.priceUSD;
-  const priceCurrency = plan?.price?.currency ?? "USD";
+  const livePrice = plan?.price?.source === "airalo" ? plan.price : null;
+  const priceAmount = livePrice?.amount;
+  const priceCurrency = livePrice?.currency ?? "USD";
   const providerName = plan?.provider?.title ?? plan?.package?.operator?.title;
 
   return (
