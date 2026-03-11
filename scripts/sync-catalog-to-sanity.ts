@@ -361,13 +361,14 @@ async function main() {
     }
   }
 
+  const expectedPackageIds = new Set(packageDocs.map((doc) => doc._id as string));
   const existingPackageIds = await fetchExistingIds("catalogPackage");
   const countryDocsWithPrimary = countryDocs.map((doc) => {
     const docId = doc._id as string;
     const primaryRef = primaryPackageRefByCountryDocId.get(docId);
     return {
       ...doc,
-      primaryPackage: primaryRef && existingPackageIds.has(primaryRef)
+      primaryPackage: primaryRef && expectedPackageIds.has(primaryRef) && existingPackageIds.has(primaryRef)
         ? { _type: "reference", _ref: primaryRef }
         : null,
     };
@@ -384,8 +385,6 @@ async function main() {
 
   const expectedCountryIds = new Set(countryDocs.map((doc) => doc._id as string));
   const expectedOperatorIds = new Set(operatorDocs.map((doc) => doc._id as string));
-  const expectedPackageIds = new Set(packageDocs.map((doc) => doc._id as string));
-
   const staleCountries = Array.from(existingCountryIds).filter((id) => !expectedCountryIds.has(id));
   const staleOperators = Array.from(existingOperatorIds).filter((id) => !expectedOperatorIds.has(id));
   const stalePackages = Array.from(existingPackageIds).filter((id) => !expectedPackageIds.has(id));
