@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Show commit
+        run: git log -1 --oneline
+
       - name: Sync catalog to Sanity
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
