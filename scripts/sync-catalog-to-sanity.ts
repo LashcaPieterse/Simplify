@@ -226,35 +226,14 @@ async function main() {
 
   const now = new Date().toISOString();
 
-  // Select a primary package per country (cheapest by priceCents).
-  const primaryPackageRefByCountryId = new Map<string, string>();
-  for (const pkg of packages) {
-    if (typeof pkg.priceCents !== "number") continue;
-    const currentRef = primaryPackageRefByCountryId.get(pkg.countryId);
-    const currentPrice =
-      currentRef === undefined
-        ? Number.POSITIVE_INFINITY
-        : pkg.priceCents;
-    const candidatePrice = pkg.priceCents;
-    if (candidatePrice <= currentPrice) {
-      const pkgDocId = `catalog-package-${sanitizeDocumentId(pkg.externalId)}`;
-      primaryPackageRefByCountryId.set(pkg.countryId, pkgDocId);
-    }
-  }
-
   const countryIdMap = new Map<string, string>();
   const countryById = new Map<string, (typeof countries)[number]>();
-  const primaryPackageRefByCountryDocId = new Map<string, string>();
   const countryDocs: Record<string, unknown>[] = [];
 
   for (const country of countries) {
     const docId = `catalog-country-${country.countryCode.toLowerCase()}`;
     countryIdMap.set(country.id, docId);
     countryById.set(country.id, country);
-    const primaryRef = primaryPackageRefByCountryId.get(country.id);
-    if (primaryRef) {
-      primaryPackageRefByCountryDocId.set(docId, primaryRef);
-    }
 
     const sourceImageUrl = country.imageUrl ?? fallbackCountryImageUrl(country.countryCode, country.name);
     const image =
@@ -313,6 +292,7 @@ async function main() {
   }
 
   const packageDocs: Record<string, unknown>[] = [];
+  const primaryCandidateByCountryId = new Map<string, { priceCents: number; docId: string }>();
 
   for (const pkg of packages) {
     const countryRef = countryIdMap.get(pkg.countryId);
@@ -332,8 +312,17 @@ async function main() {
       existingImages.get(docId) ??
       (await uploadPlaceholderImage("catalog-package-placeholder.png"));
 
+    const pkgDocId = `catalog-package-${sanitizeDocumentId(pkg.externalId)}`;
+
+    if (typeof pkg.priceCents === "number") {
+      const current = primaryCandidateByCountryId.get(pkg.countryId);
+      if (!current || pkg.priceCents <= current.priceCents) {
+        primaryCandidateByCountryId.set(pkg.countryId, { priceCents: pkg.priceCents, docId: pkgDocId });
+      }
+    }
+
     packageDocs.push({
-      _id: docId,
+      _id: pkgDocId,
       _type: "catalogPackage",
       title: pkg.name,
       externalId: pkg.externalId,
@@ -363,6 +352,14 @@ async function main() {
   await upsertDocuments(countryDocs, "catalog countries");
   await upsertDocuments(operatorDocs, "catalog operators");
   await upsertDocuments(packageDocs, "catalog packages", "sync");
+
+  const primaryPackageRefByCountryDocId = new Map<string, string>();
+  for (const [countryId, candidate] of primaryCandidateByCountryId) {
+    const countryDocId = countryIdMap.get(countryId);
+    if (countryDocId) {
+      primaryPackageRefByCountryDocId.set(countryDocId, candidate.docId);
+    }
+  }
 
   const existingPackageIds = await fetchExistingIds("catalogPackage");
   const countryDocsWithPrimary = countryDocs.map((doc) => {
