@@ -189,10 +189,14 @@ function sanitizeDocumentId(value: string): string {
   return Buffer.from(value).toString("base64url").slice(0, 24);
 }
 
-async function upsertDocuments(documents: Record<string, unknown>[], label: string) {
+async function upsertDocuments(
+  documents: Record<string, unknown>[],
+  label: string,
+  visibility: "sync" | "async" = "async",
+) {
   for (const batch of chunk(documents, BATCH_SIZE)) {
     const mutations = batch.map((doc) => ({ createOrReplace: doc }));
-    await sanity.mutate(mutations, { returnIds: false, visibility: "async" });
+    await sanity.mutate(mutations, { returnIds: false, visibility });
   }
   console.info(`[sanity-sync] Upserted ${documents.length} ${label}`);
 }
@@ -358,7 +362,7 @@ async function main() {
 
   await upsertDocuments(countryDocs, "catalog countries");
   await upsertDocuments(operatorDocs, "catalog operators");
-  await upsertDocuments(packageDocs, "catalog packages");
+  await upsertDocuments(packageDocs, "catalog packages", "sync");
 
   const existingPackageIds = await fetchExistingIds("catalogPackage");
   const countryDocsWithPrimary = countryDocs.map((doc) => {
@@ -372,7 +376,7 @@ async function main() {
     };
   });
 
-  await upsertDocuments(countryDocsWithPrimary, "catalog countries (primary packages)");
+  await upsertDocuments(countryDocsWithPrimary, "catalog countries (primary packages)", "sync");
 
   // Remove stale docs so Sanity mirrors the database exactly.
   const [existingCountryIds, existingOperatorIds, existingPackageIds] = await Promise.all([
