@@ -240,12 +240,17 @@ async function main() {
 
   const countryIdMap = new Map<string, string>();
   const countryById = new Map<string, (typeof countries)[number]>();
+  const primaryPackageRefByCountryDocId = new Map<string, string>();
   const countryDocs: Record<string, unknown>[] = [];
 
   for (const country of countries) {
     const docId = `catalog-country-${country.countryCode.toLowerCase()}`;
     countryIdMap.set(country.id, docId);
     countryById.set(country.id, country);
+    const primaryRef = primaryPackageRefByCountryId.get(country.id);
+    if (primaryRef) {
+      primaryPackageRefByCountryDocId.set(docId, primaryRef);
+    }
 
     const sourceImageUrl = country.imageUrl ?? fallbackCountryImageUrl(country.countryCode, country.name);
     const image =
@@ -262,9 +267,8 @@ async function main() {
       badge: null,
       summary: null,
       featured: false,
-      primaryPackage: primaryPackageRefByCountryId.has(country.id)
-        ? { _type: "reference", _ref: primaryPackageRefByCountryId.get(country.id)! }
-        : null,
+      // Set primaryPackage after packages exist to avoid reference errors.
+      primaryPackage: null,
       image,
       metadataJson: serializeMetadata(country.metadata),
       lastSyncedAt: now
@@ -355,6 +359,20 @@ async function main() {
   await upsertDocuments(countryDocs, "catalog countries");
   await upsertDocuments(operatorDocs, "catalog operators");
   await upsertDocuments(packageDocs, "catalog packages");
+
+  const expectedPackageIds = new Set(packageDocs.map((doc) => doc._id as string));
+  const countryDocsWithPrimary = countryDocs.map((doc) => {
+    const docId = doc._id as string;
+    const primaryRef = primaryPackageRefByCountryDocId.get(docId);
+    return {
+      ...doc,
+      primaryPackage: primaryRef && expectedPackageIds.has(primaryRef)
+        ? { _type: "reference", _ref: primaryRef }
+        : null,
+    };
+  });
+
+  await upsertDocuments(countryDocsWithPrimary, "catalog countries (primary packages)");
 
   // Remove stale docs so Sanity mirrors the database exactly.
   const [existingCountryIds, existingOperatorIds, existingPackageIds] = await Promise.all([
