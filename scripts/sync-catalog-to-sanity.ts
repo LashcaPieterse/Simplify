@@ -360,13 +360,13 @@ async function main() {
   await upsertDocuments(operatorDocs, "catalog operators");
   await upsertDocuments(packageDocs, "catalog packages");
 
-  const expectedPackageIds = new Set(packageDocs.map((doc) => doc._id as string));
+  const existingPackageIds = await fetchExistingIds("catalogPackage");
   const countryDocsWithPrimary = countryDocs.map((doc) => {
     const docId = doc._id as string;
     const primaryRef = primaryPackageRefByCountryDocId.get(docId);
     return {
       ...doc,
-      primaryPackage: primaryRef && expectedPackageIds.has(primaryRef)
+      primaryPackage: primaryRef && existingPackageIds.has(primaryRef)
         ? { _type: "reference", _ref: primaryRef }
         : null,
     };
