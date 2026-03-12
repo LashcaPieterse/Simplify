@@ -93,9 +93,16 @@ export async function createCheckout(
   const input = parsed.data;
   const db = options.prisma ?? prismaClient;
   const quantity = normaliseQuantity(input.quantity);
+  const packageIdIsUuid = isUuid(input.packageId);
+
+  logOrderInfo("payments.checkout.package_lookup", {
+    requestedPackageId: input.packageId,
+    packageIdIsUuid,
+    userId: options.userId ?? null,
+  });
 
   // Accept either the Prisma package id or the externalId from catalog/Sanity.
-  const packageLookup: Prisma.PackageWhereInput = isUuid(input.packageId)
+  const packageLookup: Prisma.PackageWhereInput = packageIdIsUuid
     ? {
         isActive: true,
         OR: [{ id: input.packageId }, { externalId: input.packageId }],
@@ -108,8 +115,19 @@ export async function createCheckout(
   const pkg = await db.package.findFirst({ where: packageLookup });
 
   if (!pkg) {
+    logOrderError("payments.checkout.package_not_found", {
+      requestedPackageId: input.packageId,
+      packageIdIsUuid,
+      userId: options.userId ?? null,
+    });
     throw new Error("Selected package is unavailable.");
   }
+
+  logOrderInfo("payments.checkout.package_resolved", {
+    requestedPackageId: input.packageId,
+    matchedPackageId: pkg.id,
+    matchedExternalId: pkg.externalId,
+  });
 
   const priceCents = pkg.sellingPriceCents ?? pkg.priceCents;
   const totalCents = priceCents * quantity;
