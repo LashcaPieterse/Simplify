@@ -377,7 +377,7 @@ async function main() {
   await upsertDocuments(countryDocsWithPrimary, "catalog countries (primary packages)", "sync");
 
   // Remove stale docs so Sanity mirrors the database exactly.
-  const [existingCountryIds, existingOperatorIds, existingPackageIds] = await Promise.all([
+  const [existingCountryIds, existingOperatorIds, existingPackageIdsFinal] = await Promise.all([
     fetchExistingIds("catalogCountry"),
     fetchExistingIds("catalogOperator"),
     fetchExistingIds("catalogPackage")
@@ -387,7 +387,7 @@ async function main() {
   const expectedOperatorIds = new Set(operatorDocs.map((doc) => doc._id as string));
   const staleCountries = Array.from(existingCountryIds).filter((id) => !expectedCountryIds.has(id));
   const staleOperators = Array.from(existingOperatorIds).filter((id) => !expectedOperatorIds.has(id));
-  const stalePackages = Array.from(existingPackageIds).filter((id) => !expectedPackageIds.has(id));
+  const stalePackages = Array.from(existingPackageIdsFinal).filter((id) => !expectedPackageIds.has(id));
 
   await deleteDocuments(staleCountries, "catalog countries");
   await deleteDocuments(staleOperators, "catalog operators");
