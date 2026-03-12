@@ -206,18 +206,47 @@ async function fetchExistingIds(type: string): Promise<Set<string>> {
   return new Set(ids ?? []);
 }
 
+function isReferenceDeleteError(error: unknown): {
+  isReferenceError: boolean;
+  referencingIds?: string[];
+} {
+  if (!error || typeof error !== "object") return { isReferenceError: false };
+  const details = (error as { details?: { items?: Array<{ error?: { type?: string; referencingIDs?: string[] } }> } }).details;
+  const items = details?.items ?? [];
+  for (const item of items) {
+    const type = item?.error?.type;
+    if (type === "documentHasExistingReferencesError") {
+      return { isReferenceError: true, referencingIds: item.error?.referencingIDs };
+    }
+  }
+  return { isReferenceError: false };
+}
+
 async function deleteDocuments(
   docIds: string[],
   label: string,
   visibility: "sync" | "async" = "async",
 ) {
   if (!docIds.length) return;
-  for (const batch of chunk(docIds, BATCH_SIZE)) {
-    // Sanity's newer API versions expect the delete mutation to be an object with an id property.
-    const mutations = batch.map((id) => ({ delete: { id } }));
-    await sanity.mutate(mutations, { returnIds: false, visibility });
+  let deleted = 0;
+  let skipped = 0;
+  for (const id of docIds) {
+    try {
+      await sanity.delete(id, { visibility });
+      deleted += 1;
+    } catch (error) {
+      const { isReferenceError, referencingIds } = isReferenceDeleteError(error);
+      if (isReferenceError) {
+        skipped += 1;
+        console.warn(
+          `[sanity-sync] Skipping delete for ${id} (${label}); still referenced by ${referencingIds?.join(", ") ?? "unknown docs"}`,
+        );
+        continue;
+      }
+      throw error;
+    }
   }
-  console.info(`[sanity-sync] Deleted ${docIds.length} stale ${label}`);
+  console.info(`[sanity-sync] Deleted ${deleted} stale ${label} (${skipped} skipped due to references)`);
 }
 
 async function main() {
