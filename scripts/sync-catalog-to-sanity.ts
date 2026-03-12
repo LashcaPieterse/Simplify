@@ -206,12 +206,16 @@ async function fetchExistingIds(type: string): Promise<Set<string>> {
   return new Set(ids ?? []);
 }
 
-async function deleteDocuments(docIds: string[], label: string) {
+async function deleteDocuments(
+  docIds: string[],
+  label: string,
+  visibility: "sync" | "async" = "async",
+) {
   if (!docIds.length) return;
   for (const batch of chunk(docIds, BATCH_SIZE)) {
     // Sanity's newer API versions expect the delete mutation to be an object with an id property.
     const mutations = batch.map((id) => ({ delete: { id } }));
-    await sanity.mutate(mutations, { returnIds: false, visibility: "async" });
+    await sanity.mutate(mutations, { returnIds: false, visibility });
   }
   console.info(`[sanity-sync] Deleted ${docIds.length} stale ${label}`);
 }
@@ -389,9 +393,9 @@ async function main() {
   const staleOperators = Array.from(existingOperatorIds).filter((id) => !expectedOperatorIds.has(id));
   const stalePackages = Array.from(existingPackageIdsFinal).filter((id) => !expectedPackageIds.has(id));
 
-  await deleteDocuments(staleCountries, "catalog countries");
-  await deleteDocuments(staleOperators, "catalog operators");
-  await deleteDocuments(stalePackages, "catalog packages");
+  await deleteDocuments(stalePackages, "catalog packages", "sync");
+  await deleteDocuments(staleOperators, "catalog operators", "sync");
+  await deleteDocuments(staleCountries, "catalog countries", "sync");
 
   console.info(
     `[sanity-sync] Completed. countries=${countryDocs.length} operators=${operatorDocs.length} packages=${packageDocs.length}`
