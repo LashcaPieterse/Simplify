@@ -129,7 +129,7 @@ function fallbackOperatorImageUrl(code?: string | null, name?: string | null): s
   return "https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=1600&q=80";
 }
 
-function fallbackPackageImageUrl(name?: string | null): string | null {
+function fallbackPackageImageUrl(): string | null {
   return "https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=1600&q=80";
 }
 
@@ -348,7 +348,7 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
     }
 
     const docId = `catalog-package-${sanitizeDocumentId(pkg.externalId)}`;
-    const sourceImageUrl = pkg.imageUrl ?? fallbackPackageImageUrl(pkg.name);
+    const sourceImageUrl = pkg.imageUrl ?? fallbackPackageImageUrl();
     const image =
       (await resolveImageFromUrl(sourceImageUrl)) ??
       existingImages.get(docId) ??
