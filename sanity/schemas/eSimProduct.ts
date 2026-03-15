@@ -1,5 +1,4 @@
 import { defineField, defineType } from "sanity";
-import { CatalogPackagePriceInput } from "../components/CatalogPackagePriceInput";
 
 const statusOptions: { title: string; value: "active" | "comingSoon" | "archived" }[] = [
   { title: "Active", value: "active" },
@@ -24,15 +23,6 @@ export const eSimProduct = defineType({
       type: "slug",
       options: { source: "displayName", maxLength: 96 },
       validation: (Rule) => Rule.required()
-    }),
-    defineField({
-      name: "priceUSD",
-      title: "Price (USD)",
-      type: "number",
-      components: { input: CatalogPackagePriceInput },
-      description:
-        "Derived from the selected catalog package selling price (or enter manually if missing).",
-      validation: (Rule) => Rule.positive()
     }),
     defineField({
       name: "coverImage",
@@ -114,16 +104,12 @@ export const eSimProduct = defineType({
     select: {
       title: "displayName",
       subtitle: "status",
-      media: "coverImage",
-      priceUSD: "priceUSD"
+      media: "coverImage"
     },
-    prepare({ title, subtitle, media, priceUSD }) {
-      const priceLabel =
-        typeof priceUSD === "number" ? `$${priceUSD.toFixed(2)}` : "Price unavailable";
-
+    prepare({ title, subtitle, media }) {
       return {
         title,
-        subtitle: subtitle ? `${subtitle} • ${priceLabel}` : priceLabel,
+        subtitle: subtitle ?? "active",
         media
       };
     }

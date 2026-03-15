@@ -2,6 +2,7 @@ import { KpiCard } from "@/components/admin/KpiCard";
 import type { Prisma } from "@prisma/client";
 import { SimpleBarChart } from "@/components/admin/SimpleBarChart";
 import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
+import { RunSanitySyncButton } from "@/components/admin/RunSanitySyncButton";
 import prisma from "@/lib/db/client";
 import { formatCurrency } from "@/lib/format";
 import { getCatalogMismatches } from "@/lib/catalog/mismatches";
@@ -122,6 +123,16 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
             Apply
           </button>
         </form>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p className="text-sm font-semibold text-slate-900">Catalog publish</p>
+        <p className="text-sm text-slate-600">
+          Trigger manual database to Sanity sync from the dashboard.
+        </p>
+        <div className="mt-3">
+          <RunSanitySyncButton />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

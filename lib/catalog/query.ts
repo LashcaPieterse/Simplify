@@ -30,9 +30,6 @@ const CATALOG_PACKAGE_FIELDS = `
   _id,
   externalId,
   title,
-  priceCents,
-  sellingPriceCents,
-  currencyCode,
   dataAmountMb,
   validityDays,
   isUnlimited,
@@ -102,9 +99,6 @@ type CatalogPackageDoc = {
   _id: string;
   externalId?: string;
   title?: string;
-  priceCents?: number;
-  sellingPriceCents?: number | null;
-  currencyCode?: string;
   dataAmountMb?: number | null;
   validityDays?: number | null;
   isUnlimited?: boolean;
@@ -305,17 +299,15 @@ function buildSlugs(product: SanityCatalogProduct): ProductSlugSet {
 function toCatalogPackageInfo(pkg?: CatalogPackageDoc | null): CatalogPackageInfo | null {
   if (!pkg) return null;
 
-  const currency = pkg.currencyCode ?? "USD";
-
   return {
     id: pkg._id,
     externalId: pkg.externalId ?? pkg._id,
     title: pkg.title,
-    currency,
+    currency: "USD",
     badge: pkg.badge,
     summary: pkg.summary,
     image: pkg.image,
-    priceCents: pkg.priceCents ?? 0,
+    priceCents: 0,
     dataLimitMb: pkg.dataAmountMb ?? null,
     validityDays: pkg.validityDays ?? null,
     region: null,

@@ -18,24 +18,6 @@ export const catalogPackage = defineType({
       validation: (Rule) => Rule.required()
     }),
     defineField({
-      name: "priceCents",
-      title: "Price (cents)",
-      type: "number",
-      validation: (Rule) => Rule.required().min(0)
-    }),
-    defineField({
-      name: "sellingPriceCents",
-      title: "Selling price (cents)",
-      type: "number",
-      description: "Recommended retail price when available."
-    }),
-    defineField({
-      name: "currencyCode",
-      title: "Currency",
-      type: "string",
-      validation: (Rule) => Rule.required().length(3)
-    }),
-    defineField({
       name: "badge",
       title: "Badge",
       type: "string",

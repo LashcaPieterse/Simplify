@@ -115,9 +115,6 @@ type CatalogPackageDoc = {
   externalId?: string;
   title?: string;
   slug?: { current?: string };
-  priceCents?: number;
-  sellingPriceCents?: number | null;
-  currencyCode?: string;
   dataAmountMb?: number | null;
   validityDays?: number | null;
   isUnlimited?: boolean | null;
@@ -325,9 +322,6 @@ const CATALOG_PACKAGE_FIELDS = `
   _id,
   externalId,
   title,
-  priceCents,
-  sellingPriceCents,
-  currencyCode,
   dataAmountMb,
   validityDays,
   isUnlimited,
@@ -493,14 +487,14 @@ const countriesQuery = groq`
 const countryBySlugQuery = groq`
   *[_type == "catalogCountry" && slug.current == $slug][0]{
     ${CATALOG_COUNTRY_FIELDS},
-    "packages": *[_type == "catalogPackage" && country._ref == ^._id] | order(priceCents asc) {
+    "packages": *[_type == "catalogPackage" && country._ref == ^._id] | order(title asc) {
       ${CATALOG_PACKAGE_FIELDS}
     }
   }
 `;
 
 const plansForCountryQuery = groq`
-  *[_type == "catalogPackage" && country->slug.current == $slug] | order(priceCents asc) {
+  *[_type == "catalogPackage" && country->slug.current == $slug] | order(title asc) {
     ${CATALOG_PACKAGE_FIELDS}
   }
 `;
@@ -558,14 +552,12 @@ const postBySlugQuery = groq`
 
 function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
   const externalId = pkg.externalId ?? pkg._id;
-  const priceCents = pkg.sellingPriceCents ?? pkg.priceCents ?? 0;
-  const currencyCode = pkg.currencyCode ?? "USD";
 
   return {
     _id: pkg._id,
     title: pkg.title ?? pkg.slug?.current ?? "Untitled package",
     slug: pkg.slug?.current ?? externalId,
-    priceUSD: priceCents / 100,
+    priceUSD: 0,
     dataGB: pkg.dataAmountMb ? Math.round(pkg.dataAmountMb / 102.4) / 10 : 0,
     validityDays: pkg.validityDays ?? 0,
     hotspot: undefined,
@@ -580,18 +572,12 @@ function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
           logo: pkg.operator.image,
         }
       : undefined,
-    price: priceCents
-      ? {
-          amount: priceCents / 100,
-          currency: currencyCode,
-          source: "airalo",
-        }
-      : null,
+    price: null,
     package: {
       id: pkg._id,
       externalId,
-      currency: currencyCode,
-      priceCents,
+      currency: "USD",
+      priceCents: 0,
       isActive: true,
       dataLimitMb: pkg.dataAmountMb ?? null,
       validityDays: pkg.validityDays ?? null,

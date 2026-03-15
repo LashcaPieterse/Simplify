@@ -84,6 +84,8 @@ model Package {
   deactivatedAt      DateTime? @map("deactivated_at")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at")
+  esimOrders         EsimOrder[]
+  checkoutSessions   CheckoutSession[]
 
   @@index([countryId])
   @@index([operatorId])
@@ -188,42 +190,14 @@ model PublishingState {
   @@map("publishing_state")
 }
 
-model AiraloPackage {
-  id                String             @id @default(cuid())
-  externalId        String             @unique
-  name              String
-  description       String?
-  country           String?
-  countryCode       String?
-  region            String?
-  dataLimitMb       Int?
-  validityDays      Int?
-  priceCents        Int
-  currency          String
-  sellingPriceCents Int?
-  metadata          Json?
-  lastSyncedAt      DateTime?
-  sourceHash        String?
-  isActive          Boolean            @default(true)
-  deactivatedAt     DateTime?
-  lastSyncJob       SyncJob?           @relation(fields: [lastSyncJobId], references: [id])
-  lastSyncJobId     String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  esimOrders        EsimOrder[]
-  checkoutSessions  CheckoutSession[]
-  tags              AiraloPackageTag[]
-  notes             PackageNote[]
-}
-
 model EsimOrder {
   id                   String                     @id @default(cuid())
   orderNumber          String?                    @unique
   requestId            String?                    @unique
   user                 User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId               String?
-  package              AiraloPackage              @relation(fields: [packageId], references: [id])
-  packageId            String
+  package              Package                    @relation(fields: [packageId], references: [id])
+  packageId            String                     @db.Uuid
   status               String                     @default("pending")
   customerEmail        String?
   quantity             Int                        @default(1)
@@ -306,8 +280,8 @@ model CheckoutSession {
   id              String               @id @default(cuid())
   user            User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId          String?
-  package         AiraloPackage        @relation(fields: [packageId], references: [id])
-  packageId       String
+  package         Package              @relation(fields: [packageId], references: [id])
+  packageId       String               @db.Uuid
   customerEmail   String?
   quantity        Int                  @default(1)
   totalCents      Int
@@ -369,7 +343,6 @@ model AdminUser {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   auditLogs    AuditLog[]
-  notes        PackageNote[]
 }
 
 model SyncJob {
@@ -383,35 +356,6 @@ model SyncJob {
   diffPreview      String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
-  packages         AiraloPackage[]
-}
-
-model PackageTag {
-  id        String             @id @default(cuid())
-  name      String             @unique
-  color     String?
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  packages  AiraloPackageTag[]
-}
-
-model AiraloPackageTag {
-  package   AiraloPackage @relation(fields: [packageId], references: [id])
-  packageId String
-  tag       PackageTag    @relation(fields: [tagId], references: [id])
-  tagId     String
-
-  @@id([packageId, tagId])
-}
-
-model PackageNote {
-  id        String        @id @default(cuid())
-  package   AiraloPackage @relation(fields: [packageId], references: [id])
-  packageId String
-  author    AdminUser?    @relation(fields: [authorId], references: [id])
-  authorId  String?
-  body      String
-  createdAt DateTime      @default(now())
 }
 
 model User {
