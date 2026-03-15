@@ -118,15 +118,6 @@ type CatalogPackageDoc = {
 
 type MultiCurrencyPriceMap = NonNullable<Package["net_prices"]>;
 
-type PackageMetadata = {
-  sku?: string | null;
-  destination?: string | null;
-  destinationName?: string | null;
-  netPrices?: MultiCurrencyPriceMap | null;
-  recommendedRetailPrices?: MultiCurrencyPriceMap | null;
-  [key: string]: unknown;
-};
-
 type PackageRecord = {
   pkg: Prisma.PackageGetPayload<{
     select: typeof CATALOG_PACKAGE_SELECT;

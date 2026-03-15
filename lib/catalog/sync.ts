@@ -3,7 +3,6 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 
 import {
   AiraloClient,
-  type AiraloCountryNode,
   type AiraloPackageNode,
   type GetPackagesOptions,
 } from "../airalo/client";

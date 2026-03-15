@@ -3,6 +3,11 @@ import test from "node:test";
 
 import { getCatalogProductSummaries } from "./query";
 
+type FetchPackages = NonNullable<
+  NonNullable<Parameters<typeof getCatalogProductSummaries>[0]>["fetchPackages"]
+>;
+type FetchPackagesResult = Awaited<ReturnType<FetchPackages>>;
+
 type TestPackage = {
   id: string;
   airaloPackageId: string;
@@ -93,9 +98,7 @@ test("getCatalogProductSummaries does not fall back to country matches", async (
     },
   ];
 
-  const summaries = await getCatalogProductSummaries({
-    fetchProducts: async () => sanityProducts,
-    fetchPackages: async () => [
+  const dbPackages = [
       {
         id: "pkg-1",
         airaloPackageId: "some-other-package",
@@ -124,7 +127,11 @@ test("getCatalogProductSummaries does not fall back to country matches", async (
           updatedAt: new Date(),
         },
       } as TestPackage,
-    ] as unknown as any,
+    ] as unknown as FetchPackagesResult;
+
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => sanityProducts,
+    fetchPackages: async () => dbPackages,
   });
 
   assert.equal(summaries.length, 1);
