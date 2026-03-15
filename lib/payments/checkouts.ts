@@ -79,6 +79,31 @@ function serialise(value: unknown): string {
   }
 }
 
+async function resolveCheckoutUserId(
+  db: PrismaClient,
+  userId?: string,
+): Promise<string | null> {
+  if (!userId) {
+    return null;
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+
+  if (user) {
+    return user.id;
+  }
+
+  logOrderInfo("payments.checkout.user_not_found", {
+    userId,
+    action: "fallback_to_guest_checkout",
+  });
+
+  return null;
+}
+
 export async function createCheckout(
   rawInput: CreateCheckoutInput,
   options: { prisma?: PrismaClient; baseUrl: string; userId?: string },
@@ -94,6 +119,7 @@ export async function createCheckout(
   const db = options.prisma ?? prismaClient;
   const quantity = normaliseQuantity(input.quantity);
   const packageIdIsUuid = isUuid(input.packageId);
+  const checkoutUserId = await resolveCheckoutUserId(db, options.userId);
 
   logOrderInfo("payments.checkout.package_lookup", {
     requestedPackageId: input.packageId,
@@ -134,7 +160,7 @@ export async function createCheckout(
 
   const checkout = await db.checkoutSession.create({
     data: {
-      userId: options.userId ?? null,
+      userId: checkoutUserId,
       packageId: pkg.id,
       customerEmail: input.customerEmail ?? null,
       quantity,
@@ -193,7 +219,7 @@ export async function createCheckout(
 
   const transaction = await db.paymentTransaction.create({
     data: {
-      user: options.userId ? { connect: { id: options.userId } } : undefined,
+      user: checkoutUserId ? { connect: { id: checkoutUserId } } : undefined,
       provider: PROVIDER,
       providerReference: response.reference ?? null,
       transactionToken: response.token,
