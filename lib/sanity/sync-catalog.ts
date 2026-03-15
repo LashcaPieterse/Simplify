@@ -401,12 +401,12 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
   await upsertDocuments(packageDocs, "catalog packages", "sync");
 
   const primaryPackageRefByCountryDocId = new Map<string, string>();
-  for (const [countryId, candidate] of primaryCandidateByCountryId) {
+  primaryCandidateByCountryId.forEach((candidate, countryId) => {
     const countryDocId = countryIdMap.get(countryId);
     if (countryDocId) {
       primaryPackageRefByCountryDocId.set(countryDocId, candidate.docId);
     }
-  }
+  });
 
   const expectedPackageIds = new Set(packageDocs.map((doc) => doc._id as string));
   const existingPackageIds = await fetchExistingIds("catalogPackage");
