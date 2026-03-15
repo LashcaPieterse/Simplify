@@ -114,7 +114,6 @@ export async function runAiraloSyncJob(actorEmail?: string) {
         state: {
           upsert: {
             create: {
-              packageId: previous.id,
               isActive: normalizedActive,
               deactivatedAt: normalizedActive ? null : new Date(),
               basePriceCents: sourcePriceCents,
