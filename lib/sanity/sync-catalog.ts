@@ -188,7 +188,7 @@ async function upsertDocuments(
     const mutations: Mutation<Record<string, unknown>>[] = batch.map((doc) => ({
       createOrReplace: doc,
     }));
-    await getSanityClient().mutate(mutations, { returnIds: false, visibility });
+    await getSanityClient().mutate(mutations, { visibility });
   }
   console.info(`[sanity-sync] Upserted ${documents.length} ${label}`);
 }
