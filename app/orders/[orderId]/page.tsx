@@ -106,7 +106,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
   }
   const pkg = await prisma.package.findFirst({
     where: {
-      OR: [{ id: order.packageId }, { externalId: order.packageId }],
+      OR: [{ id: order.packageId }, { airaloPackageId: order.packageId }],
     },
   });
   const profile = order.profiles[0] ?? null;
@@ -127,7 +127,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
       <header className="space-y-2">
         <p className="text-sm uppercase tracking-wide text-sand-500">Order</p>
         <h1 className="text-3xl font-semibold text-brand-900">
-          {pkg?.name ?? "eSIM order"}
+          {pkg?.title ?? "eSIM order"}
         </h1>
         <div className="text-sm text-sand-600">
           <p>

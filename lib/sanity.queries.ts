@@ -589,7 +589,7 @@ function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
 }
 
 type LivePackageSnapshot = {
-  externalId: string;
+  airaloPackageId: string;
   isActive: boolean;
   updatedAt: Date;
   priceCents: number;
@@ -598,6 +598,12 @@ type LivePackageSnapshot = {
   dataAmountMb: number | null;
   validityDays: number | null;
 };
+
+function decimalToCents(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.round(parsed * 100);
+}
 
 async function getLivePackageSnapshots(
   packageDocs: CatalogPackageDoc[],
@@ -611,20 +617,39 @@ async function getLivePackageSnapshots(
   }
 
   const records = await prisma.package.findMany({
-    where: { externalId: { in: externalIds } },
+    where: { airaloPackageId: { in: externalIds } },
     select: {
-      externalId: true,
-      isActive: true,
+      airaloPackageId: true,
+      amount: true,
+      day: true,
+      price: true,
       updatedAt: true,
-      priceCents: true,
-      sellingPriceCents: true,
-      currencyCode: true,
-      dataAmountMb: true,
-      validityDays: true,
+      state: {
+        select: {
+          isActive: true,
+          sellingPriceCents: true,
+          currencyCode: true,
+          updatedAt: true,
+        },
+      },
     },
   });
 
-  return new Map(records.map((record) => [record.externalId, record]));
+  return new Map(
+    records.map((record) => [
+      record.airaloPackageId,
+      {
+        airaloPackageId: record.airaloPackageId,
+        isActive: record.state?.isActive ?? false,
+        updatedAt: record.state?.updatedAt ?? record.updatedAt,
+        priceCents: decimalToCents(record.price),
+        sellingPriceCents: record.state?.sellingPriceCents ?? null,
+        currencyCode: record.state?.currencyCode ?? "USD",
+        dataAmountMb: record.amount,
+        validityDays: record.day,
+      } satisfies LivePackageSnapshot,
+    ]),
+  );
 }
 
 function applyLivePackageSnapshot(

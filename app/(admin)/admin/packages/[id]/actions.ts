@@ -4,9 +4,10 @@ import prisma from "@/lib/db/client";
 import { revalidatePath } from "next/cache";
 
 export async function updateSellingPrice(packageId: string, sellingPriceCents: number) {
-  await prisma.package.update({
-    where: { id: packageId },
-    data: { sellingPriceCents, updatedAt: new Date() },
+  await prisma.packageState.upsert({
+    where: { packageId },
+    create: { packageId, sellingPriceCents },
+    update: { sellingPriceCents, updatedAt: new Date() },
   });
   await prisma.auditLog.create({
     data: {
@@ -20,9 +21,10 @@ export async function updateSellingPrice(packageId: string, sellingPriceCents: n
 }
 
 export async function updateStatus(packageId: string, isActive: boolean) {
-  await prisma.package.update({
-    where: { id: packageId },
-    data: { isActive, deactivatedAt: isActive ? null : new Date() },
+  await prisma.packageState.upsert({
+    where: { packageId },
+    create: { packageId, isActive, deactivatedAt: isActive ? null : new Date() },
+    update: { isActive, deactivatedAt: isActive ? null : new Date(), updatedAt: new Date() },
   });
   await prisma.auditLog.create({
     data: {

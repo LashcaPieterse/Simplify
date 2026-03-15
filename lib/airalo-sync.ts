@@ -5,19 +5,12 @@ import prisma from "@/lib/db/client";
 export type AiraloCatalogEntry = {
   externalId: string;
   name: string;
-  dataAmountMb?: number;
+  amountMb?: number;
   validityDays?: number;
-  priceCents: number;
+  price?: number;
   currency?: string;
-  currencyCode?: string;
   isActive?: boolean;
 };
-
-async function loadCatalogFromDisk(): Promise<AiraloCatalogEntry[]> {
-  const filePath = path.join(process.cwd(), "data", "airalo-packages.json");
-  const contents = await fs.readFile(filePath, "utf-8");
-  return JSON.parse(contents) as AiraloCatalogEntry[];
-}
 
 type PackageDiff = {
   externalId: string;
@@ -31,26 +24,16 @@ type SyncSummary = {
   deactivated: PackageDiff[];
 };
 
-function collectChanges(
-  entry: AiraloCatalogEntry,
-  existing: {
-    id: string;
-    name: string;
-    dataAmountMb: number | null;
-    validityDays: number | null;
-    priceCents: number;
-    sellingPriceCents: number | null;
-    currencyCode: string;
-    isActive: boolean;
-  },
-) {
-  const changes: Record<string, { from: unknown; to: unknown }> = {};
-  if (existing.name !== entry.name) changes.name = { from: existing.name, to: entry.name };
-  if (existing.dataAmountMb !== entry.dataAmountMb) changes.dataAmountMb = { from: existing.dataAmountMb, to: entry.dataAmountMb };
-  if (existing.validityDays !== entry.validityDays) changes.validityDays = { from: existing.validityDays, to: entry.validityDays };
-  if (existing.priceCents !== entry.priceCents) changes.priceCents = { from: existing.priceCents, to: entry.priceCents };
-  if (existing.currencyCode !== entry.currencyCode) changes.currencyCode = { from: existing.currencyCode, to: entry.currencyCode };
-  return changes;
+async function loadCatalogFromDisk(): Promise<AiraloCatalogEntry[]> {
+  const filePath = path.join(process.cwd(), "data", "airalo-packages.json");
+  const contents = await fs.readFile(filePath, "utf-8");
+  return JSON.parse(contents) as AiraloCatalogEntry[];
+}
+
+function decimalToCents(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.round(parsed * 100);
 }
 
 export async function runAiraloSyncJob(actorEmail?: string) {
@@ -66,85 +49,128 @@ export async function runAiraloSyncJob(actorEmail?: string) {
   const existing = await prisma.package.findMany({
     select: {
       id: true,
-      externalId: true,
-      name: true,
-      dataAmountMb: true,
-      validityDays: true,
-      priceCents: true,
-      sellingPriceCents: true,
-      currencyCode: true,
-      isActive: true,
-      deactivatedAt: true,
+      airaloPackageId: true,
+      title: true,
+      amount: true,
+      day: true,
+      price: true,
+      state: {
+        select: {
+          isActive: true,
+          deactivatedAt: true,
+          currencyCode: true,
+          basePriceCents: true,
+          sellingPriceCents: true,
+        },
+      },
     },
   });
-  const existingByExternalId = new Map(existing.map((pkg) => [pkg.externalId, pkg]));
+  const existingByExternalId = new Map(existing.map((pkg) => [pkg.airaloPackageId, pkg]));
 
   const summary: SyncSummary = { created: [], updated: [], deactivated: [] };
-  const createdCount = 0;
   let updatedCount = 0;
+  let deactivatedCount = 0;
 
   for (const entry of catalog) {
     const previous = existingByExternalId.get(entry.externalId);
-    const currencyCode = entry.currencyCode ?? entry.currency ?? "USD";
-    const normalizedEntry = { ...entry, currencyCode };
-    const sellingPriceCents = entry.priceCents + Math.round(entry.priceCents * 0.2);
-
     if (!previous) {
-      console.warn(`[airalo-sync] Skipping package ${entry.externalId} (missing country/operator).`);
       continue;
     }
 
-    const changes = collectChanges(normalizedEntry as AiraloCatalogEntry, previous);
-    const hasChanges =
-      Object.keys(changes).length > 0 || previous.isActive !== (normalizedEntry.isActive ?? true);
-    if (hasChanges) {
-      await prisma.package.update({
-        where: { id: previous.id },
-        data: {
-          name: normalizedEntry.name,
-          dataAmountMb: normalizedEntry.dataAmountMb ?? null,
-          validityDays: normalizedEntry.validityDays,
-          priceCents: normalizedEntry.priceCents,
-          sellingPriceCents: previous.sellingPriceCents ?? sellingPriceCents,
-          currencyCode,
-          isActive: normalizedEntry.isActive ?? true,
-          deactivatedAt: normalizedEntry.isActive === false ? new Date() : previous.deactivatedAt,
-          updatedAt: startedAt,
-        },
-      });
-      updatedCount += 1;
-      summary.updated.push({ externalId: entry.externalId, name: entry.name, changes });
+    const normalizedPrice = Number(entry.price ?? previous.price ?? 0);
+    const normalizedAmount = Number(entry.amountMb ?? previous.amount ?? 0);
+    const normalizedDay = Number(entry.validityDays ?? previous.day ?? 0);
+    const normalizedCurrency = (entry.currency ?? previous.state?.currencyCode ?? "USD").toUpperCase();
+    const normalizedActive = entry.isActive ?? true;
+    const sourcePriceCents = decimalToCents(normalizedPrice);
+    const nextSell =
+      previous.state?.sellingPriceCents ??
+      sourcePriceCents + Math.round(sourcePriceCents * 0.2);
 
-      await prisma.auditLog.create({
-        data: {
-          action: "package.updated",
-          entityId: previous.id,
-          entityType: "Package",
-          details: JSON.stringify({ changes, syncedAt: startedAt.toISOString() }),
-        },
-      });
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (previous.title !== entry.name) changes.title = { from: previous.title, to: entry.name };
+    if (previous.amount !== normalizedAmount) changes.amount = { from: previous.amount, to: normalizedAmount };
+    if (previous.day !== normalizedDay) changes.day = { from: previous.day, to: normalizedDay };
+    if (Number(previous.price) !== normalizedPrice) changes.price = { from: Number(previous.price), to: normalizedPrice };
+    if ((previous.state?.currencyCode ?? "USD") !== normalizedCurrency) {
+      changes.currencyCode = { from: previous.state?.currencyCode ?? "USD", to: normalizedCurrency };
     }
+    if ((previous.state?.isActive ?? true) !== normalizedActive) {
+      changes.isActive = { from: previous.state?.isActive ?? true, to: normalizedActive };
+    }
+
+    if (Object.keys(changes).length === 0) {
+      existingByExternalId.delete(entry.externalId);
+      continue;
+    }
+
+    await prisma.package.update({
+      where: { id: previous.id },
+      data: {
+        title: entry.name,
+        amount: normalizedAmount,
+        day: normalizedDay,
+        price: normalizedPrice,
+        state: {
+          upsert: {
+            create: {
+              packageId: previous.id,
+              isActive: normalizedActive,
+              deactivatedAt: normalizedActive ? null : new Date(),
+              basePriceCents: sourcePriceCents,
+              sellingPriceCents: nextSell,
+              currencyCode: normalizedCurrency,
+              sourcePriceDecimal: normalizedPrice,
+              sellPriceDecimal: nextSell / 100,
+              lastSyncedAt: startedAt,
+            },
+            update: {
+              isActive: normalizedActive,
+              deactivatedAt: normalizedActive ? null : previous.state?.deactivatedAt ?? new Date(),
+              basePriceCents: sourcePriceCents,
+              sellingPriceCents: nextSell,
+              currencyCode: normalizedCurrency,
+              sourcePriceDecimal: normalizedPrice,
+              sellPriceDecimal: nextSell / 100,
+              lastSyncedAt: startedAt,
+              updatedAt: startedAt,
+            },
+          },
+        },
+        updatedAt: startedAt,
+      },
+    });
+    updatedCount += 1;
+    summary.updated.push({ externalId: entry.externalId, name: entry.name, changes });
+
+    await prisma.auditLog.create({
+      data: {
+        action: "package.updated",
+        entityId: previous.id,
+        entityType: "Package",
+        details: JSON.stringify({ changes, syncedAt: startedAt.toISOString() }),
+      },
+    });
 
     existingByExternalId.delete(entry.externalId);
   }
 
   const deactivated = Array.from(existingByExternalId.values());
-  let deactivatedCount = 0;
   for (const pkg of deactivated) {
-    if (!pkg.isActive) continue;
-    await prisma.package.update({
-      where: { id: pkg.id },
+    if (!pkg.state?.isActive) continue;
+    await prisma.packageState.updateMany({
+      where: { packageId: pkg.id, isActive: true },
       data: { isActive: false, deactivatedAt: startedAt },
     });
     deactivatedCount += 1;
-    summary.deactivated.push({ externalId: pkg.externalId, name: pkg.name });
+    summary.deactivated.push({ externalId: pkg.airaloPackageId, name: pkg.title });
 
     await prisma.auditLog.create({
       data: {
         action: "package.deactivated",
         entityId: pkg.id,
         entityType: "Package",
-        details: JSON.stringify({ externalId: pkg.externalId, syncedAt: startedAt.toISOString() }),
+        details: JSON.stringify({ externalId: pkg.airaloPackageId, syncedAt: startedAt.toISOString() }),
       },
     });
   }
@@ -155,7 +181,7 @@ export async function runAiraloSyncJob(actorEmail?: string) {
     data: {
       status: "completed",
       finishedAt,
-      itemsCreated: createdCount,
+      itemsCreated: 0,
       itemsUpdated: updatedCount,
       itemsDeactivated: deactivatedCount,
       diffPreview: JSON.stringify(summary, null, 2),

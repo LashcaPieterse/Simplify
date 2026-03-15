@@ -4,17 +4,26 @@ import { formatDate } from "@/lib/format";
 import { applyRegionMarkup } from "./actions";
 
 export default async function OperationsPage() {
-  const countries = await prisma.country.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const countries = await prisma.country.findMany({
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
+  });
   const samplePackages = await prisma.package.findMany({
     orderBy: { updatedAt: "desc" },
     take: 8,
     select: {
       id: true,
-      name: true,
-      country: { select: { name: true } },
-      currencyCode: true,
-      priceCents: true,
-      sellingPriceCents: true,
+      title: true,
+      netPrice: true,
+      price: true,
+      operator: { select: { country: { select: { title: true } } } },
+      state: {
+        select: {
+          currencyCode: true,
+          basePriceCents: true,
+          sellingPriceCents: true,
+        },
+      },
     },
   });
   const auditLogs = await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 10 });
@@ -51,7 +60,7 @@ export default async function OperationsPage() {
             >
               {countries.map((country) => (
                 <option key={country.id} value={country.id}>
-                  {country.name}
+                  {country.title}
                 </option>
               ))}
             </select>
@@ -75,11 +84,13 @@ export default async function OperationsPage() {
       <BulkPriceEditor
         packages={samplePackages.map((pkg) => ({
           id: pkg.id,
-          name: pkg.name,
-          country: pkg.country?.name ?? null,
-          currency: pkg.currencyCode,
-          priceCents: pkg.priceCents,
-          sellingPriceCents: pkg.sellingPriceCents,
+          name: pkg.title,
+          country: pkg.operator.country?.title ?? null,
+          currency: pkg.state?.currencyCode ?? "USD",
+          priceCents:
+            pkg.state?.basePriceCents ??
+            Math.round(Number(pkg.netPrice ?? pkg.price) * 100),
+          sellingPriceCents: pkg.state?.sellingPriceCents ?? null,
         }))}
       />
 

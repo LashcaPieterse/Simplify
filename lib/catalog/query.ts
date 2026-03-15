@@ -131,51 +131,47 @@ type PackageRecord = {
   pkg: Prisma.PackageGetPayload<{
     select: typeof CATALOG_PACKAGE_SELECT;
   }>;
-  metadata: PackageMetadata | null;
 };
 
 const CATALOG_PACKAGE_SELECT = {
   id: true,
-  externalId: true,
-  name: true,
-  status: true,
-  simType: true,
-  isRechargeable: true,
-  networkTypes: true,
-  voiceMinutes: true,
-  sms: true,
-  apn: true,
-  iccid: true,
-  smdpAddress: true,
-  qrCodeData: true,
-  qrCodeUrl: true,
-  activationCode: true,
-  topupParentId: true,
-  dataAmountMb: true,
-  validityDays: true,
+  airaloPackageId: true,
+  title: true,
+  amount: true,
+  day: true,
   isUnlimited: true,
-  priceCents: true,
-  sellingPriceCents: true,
-  currencyCode: true,
-  netPriceJson: true,
-  rrpPriceJson: true,
+  price: true,
+  netPrice: true,
+  pricesNetPrice: true,
+  pricesRecommendedRetailPrice: true,
   shortInfo: true,
   qrInstallation: true,
   manualInstallation: true,
   isFairUsagePolicy: true,
   fairUsagePolicy: true,
-  imageUrl: true,
-  metadata: true,
-  isActive: true,
-  deactivatedAt: true,
   createdAt: true,
   updatedAt: true,
-  operator: true,
-  country: true,
+  operator: {
+    select: {
+      id: true,
+      title: true,
+      airaloOperatorId: true,
+    },
+  },
+  state: {
+    select: {
+      isActive: true,
+      sellingPriceCents: true,
+      basePriceCents: true,
+      currencyCode: true,
+      lastSyncedAt: true,
+      updatedAt: true,
+    },
+  },
 } as const satisfies Prisma.PackageSelect;
 
 type PackageMaps = {
-  bySku: Map<string, PackageRecord>;
+  bySku: Map<string, PackageRecord["pkg"]>;
 };
 
 function normalizeKey(value?: string | null): string | null {
@@ -193,42 +189,14 @@ function normalizeKey(value?: string | null): string | null {
     .replace(/(^-|-$)+/g, "");
 }
 
-function parsePackageMetadata(pkg: PackageRecord["pkg"]): PackageMetadata | null {
-  const raw = pkg.metadata;
-  if (!raw) return null;
-
-  // prisma JSON fields can be stored as stringified JSON or object; handle both.
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw) as PackageMetadata;
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed;
-      }
-    } catch (error) {
-      console.warn(`Failed to parse Airalo package metadata for ${pkg.externalId}`, error);
-    }
-    return null;
-  }
-
-  if (typeof raw === "object" && !Array.isArray(raw)) {
-    return raw as PackageMetadata;
-  }
-
-  return null;
-}
-
 function buildPackageMaps(packages: PackageRecord["pkg"][]): PackageMaps {
-  const bySku = new Map<string, PackageRecord>();
+  const bySku = new Map<string, PackageRecord["pkg"]>();
 
   for (const pkg of packages) {
-    const metadata = parsePackageMetadata(pkg);
-    const record: PackageRecord = { pkg, metadata };
-
-    const skuKey = normalizeKey(metadata?.sku ?? pkg.externalId ?? null);
+    const skuKey = normalizeKey(pkg.airaloPackageId ?? null);
     if (skuKey && !bySku.has(skuKey)) {
-      bySku.set(skuKey, record);
+      bySku.set(skuKey, pkg);
     }
-
   }
 
   return { bySku };
@@ -239,33 +207,49 @@ function centsToAmount(cents: number): number {
 }
 
 function createPriceFromPackage(record: PackageRecord): MoneyValue {
-  const priceCents = record.pkg.sellingPriceCents ?? record.pkg.priceCents;
+  const priceCents =
+    record.pkg.state?.sellingPriceCents ?? Math.round(Number(record.pkg.price) * 100);
   return {
     amount: centsToAmount(priceCents),
-    currency: record.pkg.currencyCode.toUpperCase(),
+    currency: (record.pkg.state?.currencyCode ?? "USD").toUpperCase(),
     source: "airalo",
-    lastSyncedAt: record.pkg.updatedAt?.toISOString() ?? null,
+    lastSyncedAt:
+      record.pkg.state?.lastSyncedAt?.toISOString() ??
+      record.pkg.updatedAt?.toISOString() ??
+      null,
   };
 }
 
 function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
+  const priceCents =
+    record.pkg.state?.sellingPriceCents ?? Math.round(Number(record.pkg.price) * 100);
   return {
     id: record.pkg.id,
-    externalId: record.pkg.externalId,
-    currency: record.pkg.currencyCode.toUpperCase(),
-    priceCents: record.pkg.sellingPriceCents ?? record.pkg.priceCents,
-    isActive: record.pkg.isActive,
-    dataLimitMb: record.pkg.dataAmountMb,
-    validityDays: record.pkg.validityDays,
+    externalId: record.pkg.airaloPackageId,
+    title: record.pkg.title,
+    currency: (record.pkg.state?.currencyCode ?? "USD").toUpperCase(),
+    priceCents,
+    isActive: record.pkg.state?.isActive ?? false,
+    dataLimitMb: record.pkg.amount,
+    validityDays: record.pkg.day,
     region: null,
-    lastSyncedAt: record.pkg.updatedAt?.toISOString() ?? null,
-    metadata: record.metadata,
-    image: record.pkg.imageUrl ? { url: record.pkg.imageUrl } : undefined,
+    lastSyncedAt:
+      record.pkg.state?.lastSyncedAt?.toISOString() ??
+      record.pkg.updatedAt?.toISOString() ??
+      null,
+    metadata: {
+      sku: record.pkg.airaloPackageId,
+      netPrices: (record.pkg.pricesNetPrice as MultiCurrencyPriceMap | null) ?? null,
+      recommendedRetailPrices:
+        (record.pkg.pricesRecommendedRetailPrice as MultiCurrencyPriceMap | null) ?? null,
+    },
     operator: record.pkg.operator
       ? {
           _id: record.pkg.operator.id,
-          title: record.pkg.operator.name ?? "",
-          slug: record.pkg.operator.operatorCode ?? record.pkg.operator.id,
+          title: record.pkg.operator.title ?? "",
+          slug:
+            record.pkg.operator.airaloOperatorId?.toString() ??
+            record.pkg.operator.id,
           logo: undefined,
           badge: undefined,
         }
@@ -332,14 +316,15 @@ function applyPackageToProduct(
   const packageSlug = normalizeKey(product.package?.externalId ?? product.slugs?.plan ?? null);
   const packageInfoFromSanity = toCatalogPackageInfo(product.package);
 
-  const matchedRecord = packageSlug ? maps.bySku.get(packageSlug) ?? null : null;
+  const matchedPkg = packageSlug ? maps.bySku.get(packageSlug) ?? null : null;
+  const matchedRecord = matchedPkg ? { pkg: matchedPkg } : null;
 
   const priceFromPackage = matchedRecord ? createPriceFromPackage(matchedRecord) : null;
   let packageInfo: CatalogPackageInfo | null = null;
   if (packageInfoFromSanity) {
     packageInfo = {
       ...packageInfoFromSanity,
-      isActive: matchedRecord ? matchedRecord.pkg.isActive : false,
+      isActive: matchedRecord ? (matchedRecord.pkg.state?.isActive ?? false) : false,
     };
   } else if (matchedRecord) {
     packageInfo = createPackageInfo(matchedRecord);
@@ -389,9 +374,9 @@ export async function getCatalogProductSummaries(
     options.fetchPackages ??
     (() =>
       prisma.package.findMany({
-        where: { isActive: true },
+        where: { state: { is: { isActive: true } } },
         select: CATALOG_PACKAGE_SELECT,
-        orderBy: { updatedAt: "desc" },
+        orderBy: [{ updatedAt: "desc" }],
       }));
 
   const [products, packages] = await Promise.all([fetchProducts(), fetchPackages()]);

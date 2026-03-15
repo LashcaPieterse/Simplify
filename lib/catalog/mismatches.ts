@@ -46,16 +46,16 @@ export async function getCatalogMismatches(): Promise<CatalogMismatch[]> {
 
   const packages = externalIds.length
     ? await prisma.package.findMany({
-        where: { externalId: { in: externalIds } },
+        where: { airaloPackageId: { in: externalIds } },
         select: {
-          externalId: true,
-          isActive: true,
+          airaloPackageId: true,
+          state: { select: { isActive: true } },
           updatedAt: true,
         },
       })
     : [];
 
-  const packageByExternalId = new Map(packages.map((pkg) => [pkg.externalId, pkg]));
+  const packageByExternalId = new Map(packages.map((pkg) => [pkg.airaloPackageId, pkg]));
   const mismatches: CatalogMismatch[] = [];
 
   for (const product of products) {
@@ -83,14 +83,14 @@ export async function getCatalogMismatches(): Promise<CatalogMismatch[]> {
       continue;
     }
 
-    if (!pkg.isActive) {
+    if (!pkg.state?.isActive) {
       mismatches.push({
         productId: product._id,
         productName: product.displayName,
         packageExternalId: externalId,
         packageId: product.packageId ?? null,
         reason: "inactive_in_db",
-        packageIsActive: pkg.isActive,
+        packageIsActive: pkg.state?.isActive ?? null,
         packageUpdatedAt: pkg.updatedAt,
       });
     }

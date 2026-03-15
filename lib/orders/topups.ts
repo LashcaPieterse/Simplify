@@ -61,19 +61,21 @@ export async function getTopUpPackages(
 
   const localPackages = await db.package.findMany({
     where: {
-      externalId: {
+      airaloPackageId: {
         in: packages.map((pkg) => pkg.id),
       },
-      isActive: true,
+      state: {
+        is: { isActive: true },
+      },
     },
     select: {
       id: true,
-      externalId: true,
+      airaloPackageId: true,
     },
   });
 
   const localIdByExternalId = new Map(
-    localPackages.map((pkg) => [pkg.externalId, pkg.id] as const),
+    localPackages.map((pkg) => [pkg.airaloPackageId, pkg.id] as const),
   );
 
   const availablePackages = packages

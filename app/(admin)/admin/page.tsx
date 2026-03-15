@@ -47,19 +47,25 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         where: {
           OR: [
             packageUuidIds.length ? { id: { in: packageUuidIds } } : undefined,
-            packageExternalIds.length ? { externalId: { in: packageExternalIds } } : undefined,
+            packageExternalIds.length ? { airaloPackageId: { in: packageExternalIds } } : undefined,
           ].filter(Boolean) as Prisma.PackageWhereInput[],
         },
-        include: { country: true },
+        include: {
+          operator: { include: { country: true } },
+          state: true,
+        },
       })
     : [];
 
   const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const packageByExternalId = new Map(packages.map((pkg) => [pkg.externalId, pkg]));
+  const packageByExternalId = new Map(packages.map((pkg) => [pkg.airaloPackageId, pkg]));
   const totalRevenue = orders.reduce((sum, order) => sum + (order.totalCents ?? 0), 0);
   const totalCost = orders.reduce((sum, order) => {
     const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
-    const base = (pkg?.priceCents ?? 0) * order.quantity;
+    const basePriceCents =
+      pkg?.state?.basePriceCents ??
+      Math.round(Number(pkg?.netPrice ?? pkg?.price ?? 0) * 100);
+    const base = basePriceCents * order.quantity;
     return sum + base;
   }, 0);
   const totalOrders = orders.length;
@@ -77,7 +83,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
   const revenueByCountry = orders.reduce<Record<string, number>>((acc, order) => {
     const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
-    const country = pkg?.country?.name ?? "Unknown";
+    const country = pkg?.operator?.country?.title ?? "Unknown";
     const amount = order.totalCents ?? 0;
     acc[country] = (acc[country] ?? 0) + amount;
     return acc;
@@ -93,7 +99,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     if (!pkg) return acc;
     const amount = order.totalCents ?? 0;
     const key = pkg.id;
-    const name = pkg.name;
+    const name = pkg.title;
     acc[key] = { name, value: (acc[key]?.value ?? 0) + amount };
     return acc;
   }, {});

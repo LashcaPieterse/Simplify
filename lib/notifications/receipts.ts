@@ -127,8 +127,8 @@ export async function sendOrderReceipt(
   }
 
   const pkg = await db.package.findFirst({
-    where: { OR: [{ id: order.packageId }, { externalId: order.packageId }] },
-    include: { country: true },
+    where: { OR: [{ id: order.packageId }, { airaloPackageId: order.packageId }] },
+    include: { operator: { include: { country: true } } },
   });
 
   const amountCents = order.totalCents ?? order.payment?.amountCents ?? null;
@@ -141,8 +141,8 @@ export async function sendOrderReceipt(
   const { subject, text, html } = buildReceiptEmail({
     recipientName: order.user?.name ?? null,
     orderReference,
-    planName: pkg?.name ?? "Simplify eSIM plan",
-    destination: pkg?.country?.name ?? null,
+    planName: pkg?.title ?? "Simplify eSIM plan",
+    destination: pkg?.operator?.country?.title ?? null,
     amountLabel,
     status: order.status,
     purchasedAt,

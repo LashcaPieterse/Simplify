@@ -71,6 +71,14 @@ function centsToMajorUnits(cents: number): number {
   return Number((cents / 100).toFixed(2));
 }
 
+function decimalToCents(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.round(parsed * 100);
+}
+
 function serialise(value: unknown): string {
   try {
     return JSON.stringify(value ?? null);
@@ -130,15 +138,18 @@ export async function createCheckout(
   // Accept either the Prisma package id or the externalId from catalog/Sanity.
   const packageLookup: Prisma.PackageWhereInput = packageIdIsUuid
     ? {
-        isActive: true,
-        OR: [{ id: input.packageId }, { externalId: input.packageId }],
+        state: { is: { isActive: true } },
+        OR: [{ id: input.packageId }, { airaloPackageId: input.packageId }],
       }
     : {
-        isActive: true,
-        externalId: input.packageId,
+        state: { is: { isActive: true } },
+        airaloPackageId: input.packageId,
       };
 
-  const pkg = await db.package.findFirst({ where: packageLookup });
+  const pkg = await db.package.findFirst({
+    where: packageLookup,
+    include: { state: true },
+  });
 
   if (!pkg) {
     logOrderError("payments.checkout.package_not_found", {
@@ -152,10 +163,10 @@ export async function createCheckout(
   logOrderInfo("payments.checkout.package_resolved", {
     requestedPackageId: input.packageId,
     matchedPackageId: pkg.id,
-    matchedExternalId: pkg.externalId,
+    matchedExternalId: pkg.airaloPackageId,
   });
 
-  const priceCents = pkg.sellingPriceCents ?? pkg.priceCents;
+  const priceCents = pkg.state?.sellingPriceCents ?? decimalToCents(pkg.price);
   const totalCents = priceCents * quantity;
 
   const checkout = await db.checkoutSession.create({
@@ -165,7 +176,7 @@ export async function createCheckout(
       customerEmail: input.customerEmail ?? null,
       quantity,
       totalCents,
-      currency: pkg.currencyCode,
+      currency: pkg.state?.currencyCode ?? "USD",
       status: STATUS_PENDING,
       intent: input.intent ?? "purchase",
       topUpForOrderId: input.topUpForOrderId ?? null,
@@ -273,15 +284,15 @@ export async function getCheckoutSummary(
 
   const latestPayment = checkout.payments[0];
   const packageLookup: Prisma.PackageWhereInput = isUuid(checkout.packageId)
-    ? { OR: [{ id: checkout.packageId }, { externalId: checkout.packageId }] }
-    : { externalId: checkout.packageId };
+    ? { OR: [{ id: checkout.packageId }, { airaloPackageId: checkout.packageId }] }
+    : { airaloPackageId: checkout.packageId };
 
   const pkg = await db.package.findFirst({ where: packageLookup });
 
   return {
     id: checkout.id,
     packageId: checkout.packageId,
-    packageName: pkg?.name ?? "Package",
+    packageName: pkg?.title ?? "Package",
     packageDescription: pkg?.shortInfo ?? null,
     quantity: checkout.quantity,
     totalCents: checkout.totalCents,

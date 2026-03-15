@@ -12,18 +12,29 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
     where: q
       ? {
           OR: [
-            { name: { contains: q, mode: "insensitive" } },
-            { externalId: { contains: q, mode: "insensitive" } },
-            { operator: { name: { contains: q, mode: "insensitive" } } },
-            { country: { name: { contains: q, mode: "insensitive" } } },
+            { title: { contains: q, mode: "insensitive" } },
+            { airaloPackageId: { contains: q, mode: "insensitive" } },
+            { operator: { is: { title: { contains: q, mode: "insensitive" } } } },
+            {
+              operator: {
+                is: {
+                  country: { is: { title: { contains: q, mode: "insensitive" } } },
+                },
+              },
+            },
           ],
         }
       : undefined,
     include: {
-      operator: { select: { name: true } },
-      country: { select: { name: true } },
+      operator: {
+        select: {
+          title: true,
+          country: { select: { title: true } },
+        },
+      },
+      state: true,
     },
-    orderBy: [{ lastSyncedAt: "desc" }, { id: "desc" }],
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: PAGE_SIZE + 1,
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
   });
@@ -32,7 +43,9 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
   const rows = hasNext ? packages.slice(0, PAGE_SIZE) : packages;
   const nextCursor = hasNext ? rows[rows.length - 1].id : null;
 
-  const states = await prisma.publishingState.findMany({ where: { packageAiraloId: { in: rows.map((row) => row.externalId) } } });
+  const states = await prisma.publishingState.findMany({
+    where: { packageAiraloId: { in: rows.map((row) => row.airaloPackageId) } },
+  });
   const statesByPackage = new Map(states.map((item) => [item.packageAiraloId, item]));
 
   return (
@@ -51,15 +64,22 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
           </thead>
           <tbody>
             {rows.map((pkg) => {
-              const state = statesByPackage.get(pkg.externalId);
+              const state = statesByPackage.get(pkg.airaloPackageId);
+              const currency = pkg.state?.currencyCode ?? "USD";
+              const source = pkg.state?.sourcePriceDecimal?.toString() ?? pkg.netPrice?.toString() ?? "-";
+              const dbPrice =
+                pkg.state?.sellPriceDecimal?.toString() ??
+                (typeof pkg.state?.sellingPriceCents === "number"
+                  ? (pkg.state.sellingPriceCents / 100).toFixed(2)
+                  : "-");
               return (
                 <tr key={pkg.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2"><Link href={`/admin/packages/${pkg.id}`} className="text-teal-700 underline">{pkg.name}</Link><p className="text-xs text-slate-500">{pkg.externalId}</p></td>
-                  <td className="px-3 py-2">{pkg.operator.name} / {pkg.country.name}</td>
-                  <td className="px-3 py-2">{pkg.sourcePriceDecimal?.toString() ?? "-"} {pkg.currencyCode}</td>
-                  <td className="px-3 py-2">{pkg.sellPriceDecimal?.toString() ?? (pkg.sellingPriceCents ? (pkg.sellingPriceCents / 100).toFixed(2) : "-")} {pkg.currencyCode}</td>
-                  <td className="px-3 py-2">{state?.publishedPrice?.toString() ?? "-"} {state?.publishedCurrency ?? pkg.currencyCode}</td>
-                  <td className="px-3 py-2">{pkg.lastSyncedAt ? formatDate(pkg.lastSyncedAt) : "-"}</td>
+                  <td className="px-3 py-2"><Link href={`/admin/packages/${pkg.id}`} className="text-teal-700 underline">{pkg.title}</Link><p className="text-xs text-slate-500">{pkg.airaloPackageId}</p></td>
+                  <td className="px-3 py-2">{pkg.operator.title} / {pkg.operator.country.title}</td>
+                  <td className="px-3 py-2">{source} {currency}</td>
+                  <td className="px-3 py-2">{dbPrice} {currency}</td>
+                  <td className="px-3 py-2">{state?.publishedPrice?.toString() ?? "-"} {state?.publishedCurrency ?? currency}</td>
+                  <td className="px-3 py-2">{pkg.state?.lastSyncedAt ? formatDate(pkg.state.lastSyncedAt) : "-"}</td>
                 </tr>
               );
             })}

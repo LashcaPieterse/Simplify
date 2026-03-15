@@ -32,8 +32,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   if (payload.action === "pull-published-to-db") {
     if (audit.publishedPrice === null) return NextResponse.json({ error: "No published price available" }, { status: 400 });
-    await prisma.package.updateMany({
-      where: { externalId: audit.packageAiraloId },
+    await prisma.packageState.updateMany({
+      where: { package: { airaloPackageId: audit.packageAiraloId } },
       data: {
         sellPriceDecimal: audit.publishedPrice,
         sellingPriceCents: Math.round(Number(audit.publishedPrice) * 100),

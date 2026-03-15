@@ -139,6 +139,14 @@ function fallbackPackageImageUrl(): string | null {
   return "https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=1600&q=80";
 }
 
+function extractImageUrl(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const candidate = (value as { url?: unknown }).url;
+  return typeof candidate === "string" && candidate.trim() ? candidate : null;
+}
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -270,7 +278,12 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
   const [countries, operators, packages] = await Promise.all([
     prisma.country.findMany(),
     prisma.operator.findMany(),
-    prisma.package.findMany()
+    prisma.package.findMany({
+      include: {
+        operator: { select: { countryId: true } },
+        state: true,
+      },
+    }),
   ]);
   const existingImages = await fetchExistingImages();
 
@@ -285,7 +298,9 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
     countryIdMap.set(country.id, docId);
     countryById.set(country.id, country);
 
-    const sourceImageUrl = country.imageUrl ?? fallbackCountryImageUrl(country.countryCode, country.name);
+    const sourceImageUrl =
+      extractImageUrl(country.imageJson) ??
+      fallbackCountryImageUrl(country.countryCode, country.title);
     const image =
       (await resolveImageFromUrl(sourceImageUrl)) ??
       existingImages.get(docId) ??
@@ -294,8 +309,8 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
     countryDocs.push({
       _id: docId,
       _type: "catalogCountry",
-      title: country.name,
-      slug: { _type: "slug", current: country.slug || slugify(country.name) },
+      title: country.title,
+      slug: { _type: "slug", current: country.slug || slugify(country.title) },
       countryCode: country.countryCode,
       badge: null,
       summary: null,
@@ -303,7 +318,7 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
       // Set primaryPackage after packages exist to avoid reference errors.
       primaryPackage: null,
       image,
-      metadataJson: serializeMetadata(country.metadata),
+      metadataJson: null,
       lastSyncedAt: now
     });
   }
@@ -312,13 +327,16 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
   const operatorDocs: SyncDocument[] = [];
   for (const operator of operators) {
     const countryRef = countryIdMap.get(operator.countryId);
-    const docId = `catalog-operator-${operator.apiOperatorId ?? operator.id}`;
+    const docId = `catalog-operator-${operator.airaloOperatorId ?? operator.id}`;
     operatorIdMap.set(operator.id, docId);
     const country = countryById.get(operator.countryId);
     const sourceImageUrl =
-      (operator as Record<string, unknown>)["imageUrl"] as string | undefined ??
-      fallbackOperatorImageUrl(operator.operatorCode, operator.name) ??
-      fallbackCountryImageUrl(country?.countryCode, country?.name);
+      extractImageUrl(operator.imageJson) ??
+      fallbackOperatorImageUrl(
+        operator.airaloOperatorId?.toString() ?? null,
+        operator.title,
+      ) ??
+      fallbackCountryImageUrl(country?.countryCode, country?.title);
     const image =
       (await resolveImageFromUrl(sourceImageUrl)) ??
       existingImages.get(docId) ??
@@ -327,16 +345,22 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
     operatorDocs.push({
       _id: docId,
       _type: "catalogOperator",
-      title: operator.name,
-      apiOperatorId: operator.apiOperatorId ?? null,
-      operatorCode: operator.operatorCode ?? null,
+      title: operator.title,
+      apiOperatorId: operator.airaloOperatorId ?? null,
+      operatorCode: operator.airaloOperatorId?.toString() ?? null,
       badge: null,
       summary: null,
       image,
       country: countryRef
         ? { _type: "reference", _ref: countryRef }
         : null,
-      metadataJson: serializeMetadata(operator.metadata),
+      metadataJson: serializeMetadata({
+        apn: operator.apn,
+        countries: operator.countriesJson,
+        coverages: operator.coveragesJson,
+        info: operator.info,
+        type: operator.type,
+      }),
       lastSyncedAt: now
     });
   }
@@ -345,39 +369,42 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
   const primaryCandidateByCountryId = new Map<string, { priceCents: number; docId: string }>();
 
   for (const pkg of packages) {
-    const countryRef = countryIdMap.get(pkg.countryId);
+    const countryRef = countryIdMap.get(pkg.operator.countryId);
     const operatorRef = operatorIdMap.get(pkg.operatorId);
 
     if (!countryRef || !operatorRef) {
       console.warn(
-        `[sanity-sync] Skipping package ${pkg.externalId} due to missing references (countryRef=${countryRef}, operatorRef=${operatorRef})`
+        `[sanity-sync] Skipping package ${pkg.airaloPackageId} due to missing references (countryRef=${countryRef}, operatorRef=${operatorRef})`
       );
       continue;
     }
 
-    const docId = `catalog-package-${sanitizeDocumentId(pkg.externalId)}`;
-    const sourceImageUrl = pkg.imageUrl ?? fallbackPackageImageUrl();
+    const docId = `catalog-package-${sanitizeDocumentId(pkg.airaloPackageId)}`;
+    const sourceImageUrl = fallbackPackageImageUrl();
     const image =
       (await resolveImageFromUrl(sourceImageUrl)) ??
       existingImages.get(docId) ??
       (await uploadPlaceholderImage("catalog-package-placeholder.png"));
 
-    const pkgDocId = `catalog-package-${sanitizeDocumentId(pkg.externalId)}`;
+    const pkgDocId = `catalog-package-${sanitizeDocumentId(pkg.airaloPackageId)}`;
+    const currentPriceCents =
+      pkg.state?.sellingPriceCents ??
+      Math.round(Number(pkg.price) * 100);
 
-    if (typeof pkg.priceCents === "number") {
-      const current = primaryCandidateByCountryId.get(pkg.countryId);
-      if (!current || pkg.priceCents <= current.priceCents) {
-        primaryCandidateByCountryId.set(pkg.countryId, { priceCents: pkg.priceCents, docId: pkgDocId });
+    if (typeof currentPriceCents === "number") {
+      const current = primaryCandidateByCountryId.get(pkg.operator.countryId);
+      if (!current || currentPriceCents <= current.priceCents) {
+        primaryCandidateByCountryId.set(pkg.operator.countryId, { priceCents: currentPriceCents, docId: pkgDocId });
       }
     }
 
     packageDocs.push({
       _id: pkgDocId,
       _type: "catalogPackage",
-      title: pkg.name,
-      externalId: pkg.externalId,
-      dataAmountMb: pkg.dataAmountMb ?? null,
-      validityDays: pkg.validityDays ?? null,
+      title: pkg.title,
+      externalId: pkg.airaloPackageId,
+      dataAmountMb: pkg.amount ?? null,
+      validityDays: pkg.day ?? null,
       isUnlimited: pkg.isUnlimited,
       badge: null,
       summary: null,
@@ -389,9 +416,12 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
       isFairUsagePolicy: pkg.isFairUsagePolicy ?? null,
       fairUsagePolicy: pkg.fairUsagePolicy ?? null,
       image,
-      metadataJson: serializeMetadata(pkg.metadata),
-      isActive: pkg.isActive,
-      deactivatedAt: pkg.deactivatedAt?.toISOString() ?? null,
+      metadataJson: serializeMetadata({
+        pricesNetPrice: pkg.pricesNetPrice,
+        pricesRecommendedRetailPrice: pkg.pricesRecommendedRetailPrice,
+      }),
+      isActive: pkg.state?.isActive ?? true,
+      deactivatedAt: pkg.state?.deactivatedAt?.toISOString() ?? null,
       lastSyncedAt: now
     });
   }

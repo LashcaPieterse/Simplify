@@ -4,10 +4,25 @@ import prisma from "@/lib/db/client";
 import { revalidatePath } from "next/cache";
 
 export async function applyRegionMarkup(countryId: string, percent: number) {
-  const packages = await prisma.package.findMany({ where: { countryId } });
+  const packages = await prisma.package.findMany({
+    where: { operator: { is: { countryId } } },
+    select: {
+      id: true,
+      netPrice: true,
+      price: true,
+      state: { select: { basePriceCents: true } },
+    },
+  });
   for (const pkg of packages) {
-    const selling = pkg.priceCents + Math.round((pkg.priceCents * percent) / 100);
-    await prisma.package.update({ where: { id: pkg.id }, data: { sellingPriceCents: selling } });
+    const basePriceCents =
+      pkg.state?.basePriceCents ??
+      Math.round(Number(pkg.netPrice ?? pkg.price) * 100);
+    const selling = basePriceCents + Math.round((basePriceCents * percent) / 100);
+    await prisma.packageState.upsert({
+      where: { packageId: pkg.id },
+      create: { packageId: pkg.id, sellingPriceCents: selling, basePriceCents },
+      update: { sellingPriceCents: selling, updatedAt: new Date() },
+    });
     await prisma.auditLog.create({
       data: {
         action: "package.bulk-price",
@@ -22,7 +37,11 @@ export async function applyRegionMarkup(countryId: string, percent: number) {
 
 export async function saveBulkPrices(updates: { id: string; sellingPriceCents: number }[]) {
   for (const update of updates) {
-    await prisma.package.update({ where: { id: update.id }, data: { sellingPriceCents: update.sellingPriceCents } });
+    await prisma.packageState.upsert({
+      where: { packageId: update.id },
+      create: { packageId: update.id, sellingPriceCents: update.sellingPriceCents },
+      update: { sellingPriceCents: update.sellingPriceCents, updatedAt: new Date() },
+    });
     await prisma.auditLog.create({
       data: {
         action: "package.bulk-price",

@@ -5,42 +5,31 @@ import { getCatalogProductSummaries } from "./query";
 
 type TestPackage = {
   id: string;
-  externalId: string;
-  name: string;
-  status: string | null;
-  simType: string | null;
-  isRechargeable: boolean | null;
-  networkTypes: string[];
-  voiceMinutes: number | null;
-  sms: number | null;
-  apn: string | null;
-  iccid: string | null;
-  smdpAddress: string | null;
-  qrCodeData: string | null;
-  qrCodeUrl: string | null;
-  activationCode: string | null;
-  topupParentId: string | null;
-  dataAmountMb: number | null;
-  validityDays: number | null;
+  airaloPackageId: string;
+  title: string;
+  amount: number;
+  day: number;
   isUnlimited: boolean;
-  priceCents: number;
-  sellingPriceCents: number | null;
-  currencyCode: string;
-  netPriceJson: unknown;
-  rrpPriceJson: unknown;
+  price: number;
+  netPrice: number | null;
+  pricesNetPrice: unknown;
+  pricesRecommendedRetailPrice: unknown;
   shortInfo: string | null;
   qrInstallation: string | null;
   manualInstallation: string | null;
   isFairUsagePolicy: boolean | null;
   fairUsagePolicy: string | null;
-  imageUrl: string | null;
-  metadata: unknown;
-  isActive: boolean;
-  deactivatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  operator: null;
-  country: { id: string; name: string; slug: string };
+  operator: null | { id: string; title: string; airaloOperatorId: number | null };
+  state: {
+    isActive: boolean;
+    sellingPriceCents: number | null;
+    basePriceCents: number;
+    currencyCode: string;
+    lastSyncedAt: Date | null;
+    updatedAt: Date;
+  } | null;
 };
 
 test("getCatalogProductSummaries returns unavailable when no DB match exists", async () => {
@@ -109,44 +98,33 @@ test("getCatalogProductSummaries does not fall back to country matches", async (
     fetchPackages: async () => [
       {
         id: "pkg-1",
-        externalId: "some-other-package",
-        name: "Expensive package",
-        status: "active",
-        simType: null,
-        isRechargeable: null,
-        networkTypes: [],
-        voiceMinutes: null,
-        sms: null,
-        apn: null,
-        iccid: null,
-        smdpAddress: null,
-        qrCodeData: null,
-        qrCodeUrl: null,
-        activationCode: null,
-        topupParentId: null,
-        dataAmountMb: null,
-        validityDays: null,
+        airaloPackageId: "some-other-package",
+        title: "Expensive package",
+        amount: 1024,
+        day: 7,
         isUnlimited: false,
-        priceCents: 7250,
-        sellingPriceCents: null,
-        currencyCode: "USD",
-        netPriceJson: null,
-        rrpPriceJson: null,
+        price: 72.5,
+        netPrice: null,
+        pricesNetPrice: null,
+        pricesRecommendedRetailPrice: null,
         shortInfo: null,
         qrInstallation: null,
         manualInstallation: null,
         isFairUsagePolicy: null,
         fairUsagePolicy: null,
-        imageUrl: null,
-        metadata: null,
-        isActive: true,
-        deactivatedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         operator: null,
-        country: { id: "country-1", name: "Malaysia", slug: "malaysia" },
+        state: {
+          isActive: true,
+          sellingPriceCents: null,
+          basePriceCents: 7250,
+          currencyCode: "USD",
+          lastSyncedAt: null,
+          updatedAt: new Date(),
+        },
       } as TestPackage,
-    ],
+    ] as unknown as any,
   });
 
   assert.equal(summaries.length, 1);

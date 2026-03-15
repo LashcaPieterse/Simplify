@@ -55,15 +55,15 @@ export default async function AccountReceiptsPage() {
         where: {
           OR: [
             packageUuidIds.length ? { id: { in: packageUuidIds } } : undefined,
-            packageExternalIds.length ? { externalId: { in: packageExternalIds } } : undefined,
+            packageExternalIds.length ? { airaloPackageId: { in: packageExternalIds } } : undefined,
           ].filter(Boolean) as Prisma.PackageWhereInput[],
         },
-        include: { country: true },
+        include: { operator: { include: { country: true } } },
       })
     : [];
 
   const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const packageByExternalId = new Map(packages.map((pkg) => [pkg.externalId, pkg]));
+  const packageByExternalId = new Map(packages.map((pkg) => [pkg.airaloPackageId, pkg]));
 
   return (
     <div className="space-y-4">
@@ -83,10 +83,10 @@ export default async function AccountReceiptsPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">
-                  {pkg?.country?.name ?? "eSIM"}
+                  {pkg?.operator?.country?.title ?? "eSIM"}
                 </p>
                 <h2 className="text-lg font-semibold text-brand-900">
-                  {pkg?.name ?? "Simplify eSIM plan"}
+                  {pkg?.title ?? "Simplify eSIM plan"}
                 </h2>
                 <p className="mt-1 text-sm text-brand-600">
                   Receipt for order {order.orderNumber ?? order.requestId ?? order.id}

@@ -171,6 +171,14 @@ function normaliseQuantity(quantity?: number): number {
   return Math.min(Math.max(quantity, DEFAULT_QUANTITY), MAX_QUANTITY);
 }
 
+function decimalToCents(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.round(parsed * 100);
+}
+
 const ORDER_DETAILS_INCLUDE = {
   profiles: {
     include: {
@@ -535,7 +543,7 @@ function shouldAutoDeactivatePackage(
 }
 
 async function autoDeactivatePackage(
-  pkg: { id: string; externalId: string },
+  pkg: { id: string; airaloPackageId: string },
   options: {
     reason: string | null;
     businessCode: number | null;
@@ -544,15 +552,15 @@ async function autoDeactivatePackage(
   },
 ): Promise<void> {
   const client = isPrismaClient(options.prisma) ? options.prisma : prismaClient;
-  const result = await client.package.updateMany({
-    where: { id: pkg.id, isActive: true },
+  const result = await client.packageState.updateMany({
+    where: { packageId: pkg.id, isActive: true },
     data: { isActive: false, deactivatedAt: new Date() },
   });
 
   if (result.count > 0) {
     logOrderWarn("catalog.package.auto_paused", {
       packageId: pkg.id,
-      packageExternalId: pkg.externalId,
+      packageExternalId: pkg.airaloPackageId,
       reason: options.reason,
       airaloErrorCode: options.businessCode,
       classification: options.classification,
@@ -676,24 +684,30 @@ export async function createOrder(
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
   const packageLookup: Prisma.PackageWhereInput = uuidRegex.test(packageId)
     ? {
-        isActive: true,
-        OR: [{ id: packageId }, { externalId: packageId }],
+        state: { is: { isActive: true } },
+        OR: [{ id: packageId }, { airaloPackageId: packageId }],
       }
     : {
-        isActive: true,
-        externalId: packageId,
+        state: { is: { isActive: true } },
+        airaloPackageId: packageId,
       };
 
-  const pkg = await db.package.findFirst({ where: packageLookup });
+  const pkg = await db.package.findFirst({
+    where: packageLookup,
+    include: { state: true },
+  });
   if (!pkg) {
-    const byId = await db.package.findFirst({ where: { id: packageId } });
-    const byExternalId = await db.package.findFirst({ where: { externalId: packageId } });
+    const byId = await db.package.findFirst({ where: { id: packageId }, include: { state: true } });
+    const byExternalId = await db.package.findFirst({
+      where: { airaloPackageId: packageId },
+      include: { state: true },
+    });
     console.info("order.package.lookup", {
       packageId,
       foundById: Boolean(byId),
       foundByExternalId: Boolean(byExternalId),
-      isActiveById: byId?.isActive ?? null,
-      isActiveByExternalId: byExternalId?.isActive ?? null,
+      isActiveById: byId?.state?.isActive ?? null,
+      isActiveByExternalId: byExternalId?.state?.isActive ?? null,
     });
   }
 
@@ -713,9 +727,11 @@ export async function createOrder(
   }
 
   const normalisedQuantity = normaliseQuantity(quantity);
-  const description = `${normalisedQuantity} x ${pkg.name}`;
+  const description = `${normalisedQuantity} x ${pkg.title}`;
+  const sellPriceCents = pkg.state?.sellingPriceCents ?? decimalToCents(pkg.price);
+  const currencyCode = pkg.state?.currencyCode ?? "USD";
   const orderPayload: CreateOrderPayload = {
-    package_id: pkg.externalId,
+    package_id: pkg.airaloPackageId,
     quantity: String(normalisedQuantity),
     type: "sim",
     description,
@@ -774,7 +790,7 @@ export async function createOrder(
 
       logOrderError("airalo.order.create.failed", {
         packageId: pkg.id,
-        packageExternalId: pkg.externalId,
+        packageExternalId: pkg.airaloPackageId,
         airaloStatus: error.details.status,
         airaloRequestId: requestId,
         airaloErrorCode: businessError?.code ?? null,
@@ -788,7 +804,7 @@ export async function createOrder(
         const validationFields = fieldErrors ? Object.keys(fieldErrors) : null;
         logOrderError("order.validation.failed", {
           packageId: pkg.id,
-          packageExternalId: pkg.externalId,
+          packageExternalId: pkg.airaloPackageId,
           airaloStatus: error.details.status,
           airaloRequestId: requestId,
           airaloErrorCode: businessError?.code ?? null,
@@ -814,7 +830,7 @@ export async function createOrder(
         }).catch((deactivationError) => {
           logOrderWarn("catalog.package.auto_pause_failed", {
             packageId: pkg.id,
-            packageExternalId: pkg.externalId,
+            packageExternalId: pkg.airaloPackageId,
             error: deactivationError instanceof Error ? deactivationError.message : String(deactivationError),
           });
         });
@@ -840,7 +856,7 @@ export async function createOrder(
 
     logOrderError("airalo.order.create.failed", {
       packageId: pkg.id,
-      packageExternalId: pkg.externalId,
+      packageExternalId: pkg.airaloPackageId,
       latencyMs: airaloLatencyMs,
       message: mapped.message,
       error: error instanceof Error ? error.message : String(error),
@@ -861,7 +877,7 @@ export async function createOrder(
   if (isAsyncSubmission && airaloAck) {
     logOrderInfo("airalo.order.async.accepted", {
       packageId: pkg.id,
-      packageExternalId: pkg.externalId,
+      packageExternalId: pkg.airaloPackageId,
       airaloRequestId: airaloAck.request_id,
       acceptedAt: airaloAck.accepted_at,
       latencyMs: airaloLatencyMs,
@@ -869,7 +885,7 @@ export async function createOrder(
   } else if (airaloOrder) {
     logOrderInfo("airalo.order.sync.completed", {
       packageId: pkg.id,
-      packageExternalId: pkg.externalId,
+      packageExternalId: pkg.airaloPackageId,
       airaloOrderId: resolveAiraloOrderId(airaloOrder),
       airaloRequestId: airaloOrder.order_reference ?? resolveAiraloOrderId(airaloOrder) ?? null,
       status: resolveAiraloStatus(airaloOrder),
@@ -888,8 +904,8 @@ export async function createOrder(
           status: resolveAiraloStatus(airaloOrder),
           customerEmail: customerEmail ?? null,
           quantity: normalisedQuantity,
-          totalCents: (pkg.sellingPriceCents ?? pkg.priceCents) * normalisedQuantity,
-          currency: pkg.currencyCode,
+          totalCents: sellPriceCents * normalisedQuantity,
+          currency: currencyCode,
         },
       });
 
