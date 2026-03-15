@@ -2,7 +2,7 @@
 * Synchronizes catalog countries, operators, and packages from the database into Sanity.
 * Run after `npx tsx scripts/sync-airalo-packages.ts` to mirror the latest Airalo catalog.
 */
-import { createClient } from "@sanity/client";
+import { createClient, type Mutation } from "@sanity/client";
 import prisma from "../db/client";
 
 const BATCH_SIZE = 50;
@@ -13,6 +13,12 @@ type SanityImageValue = {
     _type: "reference";
     _ref: string;
   };
+};
+
+type SyncDocument = {
+  _id: string;
+  _type: string;
+  [key: string]: unknown;
 };
 
 const imageRefCache = new Map<string, SanityImageValue>();
@@ -174,12 +180,14 @@ function sanitizeDocumentId(value: string): string {
 }
 
 async function upsertDocuments(
-  documents: Record<string, unknown>[],
+  documents: SyncDocument[],
   label: string,
   visibility: "sync" | "async" = "async",
 ) {
   for (const batch of chunk(documents, BATCH_SIZE)) {
-    const mutations = batch.map((doc) => ({ createOrReplace: doc }));
+    const mutations: Mutation<Record<string, unknown>>[] = batch.map((doc) => ({
+      createOrReplace: doc,
+    }));
     await getSanityClient().mutate(mutations, { returnIds: false, visibility });
   }
   console.info(`[sanity-sync] Upserted ${documents.length} ${label}`);
@@ -270,7 +278,7 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
 
   const countryIdMap = new Map<string, string>();
   const countryById = new Map<string, (typeof countries)[number]>();
-  const countryDocs: Record<string, unknown>[] = [];
+  const countryDocs: SyncDocument[] = [];
 
   for (const country of countries) {
     const docId = `catalog-country-${country.countryCode.toLowerCase()}`;
@@ -301,7 +309,7 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
   }
 
   const operatorIdMap = new Map<string, string>();
-  const operatorDocs: Record<string, unknown>[] = [];
+  const operatorDocs: SyncDocument[] = [];
   for (const operator of operators) {
     const countryRef = countryIdMap.get(operator.countryId);
     const docId = `catalog-operator-${operator.apiOperatorId ?? operator.id}`;
@@ -333,7 +341,7 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
     });
   }
 
-  const packageDocs: Record<string, unknown>[] = [];
+  const packageDocs: SyncDocument[] = [];
   const primaryCandidateByCountryId = new Map<string, { priceCents: number; docId: string }>();
 
   for (const pkg of packages) {
