@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
-import { syncAiraloPackages } from "@/lib/catalog/sync";
+import { mapAuditResultToLegacySyncResult, runSyncAuditJob } from "@/lib/sync-audit/sync-job";
 import { sendEmail } from "@/lib/notifications/email";
 
 const ALERT_RECIPIENT = process.env.AIRALO_SYNC_ALERT_EMAIL ?? "pieterselashca@gmail.com";
@@ -179,7 +179,12 @@ export async function GET(request: NextRequest) {
     }
 
     console.info("[airalo-sync][step-2/3] Starting Airalo sync job");
-    const result = await syncAiraloPackages({ logger: console });
+    const auditResult = await runSyncAuditJob({
+      triggeredBy: "api/airalo-sync",
+      continueOnError: true,
+      notes: "Legacy /api/airalo-sync trigger",
+    });
+    const result = mapAuditResultToLegacySyncResult(auditResult);
     console.info("[airalo-sync][step-3][packages] Sync completed", result);
 
     revalidatePath("/");
@@ -189,6 +194,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       startedAt: startedAt.toISOString(),
       completedAt: new Date().toISOString(),
+      runId: auditResult.runId,
       result,
     });
   } catch (error) {

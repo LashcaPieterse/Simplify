@@ -17,6 +17,28 @@ export interface RunSyncOptions {
   thresholds?: SyncThresholds;
 }
 
+export interface LegacyAiraloSyncResult {
+  total: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  deactivated: number;
+}
+
+export interface RunSyncAuditResult {
+  runId: string;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  failures: number;
+  warnings: number;
+  packages: LegacyAiraloSyncResult;
+}
+
+const PACKAGES_PAGE_LIMIT = 100;
+const PACKAGES_INCLUDE_TOP_UP = true;
+const PACKAGES_INCLUDE_FLAGS = ["top-up"] as const;
+
 function requiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env var: ${name}`);
@@ -42,7 +64,99 @@ function normalizePackage(pkg: AiraloPackageNode, operator: AiraloOperatorNode, 
   };
 }
 
-async function insertRunItem(data: {
+function sanitizeJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
+}
+
+function countryMergeKey(country: AiraloCountryNode): string {
+  return String(country.country_code ?? country.slug ?? country.title ?? "unknown").toLowerCase();
+}
+
+function operatorMergeKey(operator: AiraloOperatorNode): string {
+  return String(operator.id ?? operator.operator_code ?? operator.title ?? operator.name ?? "unknown").toLowerCase();
+}
+
+function packageMergeKey(pkg: AiraloPackageNode): string {
+  return String(pkg.id ?? pkg.slug ?? pkg.title ?? pkg.name ?? "unknown").toLowerCase();
+}
+
+export function mergeAiraloCountryTrees(pages: AiraloCountryNode[][]): AiraloCountryNode[] {
+  const mergedCountries = new Map<string, AiraloCountryNode>();
+
+  for (const countries of pages) {
+    for (const country of countries ?? []) {
+      const key = countryMergeKey(country);
+      const existingCountry = mergedCountries.get(key);
+
+      if (!existingCountry) {
+        mergedCountries.set(key, {
+          ...country,
+          operators: (country.operators ?? []).map((operator) => ({
+            ...operator,
+            packages: [...(operator.packages ?? [])],
+          })),
+        });
+        continue;
+      }
+
+      existingCountry.country_code ??= country.country_code;
+      existingCountry.slug ??= country.slug;
+      existingCountry.title ??= country.title;
+      existingCountry.region ??= country.region;
+      existingCountry.image ??= country.image;
+      existingCountry.operators ??= [];
+
+      for (const operator of country.operators ?? []) {
+        const opKey = operatorMergeKey(operator);
+        const existingOperator = existingCountry.operators.find((node) => operatorMergeKey(node) === opKey);
+
+        if (!existingOperator) {
+          existingCountry.operators.push({
+            ...operator,
+            packages: [...(operator.packages ?? [])],
+          });
+          continue;
+        }
+
+        existingOperator.id ??= operator.id;
+        existingOperator.operator_code ??= operator.operator_code;
+        existingOperator.title ??= operator.title;
+        existingOperator.name ??= operator.name;
+        existingOperator.packages ??= [];
+
+        const seenPackageKeys = new Set(existingOperator.packages.map((pkg) => packageMergeKey(pkg)));
+        for (const pkg of operator.packages ?? []) {
+          const pkgKey = packageMergeKey(pkg);
+          if (seenPackageKeys.has(pkgKey)) {
+            continue;
+          }
+          existingOperator.packages.push({ ...pkg });
+          seenPackageKeys.add(pkgKey);
+        }
+      }
+    }
+  }
+
+  return Array.from(mergedCountries.values());
+}
+
+function buildAiraloResponseMetadata(page: number, limit: number, countryCount: number) {
+  return {
+    endpoint: "/packages",
+    page,
+    limit,
+    includeTopUp: PACKAGES_INCLUDE_TOP_UP,
+    include: [...PACKAGES_INCLUDE_FLAGS],
+    countryCount,
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+export function mapAuditResultToLegacySyncResult(result: Pick<RunSyncAuditResult, "packages">): LegacyAiraloSyncResult {
+  return result.packages;
+}
+
+async function insertRunItem(db: Prisma.TransactionClient | typeof prisma, data: {
   runId: string;
   entityType: "country" | "operator" | "package";
   entityKey: string;
@@ -53,7 +167,7 @@ async function insertRunItem(data: {
   warnings?: string[];
   errorText?: string;
 }) {
-  return prisma.syncRunItem.create({
+  return db.syncRunItem.create({
     data: {
       id: randomUUID(),
       runId: data.runId,
@@ -69,7 +183,7 @@ async function insertRunItem(data: {
   });
 }
 
-export async function runSyncAuditJob(options: RunSyncOptions) {
+export async function runSyncAuditJob(options: RunSyncOptions): Promise<RunSyncAuditResult> {
   const startedAt = new Date();
   const run = await prisma.syncRun.create({
     data: {
@@ -96,9 +210,41 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
   const warnings = 0;
   let failures = 0;
   const errors: string[] = [];
+  let packageCreated = 0;
+  let packageUpdated = 0;
+  let packageUnchanged = 0;
 
   try {
-    const tree = await client.getPackagesTree({ includeTopUp: true, limit: 500 });
+    const countryPages: AiraloCountryNode[][] = [];
+    for (let page = 1; ; page += 1) {
+      const pageResult = await client.getPackagesTreePageRaw({
+        includeTopUp: PACKAGES_INCLUDE_TOP_UP,
+        limit: PACKAGES_PAGE_LIMIT,
+        page,
+      });
+
+      await prisma.entitySnapshot.create({
+        data: {
+          id: randomUUID(),
+          runId: run.id,
+          entityType: "airalo_response",
+          entityKey: `packages:page:${page}`,
+          rawPayloadJson: sanitizeJson(pageResult.rawResponse),
+          normalizedJson: sanitizeJson(
+            buildAiraloResponseMetadata(page, PACKAGES_PAGE_LIMIT, pageResult.countries.length),
+          ),
+        },
+      });
+
+      countryPages.push(pageResult.countries);
+      if (pageResult.countries.length < PACKAGES_PAGE_LIMIT) {
+        break;
+      }
+    }
+
+    const tree = mergeAiraloCountryTrees(countryPages);
+    const processedPackageKeys = new Set<string>();
+
     for (const countryNode of tree) {
       const countryKey = String(countryNode.country_code ?? countryNode.slug ?? "unknown");
       const countryNormalized = {
@@ -116,14 +262,14 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
         if (!countryBefore) {
           await tx.country.create({ data: countryNormalized });
           inserted += 1;
-          await insertRunItem({ runId: run.id, entityType: "country", entityKey: countryKey, action: "insert", afterHash: countryAfterHash, diff: countryDiff });
+          await insertRunItem(tx, { runId: run.id, entityType: "country", entityKey: countryKey, action: "insert", afterHash: countryAfterHash, diff: countryDiff });
         } else if (Object.keys(countryDiff).length > 0) {
           await tx.country.update({ where: { id: countryBefore.id }, data: { name: countryNormalized.name, slug: countryNormalized.slug } });
           updated += 1;
-          await insertRunItem({ runId: run.id, entityType: "country", entityKey: countryKey, action: "update", beforeHash: countryBeforeHash, afterHash: countryAfterHash, diff: countryDiff });
+          await insertRunItem(tx, { runId: run.id, entityType: "country", entityKey: countryKey, action: "update", beforeHash: countryBeforeHash, afterHash: countryAfterHash, diff: countryDiff });
         } else {
           skipped += 1;
-          await insertRunItem({ runId: run.id, entityType: "country", entityKey: countryKey, action: "skip", beforeHash: countryBeforeHash, afterHash: countryAfterHash });
+          await insertRunItem(tx, { runId: run.id, entityType: "country", entityKey: countryKey, action: "skip", beforeHash: countryBeforeHash, afterHash: countryAfterHash });
         }
       });
 
@@ -147,12 +293,12 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
           if (!operatorBefore) {
             const created = await tx.operator.create({ data: operatorNormalized });
             inserted += 1;
-            await insertRunItem({ runId: run.id, entityType: "operator", entityKey: operatorKey, action: "insert", afterHash: operatorAfterHash, diff: operatorDiff });
+            await insertRunItem(tx, { runId: run.id, entityType: "operator", entityKey: operatorKey, action: "insert", afterHash: operatorAfterHash, diff: operatorDiff });
             return created;
           }
           if (Object.keys(operatorDiff).length === 0) {
             skipped += 1;
-            await insertRunItem({ runId: run.id, entityType: "operator", entityKey: operatorKey, action: "skip", beforeHash: operatorBeforeHash, afterHash: operatorAfterHash });
+            await insertRunItem(tx, { runId: run.id, entityType: "operator", entityKey: operatorKey, action: "skip", beforeHash: operatorBeforeHash, afterHash: operatorAfterHash });
             return operatorBefore;
           }
           const updatedOperator = await tx.operator.update({
@@ -164,13 +310,18 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
             },
           });
           updated += 1;
-          await insertRunItem({ runId: run.id, entityType: "operator", entityKey: operatorKey, action: "update", beforeHash: operatorBeforeHash, afterHash: operatorAfterHash, diff: operatorDiff });
+          await insertRunItem(tx, { runId: run.id, entityType: "operator", entityKey: operatorKey, action: "update", beforeHash: operatorBeforeHash, afterHash: operatorAfterHash, diff: operatorDiff });
           return updatedOperator;
         });
 
         for (const packageNode of operatorNode.packages ?? []) {
           const normalized = normalizePackage(packageNode, operatorNode, countryNode);
           const packageKey = normalized.airaloId;
+          if (processedPackageKeys.has(packageKey)) {
+            continue;
+          }
+          processedPackageKeys.add(packageKey);
+
           const markup = { percent: Number(process.env.DEFAULT_PRICE_MARKUP_PERCENT ?? 20), fixed: Number(process.env.DEFAULT_PRICE_MARKUP_FIXED ?? 0) };
           const computedSell = applyMarkupRule(normalized.sourcePrice, markup);
           const normalizedRecord = {
@@ -196,8 +347,8 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
                   runId: run.id,
                   entityType: "package",
                   entityKey: packageKey,
-                  rawPayloadJson: normalized.raw as object,
-                  normalizedJson: normalizedRecord as object,
+                  rawPayloadJson: sanitizeJson(normalized.raw),
+                  normalizedJson: sanitizeJson(normalizedRecord),
                 },
               });
 
@@ -219,10 +370,12 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
                   },
                 });
                 inserted += 1;
-                await insertRunItem({ runId: run.id, entityType: "package", entityKey: packageKey, action: "insert", afterHash, diff });
+                packageCreated += 1;
+                await insertRunItem(tx, { runId: run.id, entityType: "package", entityKey: packageKey, action: "insert", afterHash, diff });
               } else if (beforeHash === afterHash) {
                 skipped += 1;
-                await insertRunItem({ runId: run.id, entityType: "package", entityKey: packageKey, action: "skip", beforeHash, afterHash });
+                packageUnchanged += 1;
+                await insertRunItem(tx, { runId: run.id, entityType: "package", entityKey: packageKey, action: "skip", beforeHash, afterHash });
               } else {
                 await tx.package.update({
                   where: { id: pkgBefore.id },
@@ -239,7 +392,8 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
                   },
                 });
                 updated += 1;
-                await insertRunItem({ runId: run.id, entityType: "package", entityKey: packageKey, action: "update", beforeHash, afterHash, diff });
+                packageUpdated += 1;
+                await insertRunItem(tx, { runId: run.id, entityType: "package", entityKey: packageKey, action: "update", beforeHash, afterHash, diff });
               }
             });
 
@@ -272,7 +426,7 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
             const message = error instanceof Error ? error.message : "Unknown package sync failure";
             errors.push(`${packageKey}: ${message}`);
             logOrderError("sync.package.failed", { runId: run.id, packageKey, error: message });
-            await insertRunItem({ runId: run.id, entityType: "package", entityKey: packageKey, action: "error", errorText: message });
+            await insertRunItem(prisma, { runId: run.id, entityType: "package", entityKey: packageKey, action: "error", errorText: message });
             if (!options.continueOnError) {
               throw error;
             }
@@ -295,8 +449,16 @@ export async function runSyncAuditJob(options: RunSyncOptions) {
       },
     });
 
-    logOrderInfo("sync.run.completed", { runId: run.id, inserted, updated, skipped, failures, warnings });
-    return { runId: run.id, inserted, updated, skipped, failures, warnings };
+    const packages: LegacyAiraloSyncResult = {
+      total: packageCreated + packageUpdated + packageUnchanged,
+      created: packageCreated,
+      updated: packageUpdated,
+      unchanged: packageUnchanged,
+      deactivated: 0,
+    };
+
+    logOrderInfo("sync.run.completed", { runId: run.id, inserted, updated, skipped, failures, warnings, packages });
+    return { runId: run.id, inserted, updated, skipped, failures, warnings, packages };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync failure";
     logOrderWarn("sync.run.failed", { runId: run.id, error: message });

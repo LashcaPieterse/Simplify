@@ -129,12 +129,59 @@ export interface AiraloCountryNode {
   [key: string]: unknown;
 }
 
-type PackagesRawResponse = { data?: unknown };
+type PackagesRawResponse = unknown;
+
+export interface AiraloPackagesTreeRawPage {
+  rawResponse: unknown;
+  countries: AiraloCountryNode[];
+}
 
 function isCountryTree(data: unknown): data is AiraloCountryNode[] {
   return (
     Array.isArray(data) &&
     data.every((country) => country !== null && typeof country === "object")
+  );
+}
+
+function extractRawPackagesData(raw: PackagesRawResponse): unknown {
+  if (raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)) {
+    return (raw as { data?: unknown }).data;
+  }
+
+  return raw;
+}
+
+function extractCountryTree(raw: PackagesRawResponse): AiraloCountryNode[] {
+  const data = extractRawPackagesData(raw);
+  if (isCountryTree(data)) {
+    return data;
+  }
+
+  if (data && typeof data === "object") {
+    const nestedCountries = (data as { countries?: unknown }).countries;
+    if (isCountryTree(nestedCountries)) {
+      return nestedCountries;
+    }
+
+    const nestedData = (data as { data?: unknown }).data;
+    if (isCountryTree(nestedData)) {
+      return nestedData;
+    }
+  }
+
+  const rootCountries =
+    raw && typeof raw === "object" ? (raw as { countries?: unknown }).countries : undefined;
+  if (isCountryTree(rootCountries)) {
+    return rootCountries;
+  }
+
+  const rootKeys =
+    raw && typeof raw === "object" ? Object.keys(raw as Record<string, unknown>) : [];
+  const dataKeys =
+    data && typeof data === "object" ? Object.keys(data as Record<string, unknown>) : [];
+
+  throw new Error(
+    `Unexpected Airalo response shape; expected an array of countries. rootKeys=${rootKeys.join(",")}, dataKeys=${dataKeys.join(",")}`,
   );
 }
 
@@ -524,44 +571,25 @@ export class AiraloClient {
 
   async getPackages(options: GetPackagesOptions = {}): Promise<Package[]> {
     const raw = await this.fetchPackagesRaw(options);
-    return normalizePackagesData(raw?.data);
+    return normalizePackagesData(extractRawPackagesData(raw));
   }
 
   /**
    * Fetch packages while preserving the raw country/operator/package hierarchy.
    */
   async getPackagesTree(options: GetPackagesOptions = {}): Promise<AiraloCountryNode[]> {
+    const page = await this.getPackagesTreePageRaw(options);
+    return page.countries;
+  }
+
+  async getPackagesTreePageRaw(
+    options: GetPackagesOptions = {},
+  ): Promise<AiraloPackagesTreeRawPage> {
     const raw = await this.fetchPackagesRaw(options);
-    const data = raw?.data;
-    if (isCountryTree(data)) {
-      return data;
-    }
-
-    if (data && typeof data === "object") {
-      const nestedCountries = (data as { countries?: unknown }).countries;
-      if (isCountryTree(nestedCountries)) {
-        return nestedCountries;
-      }
-
-      const nestedData = (data as { data?: unknown }).data;
-      if (isCountryTree(nestedData)) {
-        return nestedData;
-      }
-    }
-
-    const rootCountries = (raw as { countries?: unknown })?.countries;
-    if (isCountryTree(rootCountries)) {
-      return rootCountries;
-    }
-
-    const rootKeys =
-      raw && typeof raw === "object" ? Object.keys(raw as Record<string, unknown>) : [];
-    const dataKeys =
-      data && typeof data === "object" ? Object.keys(data as Record<string, unknown>) : [];
-
-    throw new Error(
-      `Unexpected Airalo response shape; expected an array of countries. rootKeys=${rootKeys.join(",")}, dataKeys=${dataKeys.join(",")}`,
-    );
+    return {
+      rawResponse: raw,
+      countries: extractCountryTree(raw),
+    };
   }
 
   async getOrderResponseById(orderId: string): Promise<OrderResponse> {
@@ -707,11 +735,7 @@ export class AiraloClient {
         console.info("[airalo-sync][step-3][packages] Packages request succeeded", {
           status: response.status,
         });
-        if (parsed && typeof parsed === "object") {
-          return parsed as PackagesRawResponse;
-        }
-
-        return { data: undefined };
+        return parsed as PackagesRawResponse;
       }
 
       const isUnauthorized = response.status === 401;

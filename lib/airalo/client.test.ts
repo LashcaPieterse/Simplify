@@ -314,6 +314,106 @@ test("AiraloClient merges include parameters for package requests", async () => 
   assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
 });
 
+test("AiraloClient getPackagesTreePageRaw returns parsed countries and preserves raw payload", async () => {
+  const tokenCache = new MockTokenCache();
+  const rawResponse = {
+    data: {
+      countries: [
+        {
+          country_code: "US",
+          title: "United States",
+          operators: [
+            {
+              id: 11,
+              operator_code: "att",
+              packages: [{ id: 1001, title: "US 1GB", price: 5 }],
+            },
+          ],
+        },
+      ],
+    },
+    meta: { page: 1 },
+  };
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      return jsonResponse(rawResponse, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const page = await client.getPackagesTreePageRaw({ limit: 100, page: 1, includeTopUp: true });
+  assert.equal(page.countries.length, 1);
+  assert.equal(page.countries[0]?.country_code, "US");
+  assert.deepEqual(page.rawResponse, rawResponse);
+});
+
+test("AiraloClient getPackagesTreePageRaw supports root-level country arrays", async () => {
+  const tokenCache = new MockTokenCache();
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      return jsonResponse(
+        [
+          {
+            country_code: "ZA",
+            title: "South Africa",
+            operators: [{ id: 22, operator_code: "mtn", packages: [{ id: 3001, title: "ZA 2GB" }] }],
+          },
+        ],
+        { status: 200 },
+      );
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const page = await client.getPackagesTreePageRaw();
+  assert.equal(page.countries.length, 1);
+  assert.equal(page.countries[0]?.country_code, "ZA");
+});
+
 
 
 
