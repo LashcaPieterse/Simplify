@@ -34,6 +34,70 @@ const MultiCurrencyPricesSchema = z
   .record(MultiCurrencyPriceSchema)
   .optional();
 
+const CurrencyAmountMapSchema = z.record(z.coerce.number()).optional();
+
+const ListPackagesPackageSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    slug: z.string().optional(),
+    title: z.string().optional(),
+    name: z.string().optional(),
+    price: z.coerce.number().optional(),
+    day: z.coerce.number().optional(),
+    data: z.string().optional(),
+    amount: z.union([z.string(), z.number()]).optional(),
+    is_unlimited: z.boolean().optional(),
+    prices: z
+      .object({
+        net_price: CurrencyAmountMapSchema,
+        recommended_retail_price: CurrencyAmountMapSchema,
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+const ListPackagesOperatorSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    operator_code: z.string().optional(),
+    title: z.string().optional(),
+    name: z.string().optional(),
+    packages: z.array(ListPackagesPackageSchema).optional(),
+  })
+  .passthrough();
+
+export const ListPackagesCountrySchema = z
+  .object({
+    country_code: z.string().optional(),
+    slug: z.string().optional(),
+    title: z.string().optional(),
+    region: z.string().nullable().optional(),
+    image: z
+      .object({
+        url: z.string().nullable().optional(),
+        width: z.coerce.number().optional(),
+        height: z.coerce.number().optional(),
+      })
+      .passthrough()
+      .nullable()
+      .optional(),
+    operators: z.array(ListPackagesOperatorSchema).optional(),
+  })
+  .passthrough();
+
+export const ListPackagesDataSchema = z.union([
+  z.array(ListPackagesCountrySchema),
+  z.record(ListPackagesCountrySchema),
+]);
+
+const PricingSchema = z
+  .object({
+    discount_percentage: z.coerce.number().optional(),
+    model: z.string().optional(),
+  })
+  .passthrough();
+
 export const PackageSchema = z
   .object({
     id: z.union([z.string(), z.number()]).transform(String),
@@ -91,14 +155,26 @@ const PaginationMetaSchema = z
 
 const PackagesArraySchema = z.array(PackageSchema);
 const PackagesIndexSchema = z.record(PackagesArraySchema);
+export const LegacyPackagesDataSchema = z.union([PackagesArraySchema, PackagesIndexSchema]);
 
 export const PackagesResponseSchema = BaseResponseSchema.extend({
-  data: z.union([PackagesArraySchema, PackagesIndexSchema]),
+  data: LegacyPackagesDataSchema,
   links: PaginationLinksSchema.optional(),
   meta: PaginationMetaSchema.optional(),
 });
 
 export type PackagesResponse = z.infer<typeof PackagesResponseSchema>;
+
+export const ListPackagesResponseSchema = BaseResponseSchema.extend({
+  data: ListPackagesDataSchema,
+  links: PaginationLinksSchema.optional(),
+  meta: PaginationMetaSchema.optional(),
+  pricing: PricingSchema.optional(),
+});
+
+export type ListPackagesResponse = z.infer<typeof ListPackagesResponseSchema>;
+export type ListPackagesData = z.infer<typeof ListPackagesDataSchema>;
+export type ListPackagesCountry = z.infer<typeof ListPackagesCountrySchema>;
 
 export const OrderResponseSchema = BaseResponseSchema.extend({
   data: z

@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "crypto";
 import type { ZodType, ZodTypeDef } from "zod";
 import {
+  LegacyPackagesDataSchema,
+  ListPackagesDataSchema,
+  ListPackagesResponseSchema,
   OrderResponseSchema,
   PackagesResponseSchema,
   SubmitOrderAsyncResponseSchema,
@@ -18,6 +21,7 @@ import {
 import { recordTokenRefresh } from "../observability/metrics";
 
 import type {
+  ListPackagesResponse,
   Order,
   OrderResponse,
   Package,
@@ -65,6 +69,8 @@ export interface CreateOrderPayload extends AdditionalOrderFields {
 type QueryParamValue = string | number | boolean | null | undefined;
 
 export type PackageTypeFilter = "local" | "global";
+const PACKAGE_INCLUDE_TOPUP = "topup" as const;
+export type PackageInclude = typeof PACKAGE_INCLUDE_TOPUP;
 
 export interface GetPackagesFilters {
   type?: PackageTypeFilter;
@@ -74,7 +80,7 @@ export interface GetPackagesFilters {
 export interface GetPackagesOptions {
   filter?: GetPackagesFilters;
   includeTopUp?: boolean;
-  include?: string | string[];
+  include?: PackageInclude | PackageInclude[];
   limit?: number;
   page?: number;
   extraParams?: Record<string, QueryParamValue>;
@@ -143,6 +149,28 @@ function isCountryTree(data: unknown): data is AiraloCountryNode[] {
   );
 }
 
+function isCountryIndexMap(data: unknown): data is Record<string, AiraloCountryNode> {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return false;
+  }
+
+  return Object.values(data).every(
+    (country) => country !== null && typeof country === "object" && !Array.isArray(country),
+  );
+}
+
+function toCountryTree(data: unknown): AiraloCountryNode[] | null {
+  if (isCountryTree(data)) {
+    return data;
+  }
+
+  if (isCountryIndexMap(data)) {
+    return Object.values(data);
+  }
+
+  return null;
+}
+
 function extractRawPackagesData(raw: PackagesRawResponse): unknown {
   if (raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)) {
     return (raw as { data?: unknown }).data;
@@ -153,26 +181,44 @@ function extractRawPackagesData(raw: PackagesRawResponse): unknown {
 
 function extractCountryTree(raw: PackagesRawResponse): AiraloCountryNode[] {
   const data = extractRawPackagesData(raw);
-  if (isCountryTree(data)) {
-    return data;
+  const directCountries = toCountryTree(data);
+  if (directCountries) {
+    return directCountries;
   }
 
   if (data && typeof data === "object") {
     const nestedCountries = (data as { countries?: unknown }).countries;
-    if (isCountryTree(nestedCountries)) {
-      return nestedCountries;
+    const countryNodes = toCountryTree(nestedCountries);
+    if (countryNodes) {
+      return countryNodes;
     }
 
     const nestedData = (data as { data?: unknown }).data;
-    if (isCountryTree(nestedData)) {
-      return nestedData;
+    const nestedCountryNodes = toCountryTree(nestedData);
+    if (nestedCountryNodes) {
+      return nestedCountryNodes;
+    }
+
+    const parsedDirectData = ListPackagesDataSchema.safeParse(data);
+    if (parsedDirectData.success) {
+      return Array.isArray(parsedDirectData.data)
+        ? parsedDirectData.data
+        : Object.values(parsedDirectData.data);
     }
   }
 
-  const rootCountries =
+  const rootCountriesRaw =
     raw && typeof raw === "object" ? (raw as { countries?: unknown }).countries : undefined;
-  if (isCountryTree(rootCountries)) {
+  const rootCountries = toCountryTree(rootCountriesRaw);
+  if (rootCountries) {
     return rootCountries;
+  }
+
+  const parsedResponse = ListPackagesResponseSchema.safeParse(raw);
+  if (parsedResponse.success) {
+    return Array.isArray(parsedResponse.data.data)
+      ? parsedResponse.data.data
+      : Object.values(parsedResponse.data.data);
   }
 
   const rootKeys =
@@ -181,93 +227,114 @@ function extractCountryTree(raw: PackagesRawResponse): AiraloCountryNode[] {
     data && typeof data === "object" ? Object.keys(data as Record<string, unknown>) : [];
 
   throw new Error(
-    `Unexpected Airalo response shape; expected an array of countries. rootKeys=${rootKeys.join(",")}, dataKeys=${dataKeys.join(",")}`,
+    `Unexpected Airalo response shape; expected country array or indexed country object. rootKeys=${rootKeys.join(",")}, dataKeys=${dataKeys.join(",")}`,
   );
 }
 
-function normalizePackagesData(data: unknown): Package[] {
-  // New API shape: array of countries, each with operators[].packages[]
-  if (isCountryTree(data)) {
-    const flattened: Package[] = [];
-    for (const country of data) {
-      const destination = country.country_code ?? country.slug ?? country.title ?? "unknown";
-      const destinationName = country.title ?? country.slug ?? destination;
-      for (const operator of country.operators ?? []) {
-        for (const pkg of operator.packages ?? []) {
-          const netPrices =
-            pkg?.prices?.net_price && typeof pkg.prices.net_price === "object"
-              ? Object.fromEntries(
-                  Object.entries(pkg.prices.net_price).map(([currency, amount]) => [
-                    currency,
-                    { amount: typeof amount === "number" ? amount : Number(amount) },
-                  ]),
-                )
-              : undefined;
+function flattenCountryTree(countries: AiraloCountryNode[]): Package[] {
+  const flattened: Package[] = [];
+  for (const country of countries) {
+    const destination = country.country_code ?? country.slug ?? country.title ?? "unknown";
+    const destinationName = country.title ?? country.slug ?? destination;
+    for (const operator of country.operators ?? []) {
+      for (const pkg of operator.packages ?? []) {
+        const netPrices =
+          pkg?.prices?.net_price && typeof pkg.prices.net_price === "object"
+            ? Object.fromEntries(
+                Object.entries(pkg.prices.net_price).map(([currency, amount]) => [
+                  currency,
+                  { amount: typeof amount === "number" ? amount : Number(amount) },
+                ]),
+              )
+            : undefined;
 
-          const rrps =
-            pkg?.prices?.recommended_retail_price && typeof pkg.prices.recommended_retail_price === "object"
-              ? Object.fromEntries(
-                  Object.entries(pkg.prices.recommended_retail_price).map(([currency, amount]) => [
-                    currency,
-                    { amount: typeof amount === "number" ? amount : Number(amount) },
-                  ]),
-                )
-              : undefined;
+        const rrps =
+          pkg?.prices?.recommended_retail_price && typeof pkg.prices.recommended_retail_price === "object"
+            ? Object.fromEntries(
+                Object.entries(pkg.prices.recommended_retail_price).map(([currency, amount]) => [
+                  currency,
+                  { amount: typeof amount === "number" ? amount : Number(amount) },
+                ]),
+              )
+            : undefined;
 
-          flattened.push({
-            id: String(pkg?.id ?? pkg?.slug ?? pkg?.title ?? destination),
-            name: pkg?.title ?? pkg?.name ?? "Unknown",
-            destination,
-            destination_name: destinationName,
-            region: country.region ?? country.title ?? undefined,
-            currency: (pkg as Record<string, unknown>).currency?.toString() ?? "USD",
-            price: typeof pkg?.price === "number" ? pkg.price : undefined,
-            validity: typeof pkg?.day === "number" ? pkg.day : undefined,
-            data_amount: pkg?.data ?? (pkg?.is_unlimited ? "Unlimited" : pkg?.amount ? String(pkg.amount) : undefined),
-            is_unlimited: Boolean(pkg?.is_unlimited),
-            net_prices: netPrices,
-            recommended_retail_prices: rrps,
-            sku: pkg?.id ? String(pkg.id) : undefined,
-            status: (pkg as Record<string, unknown>).status?.toString(),
-            sim_type: (pkg as Record<string, unknown>).sim_type?.toString(),
-            is_rechargeable: Boolean((pkg as Record<string, unknown>).is_rechargeable ?? false),
-            network_types: Array.isArray((pkg as Record<string, unknown>).network_types)
-              ? ((pkg as Record<string, unknown>).network_types as unknown[]).map((n) => n?.toString?.() ?? "")
+        flattened.push({
+          id: String(pkg?.id ?? pkg?.slug ?? pkg?.title ?? destination),
+          name: pkg?.title ?? pkg?.name ?? "Unknown",
+          destination,
+          destination_name: destinationName,
+          region: country.region ?? country.title ?? undefined,
+          currency: (pkg as Record<string, unknown>).currency?.toString() ?? "USD",
+          price: typeof pkg?.price === "number" ? pkg.price : undefined,
+          validity: typeof pkg?.day === "number" ? pkg.day : undefined,
+          data_amount: pkg?.data ?? (pkg?.is_unlimited ? "Unlimited" : pkg?.amount ? String(pkg.amount) : undefined),
+          is_unlimited: Boolean(pkg?.is_unlimited),
+          net_prices: netPrices,
+          recommended_retail_prices: rrps,
+          sku: pkg?.id ? String(pkg.id) : undefined,
+          status: (pkg as Record<string, unknown>).status?.toString(),
+          sim_type: (pkg as Record<string, unknown>).sim_type?.toString(),
+          is_rechargeable: Boolean((pkg as Record<string, unknown>).is_rechargeable ?? false),
+          network_types: Array.isArray((pkg as Record<string, unknown>).network_types)
+            ? ((pkg as Record<string, unknown>).network_types as unknown[]).map((n) => n?.toString?.() ?? "")
+            : undefined,
+          voice:
+            typeof (pkg as Record<string, unknown>).voice === "number"
+              ? Number((pkg as Record<string, unknown>).voice)
               : undefined,
-            voice:
-              typeof (pkg as Record<string, unknown>).voice === "number"
-                ? Number((pkg as Record<string, unknown>).voice)
-                : undefined,
-            sms:
-              typeof (pkg as Record<string, unknown>).sms === "number"
-                ? Number((pkg as Record<string, unknown>).sms)
-                : undefined,
-            apn: (pkg as Record<string, unknown>).apn?.toString(),
-            qr_code_data: (pkg as Record<string, unknown>).qr_code_data?.toString(),
-            qr_code_url: (pkg as Record<string, unknown>).qr_code_url?.toString(),
-            smdp_address: (pkg as Record<string, unknown>).smdp_address?.toString(),
-            iccid: (pkg as Record<string, unknown>).iccid?.toString(),
-            activation_code: (pkg as Record<string, unknown>).activation_code?.toString(),
-            top_up_parent_package_id: (pkg as Record<string, unknown>).top_up_parent_package_id
-              ? (pkg as Record<string, unknown>).top_up_parent_package_id!.toString()
+          sms:
+            typeof (pkg as Record<string, unknown>).sms === "number"
+              ? Number((pkg as Record<string, unknown>).sms)
               : undefined,
-          });
-        }
+          apn: (pkg as Record<string, unknown>).apn?.toString(),
+          qr_code_data: (pkg as Record<string, unknown>).qr_code_data?.toString(),
+          qr_code_url: (pkg as Record<string, unknown>).qr_code_url?.toString(),
+          smdp_address: (pkg as Record<string, unknown>).smdp_address?.toString(),
+          iccid: (pkg as Record<string, unknown>).iccid?.toString(),
+          activation_code: (pkg as Record<string, unknown>).activation_code?.toString(),
+          top_up_parent_package_id: (pkg as Record<string, unknown>).top_up_parent_package_id
+            ? (pkg as Record<string, unknown>).top_up_parent_package_id!.toString()
+            : undefined,
+        });
       }
     }
-    return flattened;
   }
 
-  // Legacy shapes: array of packages or index map
-  try {
-    const response = PackagesResponseSchema.parse({ data });
-    if (Array.isArray(response.data)) {
-      return response.data;
-    }
-    return Object.values(response.data).flatMap((packages) => packages);
-  } catch {
-    return [];
+  return flattened;
+}
+
+function normalizePackagesData(data: unknown): Package[] {
+  const countryTree = toCountryTree(data);
+  if (countryTree) {
+    return flattenCountryTree(countryTree);
   }
+
+  if (data && typeof data === "object") {
+    const nestedCountries = toCountryTree((data as { countries?: unknown }).countries);
+    if (nestedCountries) {
+      return flattenCountryTree(nestedCountries);
+    }
+
+    const nestedData = toCountryTree((data as { data?: unknown }).data);
+    if (nestedData) {
+      return flattenCountryTree(nestedData);
+    }
+  }
+
+  const listPackagesData = ListPackagesDataSchema.safeParse(data);
+  if (listPackagesData.success) {
+    const countries = Array.isArray(listPackagesData.data)
+      ? listPackagesData.data
+      : Object.values(listPackagesData.data);
+    return flattenCountryTree(countries);
+  }
+
+  const legacyData = LegacyPackagesDataSchema.parse(data);
+  if (Array.isArray(legacyData)) {
+    return legacyData;
+  }
+
+  return Object.values(legacyData).flatMap((packages) => packages);
 }
 
 export interface GetUsageOptions {
@@ -364,13 +431,9 @@ export class AiraloClient {
 
   async getPackagesResponse(
     options: GetPackagesOptions = {},
-  ): Promise<PackagesResponse> {
-    const path = this.buildPackagesPath(options);
-
-    return this.request({
-      path,
-      schema: PackagesResponseSchema,
-    });
+  ): Promise<ListPackagesResponse> {
+    const raw = await this.fetchPackagesRaw(options);
+    return ListPackagesResponseSchema.parse(raw);
   }
 
   private applyPackageFilters(
@@ -398,6 +461,12 @@ export class AiraloClient {
         return;
       }
 
+      if (normalized !== PACKAGE_INCLUDE_TOPUP) {
+        throw new Error(
+          `Invalid include value "${normalized}" for /packages. Allowed value is "${PACKAGE_INCLUDE_TOPUP}".`,
+        );
+      }
+
       if (!includes.includes(normalized)) {
         includes.push(normalized);
       }
@@ -406,11 +475,11 @@ export class AiraloClient {
     if (Array.isArray(options.include)) {
       options.include.forEach(addInclude);
     } else if (typeof options.include === "string") {
-      addInclude(options.include);
+      options.include.split(",").forEach((segment) => addInclude(segment));
     }
 
     if (options.includeTopUp) {
-      addInclude("top-up");
+      addInclude(PACKAGE_INCLUDE_TOPUP);
     }
 
     if (includes.length === 0) {
@@ -441,6 +510,12 @@ export class AiraloClient {
     }
 
     if (options.extraParams) {
+      if ("include" in options.extraParams) {
+        throw new Error(
+          'The /packages "include" query param must be provided via include/includeTopUp options.',
+        );
+      }
+
       Object.entries(options.extraParams).forEach(([key, value]) => {
         if (value === undefined || value === null) {
           return;

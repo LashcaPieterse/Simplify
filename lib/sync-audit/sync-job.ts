@@ -37,7 +37,7 @@ export interface RunSyncAuditResult {
 
 const PACKAGES_PAGE_LIMIT = 100;
 const PACKAGES_INCLUDE_TOP_UP = true;
-const PACKAGES_INCLUDE_FLAGS = ["top-up"] as const;
+const PACKAGES_INCLUDE_FLAGS = ["topup"] as const;
 
 function requiredEnv(name: string): string {
   const value = process.env[name];

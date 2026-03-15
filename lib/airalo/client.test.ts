@@ -268,7 +268,7 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
   assert.equal(tokenCache.clearCount, 2, "should purge cached token before each retry that requests a fresh token");
 });
 
-test("AiraloClient merges include parameters for package requests", async () => {
+test("AiraloClient uses include=topup for package requests", async () => {
   const tokenCache = new MockTokenCache();
   let requestedUrl: string | null = null;
 
@@ -306,12 +306,108 @@ test("AiraloClient merges include parameters for package requests", async () => 
 
   await client.getPackages({
     includeTopUp: true,
-    include: ["voice", "sms", "voice", ""],
+    include: ["topup", "topup"],
   });
 
   assert(requestedUrl, "packages request should have been issued");
   const url = new URL(requestedUrl!);
-  assert.equal(url.searchParams.get("include"), "voice,sms,top-up");
+  assert.equal(url.searchParams.get("include"), "topup");
+});
+
+test("AiraloClient rejects unsupported include values for /packages", async () => {
+  const tokenCache = new MockTokenCache();
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    if (target.includes("packages")) {
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await assert.rejects(
+    client.getPackages({
+      include: ["voice" as unknown as "topup"],
+    }),
+    (error: unknown) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /Invalid include value "voice"/);
+      return true;
+    },
+  );
+});
+
+test("AiraloClient serializes filter[type] and filter[country]", async () => {
+  const tokenCache = new MockTokenCache();
+  let requestedUrl: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      requestedUrl = target;
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await client.getPackages({
+    filter: { type: "local", country: "US" },
+    limit: 50,
+    page: 2,
+  });
+
+  assert(requestedUrl, "packages request should have been issued");
+  const url = new URL(requestedUrl!);
+  assert.equal(url.searchParams.get("filter[type]"), "local");
+  assert.equal(url.searchParams.get("filter[country]"), "US");
+  assert.equal(url.searchParams.get("limit"), "50");
+  assert.equal(url.searchParams.get("page"), "2");
 });
 
 test("AiraloClient getPackagesTreePageRaw returns parsed countries and preserves raw payload", async () => {
@@ -412,6 +508,214 @@ test("AiraloClient getPackagesTreePageRaw supports root-level country arrays", a
   const page = await client.getPackagesTreePageRaw();
   assert.equal(page.countries.length, 1);
   assert.equal(page.countries[0]?.country_code, "ZA");
+});
+
+test("AiraloClient getPackagesTreePageRaw supports indexed country objects", async () => {
+  const tokenCache = new MockTokenCache();
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      return jsonResponse(
+        {
+          data: {
+            "12": {
+              country_code: "KE",
+              title: "Kenya",
+              operators: [
+                {
+                  id: 31,
+                  operator_code: "safaricom",
+                  packages: [{ id: "ke-1gb", title: "KE 1GB", price: 5 }],
+                },
+              ],
+            },
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const page = await client.getPackagesTreePageRaw({ page: 2, limit: 100 });
+  assert.equal(page.countries.length, 1);
+  assert.equal(page.countries[0]?.country_code, "KE");
+});
+
+test("AiraloClient getPackages flattens indexed country objects without dropping packages", async () => {
+  const tokenCache = new MockTokenCache();
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      return jsonResponse(
+        {
+          data: {
+            "4": {
+              country_code: "NG",
+              title: "Nigeria",
+              operators: [
+                {
+                  id: 41,
+                  operator_code: "mtn-ng",
+                  packages: [
+                    { id: "ng-1gb", title: "NG 1GB", price: 3, day: 7, data: "1 GB" },
+                    { id: "ng-3gb", title: "NG 3GB", price: 8, day: 30, data: "3 GB" },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const packages = await client.getPackages({ page: 2, limit: 100 });
+  assert.equal(packages.length, 2);
+  assert.equal(packages[0]?.id, "ng-1gb");
+  assert.equal(packages[1]?.id, "ng-3gb");
+});
+
+test("AiraloClient getPackages throws on invalid package payload shape", async () => {
+  const tokenCache = new MockTokenCache();
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      return jsonResponse({ data: { unexpected: "shape" } }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await assert.rejects(client.getPackages(), (error: unknown) => {
+    assert(error instanceof Error);
+    assert.match(error.message, /Invalid input|Unexpected Airalo response shape/);
+    return true;
+  });
+});
+
+test("AiraloClient getPackagesResponse validates documented list-packages payload", async () => {
+  const tokenCache = new MockTokenCache();
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      return jsonResponse(
+        {
+          data: [
+            {
+              country_code: "US",
+              title: "United States",
+              operators: [
+                {
+                  id: 12,
+                  operator_code: "att",
+                  packages: [{ id: "us-1gb", title: "US 1GB", price: 5 }],
+                },
+              ],
+            },
+          ],
+          links: {
+            first: "https://partners-api.airalo.com/v2/packages?page=1",
+            last: "https://partners-api.airalo.com/v2/packages?page=1",
+            prev: null,
+            next: null,
+          },
+          meta: {
+            message: "success",
+            current_page: 1,
+            last_page: 1,
+            path: "https://partners-api.airalo.com/v2/packages",
+            per_page: "100",
+            total: 1,
+          },
+          pricing: {
+            discount_percentage: 0,
+            model: "default",
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = new AiraloClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const response = await client.getPackagesResponse({ limit: 100, page: 1 });
+  assert.equal(Array.isArray(response.data), true);
+  assert.equal(response.meta?.current_page, 1);
+  assert.equal(response.pricing?.model, "default");
 });
 
 
