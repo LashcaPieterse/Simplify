@@ -152,6 +152,14 @@ function normalizeStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function resolveFirstCurrencyAmount(map: unknown): ResolvedPrice | null {
   if (!map || typeof map !== "object" || Array.isArray(map)) {
     return null;
@@ -431,30 +439,50 @@ export async function syncAiraloCatalog(
       });
 
       for (const country of countriesPage) {
+        const providedCountryCode = normalizeString(country.country_code, "");
+        const normalizedSlug = slugify(
+          normalizeString(country.slug, normalizeString(country.title, providedCountryCode || "unknown")),
+        );
+        const slug = normalizeString(normalizedSlug, "unknown");
         const countryCode = normalizeString(
-          country.country_code ?? country.slug ?? country.title,
-          "unknown",
+          providedCountryCode,
+          `AIRALO-${slug}`,
         ).toUpperCase();
-        const slug = normalizeString(country.slug, countryCode.toLowerCase());
         const title = normalizeString(country.title, slug);
         const imageJson = toPrismaJson(country.image ?? null);
 
-        const existingCountry = await db.country.findUnique({ where: { countryCode } });
-        const countryRecord = await db.country.upsert({
-          where: { countryCode },
-          create: {
-            countryCode,
-            slug,
-            title,
-            imageJson,
-          },
-          update: {
-            slug,
-            title,
-            imageJson,
-            updatedAt: now,
-          },
-        });
+        const countryByCode = await db.country.findUnique({ where: { countryCode } });
+        const countryBySlug = await db.country.findUnique({ where: { slug } });
+        const existingCountry = countryByCode ?? countryBySlug;
+        const hasIdentityConflict =
+          countryByCode !== null &&
+          countryBySlug !== null &&
+          countryByCode.id !== countryBySlug.id;
+
+        if (hasIdentityConflict) {
+          logger.warn(
+            `[airalo-sync] Country identity conflict for code=${countryCode} slug=${slug}; preserving existing code/slug pair`,
+          );
+        }
+
+        const countryData = {
+          countryCode: hasIdentityConflict && countryByCode ? countryByCode.countryCode : countryCode,
+          slug: hasIdentityConflict && countryByCode ? countryByCode.slug : slug,
+          title,
+          imageJson,
+        };
+
+        const countryRecord = existingCountry
+          ? await db.country.update({
+              where: { id: existingCountry.id },
+              data: {
+                ...countryData,
+                updatedAt: now,
+              },
+            })
+          : await db.country.create({
+              data: countryData,
+            });
 
         if (existingCountry) {
           countriesUpdated.count += 1;
