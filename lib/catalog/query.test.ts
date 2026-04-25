@@ -45,8 +45,9 @@ test("getCatalogProductSummaries returns unavailable when no DB match exists", a
       slug: "test-product",
       priceUSD: 25,
       shortDescription: "A reliable travel eSIM",
-      status: "active",
+      status: "active" as const,
       package: {
+        _id: "sanity-missing-1",
         externalId: "missing-1",
       },
       plan: {
@@ -73,7 +74,7 @@ test("getCatalogProductSummaries returns unavailable when no DB match exists", a
 
   assert.equal(fetchPackagesCalls, 1);
   assert.equal(summaries.length, 1);
-  assert.equal(summaries[0]?.package, null);
+  assert.equal(summaries[0]?.package?.isActive, false);
   assert.equal(summaries[0]?.price, null);
   assert.equal(summaries[0]?.priceUSD, 0);
 });
@@ -86,8 +87,9 @@ test("getCatalogProductSummaries does not fall back to country matches", async (
       slug: "malaysia",
       priceUSD: 45,
       shortDescription: "Malaysia test product",
-      status: "active",
+      status: "active" as const,
       package: {
+        _id: "sanity-missing-2",
         externalId: "sambungkan-7days-1gb",
       },
       country: {
@@ -136,5 +138,64 @@ test("getCatalogProductSummaries does not fall back to country matches", async (
 
   assert.equal(summaries.length, 1);
   assert.equal(summaries[0]?.price, null);
-  assert.equal(summaries[0]?.package, null);
+  assert.equal(summaries[0]?.package?.isActive, false);
+});
+
+test("getCatalogProductSummaries marks active packages without selling price as unavailable", async () => {
+  const sanityProducts = [
+    {
+      _id: "product-3",
+      displayName: "Kenya 3GB",
+      slug: "kenya-3gb",
+      priceUSD: 12,
+      shortDescription: "Kenya test product",
+      status: "active" as const,
+      package: {
+        _id: "sanity-pkg-1",
+        externalId: "ke-3gb-7d",
+        title: "Kenya 3GB",
+      },
+    },
+  ];
+
+  const dbPackages = [
+    {
+      id: "pkg-3",
+      airaloPackageId: "ke-3gb-7d",
+      title: "Kenya 3GB",
+      amount: 3072,
+      day: 7,
+      isUnlimited: false,
+      price: 12,
+      netPrice: null,
+      pricesNetPrice: null,
+      pricesRecommendedRetailPrice: null,
+      shortInfo: null,
+      qrInstallation: null,
+      manualInstallation: null,
+      isFairUsagePolicy: null,
+      fairUsagePolicy: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      operator: null,
+      state: {
+        isActive: true,
+        sellingPriceCents: null,
+        basePriceCents: 1200,
+        currencyCode: "USD",
+        lastSyncedAt: null,
+        updatedAt: new Date(),
+      },
+    } as TestPackage,
+  ] as unknown as FetchPackagesResult;
+
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => sanityProducts,
+    fetchPackages: async () => dbPackages,
+  });
+
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0]?.price, null);
+  assert.equal(summaries[0]?.priceUSD, 0);
+  assert.equal(summaries[0]?.package?.isActive, false);
 });

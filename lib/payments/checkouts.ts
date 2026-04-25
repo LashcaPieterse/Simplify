@@ -71,14 +71,6 @@ function centsToMajorUnits(cents: number): number {
   return Number((cents / 100).toFixed(2));
 }
 
-function decimalToCents(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.round(parsed * 100);
-}
-
 function serialise(value: unknown): string {
   try {
     return JSON.stringify(value ?? null);
@@ -160,13 +152,23 @@ export async function createCheckout(
     throw new Error("Selected package is unavailable.");
   }
 
+  if (typeof pkg.state?.sellingPriceCents !== "number") {
+    logOrderError("payments.checkout.package_missing_price", {
+      requestedPackageId: input.packageId,
+      matchedPackageId: pkg.id,
+      matchedExternalId: pkg.airaloPackageId,
+      userId: options.userId ?? null,
+    });
+    throw new Error("Selected package is unavailable.");
+  }
+
   logOrderInfo("payments.checkout.package_resolved", {
     requestedPackageId: input.packageId,
     matchedPackageId: pkg.id,
     matchedExternalId: pkg.airaloPackageId,
   });
 
-  const priceCents = pkg.state?.sellingPriceCents ?? decimalToCents(pkg.price);
+  const priceCents = pkg.state.sellingPriceCents;
   const totalCents = priceCents * quantity;
 
   const checkout = await db.checkoutSession.create({

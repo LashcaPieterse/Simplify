@@ -197,30 +197,46 @@ function centsToAmount(cents: number): number {
   return Math.round(cents) / 100;
 }
 
-function createPriceFromPackage(record: PackageRecord): MoneyValue {
-  const priceCents =
-    record.pkg.state?.sellingPriceCents ?? Math.round(Number(record.pkg.price) * 100);
+function hasConfiguredSellingPrice(
+  state: PackageRecord["pkg"]["state"],
+): state is NonNullable<PackageRecord["pkg"]["state"]> & { sellingPriceCents: number } {
+  if (!state) {
+    return false;
+  }
+
+  return typeof state.sellingPriceCents === "number";
+}
+
+function createPriceFromPackage(record: PackageRecord): MoneyValue | null {
+  const state = record.pkg.state;
+  if (!hasConfiguredSellingPrice(state)) {
+    return null;
+  }
+
+  const priceCents = state.sellingPriceCents;
   return {
     amount: centsToAmount(priceCents),
-    currency: (record.pkg.state?.currencyCode ?? "USD").toUpperCase(),
+    currency: (state.currencyCode ?? "USD").toUpperCase(),
     source: "airalo",
     lastSyncedAt:
-      record.pkg.state?.lastSyncedAt?.toISOString() ??
+      state.lastSyncedAt?.toISOString() ??
       record.pkg.updatedAt?.toISOString() ??
       null,
   };
 }
 
 function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
-  const priceCents =
-    record.pkg.state?.sellingPriceCents ?? Math.round(Number(record.pkg.price) * 100);
+  const state = record.pkg.state;
+  const hasSellingPrice = hasConfiguredSellingPrice(state);
+  const isSellable = (state?.isActive ?? false) && hasSellingPrice;
+  const priceCents = hasSellingPrice ? state.sellingPriceCents : 0;
   return {
     id: record.pkg.id,
     externalId: record.pkg.airaloPackageId,
     title: record.pkg.title,
     currency: (record.pkg.state?.currencyCode ?? "USD").toUpperCase(),
     priceCents,
-    isActive: record.pkg.state?.isActive ?? false,
+    isActive: isSellable,
     dataLimitMb: record.pkg.amount,
     validityDays: record.pkg.day,
     region: null,
@@ -313,9 +329,13 @@ function applyPackageToProduct(
   const priceFromPackage = matchedRecord ? createPriceFromPackage(matchedRecord) : null;
   let packageInfo: CatalogPackageInfo | null = null;
   if (packageInfoFromSanity) {
+    const isSellable = matchedRecord
+      ? (matchedRecord.pkg.state?.isActive ?? false) &&
+        hasConfiguredSellingPrice(matchedRecord.pkg.state)
+      : false;
     packageInfo = {
       ...packageInfoFromSanity,
-      isActive: matchedRecord ? (matchedRecord.pkg.state?.isActive ?? false) : false,
+      isActive: isSellable,
     };
   } else if (matchedRecord) {
     packageInfo = createPackageInfo(matchedRecord);

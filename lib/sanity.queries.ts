@@ -592,18 +592,11 @@ type LivePackageSnapshot = {
   airaloPackageId: string;
   isActive: boolean;
   updatedAt: Date;
-  priceCents: number;
   sellingPriceCents: number | null;
   currencyCode: string;
   dataAmountMb: number | null;
   validityDays: number | null;
 };
-
-function decimalToCents(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isFinite(parsed)) return 0;
-  return Math.round(parsed * 100);
-}
 
 async function getLivePackageSnapshots(
   packageDocs: CatalogPackageDoc[],
@@ -622,7 +615,6 @@ async function getLivePackageSnapshots(
       airaloPackageId: true,
       amount: true,
       day: true,
-      price: true,
       updatedAt: true,
       state: {
         select: {
@@ -642,7 +634,6 @@ async function getLivePackageSnapshots(
         airaloPackageId: record.airaloPackageId,
         isActive: record.state?.isActive ?? false,
         updatedAt: record.state?.updatedAt ?? record.updatedAt,
-        priceCents: decimalToCents(record.price),
         sellingPriceCents: record.state?.sellingPriceCents ?? null,
         currencyCode: record.state?.currencyCode ?? "USD",
         dataAmountMb: record.amount,
@@ -667,8 +658,33 @@ function applyLivePackageSnapshot(
     };
   }
 
-  const livePriceCents = snapshot.sellingPriceCents ?? snapshot.priceCents;
   const liveCurrencyCode = snapshot.currencyCode.toUpperCase();
+
+  if (!snapshot.isActive || typeof snapshot.sellingPriceCents !== "number") {
+    return {
+      ...basePlan,
+      dataGB:
+        typeof snapshot.dataAmountMb === "number"
+          ? Math.round(snapshot.dataAmountMb / 102.4) / 10
+          : basePlan.dataGB,
+      validityDays: snapshot.validityDays ?? basePlan.validityDays,
+      priceUSD: 0,
+      price: null,
+      package: basePlan.package
+        ? {
+            ...basePlan.package,
+            priceCents: 0,
+            currency: liveCurrencyCode,
+            isActive: false,
+            dataLimitMb: snapshot.dataAmountMb,
+            validityDays: snapshot.validityDays,
+            lastSyncedAt: snapshot.updatedAt.toISOString(),
+          }
+        : basePlan.package,
+    };
+  }
+
+  const livePriceCents = snapshot.sellingPriceCents;
 
   return {
     ...basePlan,

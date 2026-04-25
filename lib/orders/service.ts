@@ -171,14 +171,6 @@ function normaliseQuantity(quantity?: number): number {
   return Math.min(Math.max(quantity, DEFAULT_QUANTITY), MAX_QUANTITY);
 }
 
-function decimalToCents(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isFinite(parsed)) {
-    return 0;
-  }
-  return Math.round(parsed * 100);
-}
-
 const ORDER_DETAILS_INCLUDE = {
   profiles: {
     include: {
@@ -726,9 +718,25 @@ export async function createOrder(
     throw new OrderValidationError("Selected plan is no longer available.");
   }
 
+  if (typeof pkg.state?.sellingPriceCents !== "number") {
+    logOrderError("order.package.missing_price", {
+      packageId: pkg.id,
+      packageExternalId: pkg.airaloPackageId,
+    });
+
+    recordOrderMetrics({
+      result: "error",
+      reason: "validation_failed",
+      durationMs: Date.now() - startedAt,
+      airaloStatus: "validation",
+    });
+
+    throw new OrderValidationError("Selected plan is no longer available.");
+  }
+
   const normalisedQuantity = normaliseQuantity(quantity);
   const description = `${normalisedQuantity} x ${pkg.title}`;
-  const sellPriceCents = pkg.state?.sellingPriceCents ?? decimalToCents(pkg.price);
+  const sellPriceCents = pkg.state.sellingPriceCents;
   const currencyCode = pkg.state?.currencyCode ?? "USD";
   const orderPayload: CreateOrderPayload = {
     package_id: pkg.airaloPackageId,
