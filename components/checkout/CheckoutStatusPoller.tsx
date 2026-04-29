@@ -45,8 +45,14 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
         }
 
         const nextStatus = data.paymentStatus ?? data.status ?? "pending";
+        const paymentApprovedWithoutOrder =
+          (data.paymentStatus ?? "").toLowerCase() === "approved" && !data.orderId;
+
         setStatus(nextStatus);
-        if (nextStatus.toLowerCase() === "approved") {
+
+        if (paymentApprovedWithoutOrder && data.message) {
+          setMessage(data.message);
+        } else if (nextStatus.toLowerCase() === "approved") {
           setMessage(null);
         } else if (data.message) {
           setMessage(data.message);
@@ -63,7 +69,7 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
         }
 
         // If payment is approved but no orderId yet and we have a message, stop polling and show it.
-        if ((data.paymentStatus ?? "").toLowerCase() === "approved" && !data.orderId && data.message) {
+        if (paymentApprovedWithoutOrder && data.message) {
           return;
         }
 
