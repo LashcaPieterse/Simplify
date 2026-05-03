@@ -6,12 +6,12 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/components/utils";
 
-const NAV_ITEMS: Array<{ href: Route; label: string }> = [
+const NAV_ITEMS = [
   { href: "/account/esims", label: "My eSIMs" },
   { href: "/account/receipts", label: "Receipts" },
   { href: "/account/profile", label: "Profile" },
   { href: "/account/payments", label: "Payments" },
-];
+] as const;
 
 export function AccountNav() {
   const pathname = usePathname();
@@ -23,7 +23,7 @@ export function AccountNav() {
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={item.href as Route}
             className={cn(
               "rounded-full px-4 py-2 text-sm font-semibold transition",
               isActive

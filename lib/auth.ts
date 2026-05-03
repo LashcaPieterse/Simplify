@@ -5,22 +5,28 @@ import { NextRequest } from "next/server";
 export const ADMIN_SESSION_COOKIE = "simplify-admin-session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
-function secretKey() {
-  return process.env.ADMIN_SESSION_SECRET ?? "dev-session-secret";
+function envValue(name: "ADMIN_SESSION_SECRET" | "ADMIN_EMAIL" | "ADMIN_PASSWORD") {
+  const value = process.env[name]?.trim();
+  return value && value.length > 0 ? value : null;
 }
 
 function envCredentials() {
+  const email = envValue("ADMIN_EMAIL");
+  const password = envValue("ADMIN_PASSWORD");
+  if (!email || !password) {
+    return null;
+  }
+
   return {
-    email: process.env.ADMIN_EMAIL ?? "admin@simplify.com",
-    password: process.env.ADMIN_PASSWORD ?? "admin1234",
+    email: email.toLowerCase(),
+    password,
   };
 }
 
 let cachedKey: CryptoKey | null = null;
 let cachedSecret: string | null = null;
 
-async function hmacHex(payload: string) {
-  const secret = secretKey();
+async function hmacHex(payload: string, secret: string) {
   if (!cachedKey || cachedSecret !== secret) {
     cachedSecret = secret;
     cachedKey = await crypto.subtle.importKey(
@@ -42,19 +48,22 @@ async function hmacHex(payload: string) {
     .join("");
 }
 
-async function buildToken(email: string, issuedAt: number) {
+async function buildToken(email: string, issuedAt: number, secret: string) {
   const payload = `${email}|${issuedAt}`;
-  const signature = await hmacHex(payload);
+  const signature = await hmacHex(payload, secret);
   return `${payload}|${signature}`;
 }
 
 export async function verifySessionToken(token?: string | null) {
   if (!token) return null;
+  const secret = envValue("ADMIN_SESSION_SECRET");
+  if (!secret) return null;
+
   const parts = token.split("|");
   if (parts.length !== 3) return null;
   const [email, issuedAtRaw, signature] = parts;
   const payload = `${email}|${issuedAtRaw}`;
-  if ((await hmacHex(payload)) !== signature) return null;
+  if ((await hmacHex(payload, secret)) !== signature) return null;
 
   const issuedAt = Number(issuedAtRaw);
   if (Number.isNaN(issuedAt)) return null;
@@ -76,7 +85,12 @@ export async function requireAdminSession() {
 }
 
 export async function createAdminSession(email: string) {
-  const token = await buildToken(email, Date.now());
+  const secret = envValue("ADMIN_SESSION_SECRET");
+  if (!secret) {
+    throw new Error("ADMIN_SESSION_SECRET must be configured before creating admin sessions.");
+  }
+
+  const token = await buildToken(email, Date.now(), secret);
   cookies().set(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -91,7 +105,10 @@ export function clearAdminSession() {
 }
 
 export function validateAdminCredentials(email: string, password: string) {
-  const { email: expectedEmail, password: expectedPassword } = envCredentials();
+  const credentials = envCredentials();
+  if (!credentials) return false;
+
+  const { email: expectedEmail, password: expectedPassword } = credentials;
   return email === expectedEmail && password === expectedPassword;
 }
 

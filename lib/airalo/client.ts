@@ -595,7 +595,6 @@ export class AiraloClient {
     length: number;
     fingerprint: string;
     jwt: { iat?: string; exp?: string; iss?: string; aud?: string | string[] } | null;
-    full?: string;
   } {
     const trimmed = token.trim();
     if (!trimmed) {
@@ -610,7 +609,6 @@ export class AiraloClient {
       length: trimmed.length,
       fingerprint: createHash("sha256").update(trimmed).digest("hex").slice(0, 12),
       jwt: this.parseJwtForLog(trimmed),
-      full: trimmed,
     };
   }
 

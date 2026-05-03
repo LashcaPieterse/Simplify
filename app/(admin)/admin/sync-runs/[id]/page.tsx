@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import prisma from "@/lib/db/client";
 import { notFound } from "next/navigation";
 import { formatDate } from "@/lib/format";
@@ -44,7 +45,7 @@ export default async function SyncRunDetailsPage({ params }: { params: { id: str
           <h1 className="text-2xl font-semibold text-slate-900">Sync run {run.id.slice(0, 8)}</h1>
           <p className="text-sm text-slate-600">Started {formatDate(run.startedAt)} • Status {run.status}</p>
         </div>
-        <Link href={`/api/admin/sync-runs/${run.id}/report`} className="rounded bg-slate-100 px-3 py-2 text-sm">Download run report JSON</Link>
+        <Link href={`/api/admin/sync-runs/${run.id}/report` as Route} className="rounded bg-slate-100 px-3 py-2 text-sm">Download run report JSON</Link>
       </div>
       <div className="grid gap-3 md:grid-cols-4">
         <Stat label="Inserted" value={run.insertedCount} />
