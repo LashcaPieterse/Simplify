@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
 
-type SanityWebhookPayload = {
-  _type?: string;
-  slug?: { current?: string } | string;
-  paths?: string[];
-  secret?: string;
-};
+const SanityWebhookPayloadSchema = z
+  .object({
+    _type: z.string().optional(),
+    slug: z
+      .union([
+        z.string(),
+        z
+          .object({
+            current: z.string().optional(),
+          })
+          .passthrough(),
+      ])
+      .optional(),
+    paths: z.array(z.string()).optional(),
+    secret: z.string().optional(),
+  })
+  .passthrough();
 
 const WEBHOOK_SECRET = process.env.SANITY_WEBHOOK_SECRET || process.env.SANITY_PREVIEW_SECRET;
 
@@ -35,7 +48,18 @@ const pathForDocument = (type?: string, slug?: string | null) => {
 };
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as SanityWebhookPayload | null;
+  const parseFailed = Symbol("parse_failed");
+  const rawBody = await request.json().catch(() => parseFailed);
+  if (rawBody === parseFailed) {
+    return jsonInvalidJson();
+  }
+
+  const parsedBody = SanityWebhookPayloadSchema.safeParse(rawBody);
+  if (!parsedBody.success) {
+    return jsonValidationError(parsedBody.error);
+  }
+
+  const body = parsedBody.data;
   const secret = request.headers.get("x-sanity-secret") ?? body?.secret;
 
   if (!body || !secret || secret !== WEBHOOK_SECRET) {

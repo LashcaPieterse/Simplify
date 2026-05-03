@@ -1,12 +1,21 @@
 "use server";
 
-import { createAdminSession, clearAdminSession, validateAdminCredentials } from "@/lib/auth";
+import {
+  createAdminSession,
+  clearAdminSession,
+  isAdminEmailAllowed,
+  validateAdminCredentials,
+} from "@/lib/auth";
 import prisma from "@/lib/db/client";
 import { redirect } from "next/navigation";
 
 export async function loginAdmin(formData: FormData) {
   const email = String(formData.get("email") ?? "").toLowerCase();
   const password = String(formData.get("password") ?? "");
+
+  if (!isAdminEmailAllowed(email)) {
+    return { success: false, error: "Invalid credentials" } as const;
+  }
 
   const isValid = validateAdminCredentials(email, password);
   if (!isValid) {

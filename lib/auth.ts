@@ -23,6 +23,20 @@ function envCredentials() {
   };
 }
 
+function adminAllowlist(): Set<string> {
+  const values = (process.env.ADMIN_ALLOWED_EMAILS ?? process.env.ADMIN_EMAIL ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  return new Set(values);
+}
+
+export function isAdminEmailAllowed(email: string): boolean {
+  const normalizedEmail = email.trim().toLowerCase();
+  const allowed = adminAllowlist();
+  return allowed.size === 0 || allowed.has(normalizedEmail);
+}
+
 let cachedKey: CryptoKey | null = null;
 let cachedSecret: string | null = null;
 
@@ -76,8 +90,12 @@ export async function verifySessionToken(token?: string | null) {
 export async function requireAdminSession() {
   const token = cookies().get(ADMIN_SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);
+  const isAllowed = session ? isAdminEmailAllowed(session.email) : false;
 
-  if (!session) {
+  if (!session || !isAllowed) {
+    if (session && !isAllowed) {
+      clearAdminSession();
+    }
     redirect("/admin/login");
   }
 
@@ -115,5 +133,5 @@ export function validateAdminCredentials(email: string, password: string) {
 export async function requestHasValidSession(request: NextRequest) {
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);
-  return Boolean(session);
+  return Boolean(session && isAdminEmailAllowed(session.email));
 }

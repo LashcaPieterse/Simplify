@@ -1,13 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import prisma from "@/lib/db/client";
+import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
 import { requireAdminApiSession } from "@/lib/admin/guards";
+
+const PricingAuditActionBodySchema = z.object({
+  action: z.enum(["push-db-to-published", "pull-published-to-db", "resync-package"]),
+});
+const PricingAuditActionParamsSchema = z.object({
+  id: z.string().trim().min(1, "Audit id is required."),
+});
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const session = await requireAdminApiSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const payload = (await request.json()) as { action: "push-db-to-published" | "pull-published-to-db" | "resync-package" };
-  const audit = await prisma.pricingAudit.findUnique({ where: { id: params.id } });
+  const parsedParams = PricingAuditActionParamsSchema.safeParse(params);
+  if (!parsedParams.success) {
+    return jsonValidationError(parsedParams.error);
+  }
+
+  const parseFailed = Symbol("parse_failed");
+  const rawBody = await request.json().catch(() => parseFailed);
+  if (rawBody === parseFailed) {
+    return jsonInvalidJson();
+  }
+
+  const parsedBody = PricingAuditActionBodySchema.safeParse(rawBody);
+  if (!parsedBody.success) {
+    return jsonValidationError(parsedBody.error);
+  }
+
+  const payload = parsedBody.data;
+  const audit = await prisma.pricingAudit.findUnique({ where: { id: parsedParams.data.id } });
   if (!audit) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (payload.action === "push-db-to-published") {

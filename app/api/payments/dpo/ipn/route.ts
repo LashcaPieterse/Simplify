@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import prismaClient from "@/lib/db/client";
+import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
 import {
   finaliseOrderFromCheckout,
   recordPaymentEvent,
@@ -12,6 +14,9 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+const DpoIpnPayloadSchema = z.record(z.unknown());
+const DpoTokenSchema = z.string().trim().min(1, "Transaction token missing");
 
 function timingSafeEqual(a: string, b: string): boolean {
   const bufferA = Buffer.from(a);
@@ -39,9 +44,9 @@ function verifySignature(body: string, signature: string | null): boolean {
   return timingSafeEqual(expected, signature);
 }
 
-function parsePayload(body: string, contentType: string | null): Record<string, unknown> {
+function parsePayload(body: string, contentType: string | null): unknown {
   if (contentType?.includes("application/json")) {
-    return JSON.parse(body) as Record<string, unknown>;
+    return JSON.parse(body);
   }
 
   if (contentType?.includes("application/x-www-form-urlencoded")) {
@@ -53,7 +58,7 @@ function parsePayload(body: string, contentType: string | null): Record<string, 
     return {};
   }
 
-  return JSON.parse(body) as Record<string, unknown>;
+  return JSON.parse(body);
 }
 
 function normaliseStatus(value: unknown): string {
@@ -73,22 +78,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid signature" }, { status: 401 });
   }
 
-  let payload: Record<string, unknown>;
+  let parsedPayload: unknown;
 
   try {
-    payload = parsePayload(rawBody, contentType);
+    parsedPayload = parsePayload(rawBody, contentType);
   } catch {
-    return NextResponse.json({ message: "Invalid payload" }, { status: 400 });
+    return jsonInvalidJson("Invalid payload.");
   }
 
-  const token = (payload.TransactionToken ?? payload.transactionToken ?? payload.TransactionRef ?? payload.transactionRef) as
-    | string
-    | undefined;
+  const payloadResult = DpoIpnPayloadSchema.safeParse(parsedPayload);
+  if (!payloadResult.success) {
+    return jsonValidationError(payloadResult.error);
+  }
+  const payload = payloadResult.data;
+
+  const tokenCandidate =
+    payload.TransactionToken ?? payload.transactionToken ?? payload.TransactionRef ?? payload.transactionRef;
+  const tokenResult = DpoTokenSchema.safeParse(tokenCandidate);
+  if (!tokenResult.success) {
+    return jsonValidationError(tokenResult.error);
+  }
+  const token = tokenResult.data;
+
   const status = normaliseStatus(payload.Result ?? payload.result ?? payload.Status ?? payload.status);
-
-  if (!token) {
-    return NextResponse.json({ message: "Transaction token missing" }, { status: 400 });
-  }
 
   const transaction = await prismaClient.paymentTransaction.findFirst({
     where: {

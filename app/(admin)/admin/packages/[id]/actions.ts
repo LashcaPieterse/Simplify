@@ -1,9 +1,12 @@
 "use server";
 
 import prisma from "@/lib/db/client";
+import { requireAdminSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function updateSellingPrice(packageId: string, sellingPriceCents: number) {
+  await requireAdminSession();
+
   await prisma.packageState.upsert({
     where: { packageId },
     create: { packageId, sellingPriceCents },
@@ -21,6 +24,8 @@ export async function updateSellingPrice(packageId: string, sellingPriceCents: n
 }
 
 export async function updateStatus(packageId: string, isActive: boolean) {
+  await requireAdminSession();
+
   await prisma.packageState.upsert({
     where: { packageId },
     create: { packageId, isActive, deactivatedAt: isActive ? null : new Date() },

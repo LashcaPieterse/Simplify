@@ -1,9 +1,12 @@
 "use server";
 
 import prisma from "@/lib/db/client";
+import { requireAdminSession } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 export async function applyRegionMarkup(countryId: string, percent: number) {
+  await requireAdminSession();
+
   const packages = await prisma.package.findMany({
     where: { operator: { is: { countryId } } },
     select: {
@@ -36,6 +39,8 @@ export async function applyRegionMarkup(countryId: string, percent: number) {
 }
 
 export async function saveBulkPrices(updates: { id: string; sellingPriceCents: number }[]) {
+  await requireAdminSession();
+
   for (const update of updates) {
     await prisma.packageState.upsert({
       where: { packageId: update.id },

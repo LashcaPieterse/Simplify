@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/db/client";
+import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
 import { logOrderError, logOrderInfo } from "@/lib/observability/logging";
 import { recordRateLimit, recordWebhookMetrics } from "@/lib/observability/metrics";
 import { WebhookPayloadSchema, type WebhookPayload } from "@/lib/airalo/schemas";
@@ -93,15 +94,13 @@ export async function POST(request: Request) {
     parsed = JSON.parse(rawBody);
   } catch {
     recordWebhookMetrics({ eventType: "unknown", result: "rejected", durationMs: 0, reason: "invalid_json" });
-    return NextResponse.json({ message: "Invalid JSON payload." }, { status: 400 });
+    return jsonInvalidJson();
   }
 
-  let payload: WebhookPayload;
-  try {
-    payload = WebhookPayloadSchema.parse(parsed);
-  } catch (error: unknown) {
+  const parsedPayload = WebhookPayloadSchema.safeParse(parsed);
+  if (!parsedPayload.success) {
     logOrderError("webhook.payload.invalid", {
-      error: error instanceof Error ? error.message : "Unknown error",
+      issues: parsedPayload.error.issues,
     });
     recordWebhookMetrics({
       eventType: "unknown",
@@ -109,8 +108,9 @@ export async function POST(request: Request) {
       durationMs: 0,
       reason: "schema_validation_failed",
     });
-    return NextResponse.json({ message: "Invalid webhook payload." }, { status: 422 });
+    return jsonValidationError(parsedPayload.error, "Invalid webhook payload.");
   }
+  const payload: WebhookPayload = parsedPayload.data;
 
   const processingStartedAt = Date.now();
   const eventId = resolveEventId(request.headers, payload, rawBody);

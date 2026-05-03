@@ -1,13 +1,5 @@
 import { NextRequest } from "next/server";
-import { ADMIN_SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-
-function adminAllowlist(): Set<string> {
-  const values = (process.env.ADMIN_ALLOWED_EMAILS ?? process.env.ADMIN_EMAIL ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-  return new Set(values);
-}
+import { ADMIN_SESSION_COOKIE, isAdminEmailAllowed, verifySessionToken } from "@/lib/auth";
 
 export async function requireAdminApiSession(request: NextRequest) {
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
@@ -16,8 +8,7 @@ export async function requireAdminApiSession(request: NextRequest) {
     return null;
   }
 
-  const allowed = adminAllowlist();
-  if (allowed.size === 0 || allowed.has(session.email.toLowerCase())) {
+  if (isAdminEmailAllowed(session.email)) {
     return session;
   }
 

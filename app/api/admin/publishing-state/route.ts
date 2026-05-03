@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import prisma from "@/lib/db/client";
+import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
 
-interface PublishingPayload {
-  package_airalo_id: string;
-  sanity_document_id?: string;
-  published_price?: number;
-  published_currency?: string;
-  published_at?: string;
-}
+const PublishingPayloadSchema = z
+  .object({
+    package_airalo_id: z.string().trim().min(1, "package_airalo_id is required"),
+    sanity_document_id: z.string().trim().min(1).optional(),
+    published_price: z.number().finite().optional(),
+    published_currency: z.string().trim().min(1).optional(),
+    published_at: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => !Number.isNaN(Date.parse(value)), {
+        message: "published_at must be a valid datetime string.",
+      })
+      .optional(),
+  })
+  .passthrough();
 
 export async function POST(request: NextRequest) {
   const secret = process.env.SANITY_WEBHOOK_SECRET;
@@ -16,11 +27,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const payload = (await request.json()) as PublishingPayload;
-  if (!payload.package_airalo_id) {
-    return NextResponse.json({ error: "package_airalo_id is required" }, { status: 400 });
+  const parseFailed = Symbol("parse_failed");
+  const rawBody = await request.json().catch(() => parseFailed);
+  if (rawBody === parseFailed) {
+    return jsonInvalidJson();
   }
 
+  const parsedBody = PublishingPayloadSchema.safeParse(rawBody);
+  if (!parsedBody.success) {
+    return jsonValidationError(parsedBody.error);
+  }
+
+  const payload = parsedBody.data;
   const state = await prisma.publishingState.upsert({
     where: { packageAiraloId: payload.package_airalo_id },
     create: {
