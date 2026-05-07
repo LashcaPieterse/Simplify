@@ -12,7 +12,8 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "airalo:recover-orders": "tsx scripts/recover-airalo-orders.ts",
-    "checkouts:recover-paid": "tsx scripts/recover-paid-checkouts.ts"
+    "checkouts:recover-paid": "tsx scripts/recover-paid-checkouts.ts",
+    "airalo:smoke-live": "tsx scripts/airalo-live-smoke.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.1",

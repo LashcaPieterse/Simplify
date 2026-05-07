@@ -1,5 +1,6 @@
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
 import { metrics } from "@opentelemetry/api";
+import type { AiraloThrottledEndpoint } from "../airalo/throttle";
 
 type OrderResult = "success" | "error";
 type OrderReason =
@@ -17,7 +18,8 @@ type OrderReason =
 
 type WebhookResult = "processed" | "duplicate" | "rejected" | "error";
 
-type RateLimitSource = "orders" | "webhooks";
+type RateLimitSource = "orders" | "webhooks" | AiraloThrottledEndpoint;
+type EndpointRequestResult = "success" | "error" | "rate_limited";
 
 let registry: Registry | null = null;
 let countersInitialised = false;
@@ -42,6 +44,7 @@ let webhookDuration: Histogram<string>;
 let rateLimitCounter: Counter<string>;
 let tokenRefreshCounter: Counter<string>;
 let packageSyncGauge: Gauge<string>;
+let endpointRequestCounter: Counter<string>;
 const orderOtelCounter = meter.createCounter("airalo.order.requests", {
   description: "Number of order creation attempts.",
 });
@@ -58,6 +61,9 @@ const webhookOtelDuration = meter.createHistogram("airalo.webhook.processing.dur
 });
 const rateLimitOtelCounter = meter.createCounter("airalo.rate_limit.events", {
   description: "Rate limit responses observed when communicating with Airalo.",
+});
+const endpointRequestOtelCounter = meter.createCounter("airalo.endpoint.requests", {
+  description: "Outbound Airalo endpoint request attempts and outcomes.",
 });
 const tokenRefreshOtelCounter = meter.createCounter("airalo.token.refreshes", {
   description: "Number of times the Airalo access token was refreshed.",
@@ -123,6 +129,13 @@ function ensureCounters(): void {
     name: "airalo_token_refresh_total",
     help: "Number of times a new Airalo access token was requested.",
     labelNames: ["source"],
+    registers: [register],
+  });
+
+  endpointRequestCounter = new Counter({
+    name: "airalo_endpoint_requests_total",
+    help: "Outbound Airalo endpoint request attempts by endpoint and result.",
+    labelNames: ["endpoint", "result", "status"],
     registers: [register],
   });
 
@@ -206,6 +219,42 @@ export function recordRateLimit(source: RateLimitSource): void {
   ensureCounters();
   rateLimitCounter.labels(source).inc();
   rateLimitOtelCounter.add(1, { source });
+}
+
+function resolveEndpointResult(status: number, result?: EndpointRequestResult): EndpointRequestResult {
+  if (result) {
+    return result;
+  }
+
+  if (status === 429) {
+    return "rate_limited";
+  }
+
+  if (status >= 200 && status < 300) {
+    return "success";
+  }
+
+  return "error";
+}
+
+export interface RecordAiraloEndpointRequestOptions {
+  endpoint: AiraloThrottledEndpoint;
+  status: number;
+  result?: EndpointRequestResult;
+}
+
+export function recordAiraloEndpointRequest(options: RecordAiraloEndpointRequestOptions): void {
+  ensureCounters();
+
+  const status = String(options.status);
+  const result = resolveEndpointResult(options.status, options.result);
+
+  endpointRequestCounter.labels(options.endpoint, result, status).inc();
+  endpointRequestOtelCounter.add(1, {
+    endpoint: options.endpoint,
+    result,
+    status,
+  });
 }
 
 type TokenRefreshSource = "airalo_client";

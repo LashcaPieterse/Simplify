@@ -2,7 +2,26 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { AiraloClient, AiraloError } from "./client";
+import type { AiraloClientOptions } from "./client";
 import type { TokenCache, TokenCacheRecord } from "./token-cache";
+
+const RELAXED_TEST_THROTTLING: AiraloClientOptions["endpointThrottling"] = {
+  tokenPerMinute: 10_000,
+  packagesPerMinutePerToken: 10_000,
+  simUsagePerMinutePerIccid: 10_000,
+  simUsagePerSecondPerClient: 10_000,
+  simPackagesPerMinutePerIccid: 10_000,
+};
+
+function createTestClient(options: AiraloClientOptions): AiraloClient {
+  return new AiraloClient({
+    ...options,
+    endpointThrottling: {
+      ...RELAXED_TEST_THROTTLING,
+      ...options.endpointThrottling,
+    },
+  });
+}
 
 class MockTokenCache implements TokenCache {
   private record: TokenCacheRecord | null;
@@ -76,7 +95,7 @@ test("AiraloClient clears the cached token and retries once after a 401", async 
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -88,8 +107,53 @@ test("AiraloClient clears the cached token and retries once after a 401", async 
 
   assert.equal(packageCalls, 2, "should retry the packages request exactly once");
   assert.deepEqual(packages, []);
-  assert.equal(tokenCache.clearCount, 3, "should clear cache before each attempt and after the first 401");
-  assert.deepEqual(authHeaders, ["Bearer fresh-token", "Bearer fresh-token"]);
+  assert.equal(tokenCache.clearCount, 2, "should clear once on auth failure and once for forced refresh");
+  assert.deepEqual(authHeaders, ["Bearer stale-token", "Bearer fresh-token"]);
+});
+
+test("AiraloClient reuses a cached token for /packages requests", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let tokenCalls = 0;
+  let packageCalls = 0;
+  let capturedAuthHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/token")) {
+      tokenCalls += 1;
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    if (target.includes("packages")) {
+      packageCalls += 1;
+      capturedAuthHeader = authHeader(init);
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await client.getPackages();
+
+  assert.equal(packageCalls, 1);
+  assert.equal(tokenCalls, 0, "should not hit /token when a valid cached token exists");
+  assert.equal(capturedAuthHeader, "Bearer cached-token");
 });
 
 test("AiraloClient honors the token_type returned by the token endpoint", async () => {
@@ -114,7 +178,7 @@ test("AiraloClient honors the token_type returned by the token endpoint", async 
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -149,7 +213,7 @@ test("AiraloClient normalizes bearer token_type casing", async () => {
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -199,7 +263,7 @@ test("AiraloClient retries with alternate bearer casing after a second 401", asy
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -211,9 +275,9 @@ test("AiraloClient retries with alternate bearer casing after a second 401", asy
 
   assert.deepEqual(packages, []);
   assert.equal(packageCalls, 3, "should attempt stale token, refreshed token, then alternate casing");
-  assert.equal(tokenCache.clearCount, 4, "should clear cache for each fresh-token attempt and after the first 401");
+  assert.equal(tokenCache.clearCount, 3, "should clear on auth failure and before each forced refresh");
   assert.deepEqual(authHeaders, [
-    "Bearer fresh-token",
+    "Bearer stale-token",
     "Bearer fresh-token",
     "Bearer fresh-token",
   ]);
@@ -250,7 +314,7 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -265,7 +329,7 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
   });
 
   assert.equal(packageCalls, 4, "should stop after stale token retry, alternate casing retry, and final retry");
-  assert.equal(tokenCache.clearCount, 6, "should clear cache for each attempt and retry-triggered 401 paths");
+  assert.equal(tokenCache.clearCount, 5, "should clear on auth retries and before each forced refresh");
 });
 
 test("AiraloClient uses include=topup for package requests", async () => {
@@ -296,7 +360,7 @@ test("AiraloClient uses include=topup for package requests", async () => {
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -340,7 +404,7 @@ test("AiraloClient rejects unsupported include values for /packages", async () =
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -388,7 +452,7 @@ test("AiraloClient serializes filter[type] and filter[country]", async () => {
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -454,7 +518,7 @@ test("AiraloClient getPackagesTreePageRaw returns parsed countries and preserves
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -497,7 +561,7 @@ test("AiraloClient getPackagesTreePageRaw supports root-level country arrays", a
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -547,7 +611,7 @@ test("AiraloClient getPackagesTreePageRaw supports indexed country objects", asy
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -600,7 +664,7 @@ test("AiraloClient getPackages flattens indexed country objects without dropping
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -634,7 +698,7 @@ test("AiraloClient getPackages throws on invalid package payload shape", async (
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -704,7 +768,7 @@ test("AiraloClient getPackagesResponse validates documented list-packages payloa
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -766,7 +830,7 @@ test("AiraloClient retries package sync with client credentials after auth-rejec
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -812,7 +876,7 @@ test("AiraloClient can include client credentials on package requests when enabl
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",
@@ -842,7 +906,7 @@ test(
     assert.ok(clientId, "AIRALO_CLIENT_ID must be set for live Airalo API tests");
     assert.ok(clientSecret, "AIRALO_CLIENT_SECRET must be set for live Airalo API tests");
 
-    const client = new AiraloClient({
+    const client = createTestClient({
       clientId,
       clientSecret,
     });
@@ -881,7 +945,7 @@ test("AiraloClient sends OAuth token requests as form-urlencoded", async () => {
     throw new Error(`Unexpected URL ${target}`);
   };
 
-  const client = new AiraloClient({
+  const client = createTestClient({
     clientId: "client-id",
     clientSecret: "client-secret",
     baseUrl: "https://example.com/api/",

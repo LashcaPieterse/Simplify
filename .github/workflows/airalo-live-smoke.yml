@@ -1,0 +1,30 @@
+name: Airalo Live Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      AIRALO_CLIENT_ID: ${{ secrets.AIRALO_CLIENT_ID }}
+      AIRALO_CLIENT_SECRET: ${{ secrets.AIRALO_CLIENT_SECRET }}
+      AIRALO_BASE_URL: ${{ secrets.AIRALO_BASE_URL }}
+      AIRALO_SMOKE_ICCID: ${{ secrets.AIRALO_SMOKE_ICCID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Run Airalo live smoke
+        run: npm run airalo:smoke-live
+

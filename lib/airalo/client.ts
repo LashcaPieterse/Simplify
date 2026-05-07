@@ -18,7 +18,16 @@ import {
   type TokenCache,
   type TokenCacheRecord,
 } from "./token-cache";
-import { recordTokenRefresh } from "../observability/metrics";
+import {
+  recordAiraloEndpointRequest,
+  recordRateLimit,
+  recordTokenRefresh,
+} from "../observability/metrics";
+import {
+  resolveEndpointRateLimiter,
+  type AiraloThrottledEndpoint,
+  type EndpointRateLimiter,
+} from "./throttle";
 
 import type {
   ListPackagesResponse,
@@ -46,6 +55,16 @@ export interface AiraloClientOptions {
   tokenExpiryBufferSeconds?: number;
   rateLimitRetry?: Partial<RateLimitRetryPolicy>;
   sendClientCredentialsWithPackages?: boolean;
+  endpointThrottling?: Partial<AiraloEndpointThrottlingConfig>;
+  endpointRateLimiter?: EndpointRateLimiter;
+}
+
+export interface AiraloEndpointThrottlingConfig {
+  tokenPerMinute: number;
+  packagesPerMinutePerToken: number;
+  simUsagePerMinutePerIccid: number;
+  simUsagePerSecondPerClient: number;
+  simPackagesPerMinutePerIccid: number;
 }
 
 type FormValue = string | number | boolean | null | undefined;
@@ -351,6 +370,8 @@ interface AiraloRequestOptions<T> {
   schema: ZodType<T, ZodTypeDef, unknown>;
   init?: RequestInit;
   requiresAuth?: boolean;
+  endpoint?: AiraloThrottledEndpoint;
+  throttle?: () => Promise<void>;
 }
 
 interface AiraloUnauthorizedDetails {
@@ -388,6 +409,13 @@ const DEFAULT_RATE_LIMIT_RETRY_POLICY: RateLimitRetryPolicy = {
   baseDelayMs: 500,
   maxDelayMs: 10_000,
 };
+const DEFAULT_ENDPOINT_THROTTLING: AiraloEndpointThrottlingConfig = {
+  tokenPerMinute: 3,
+  packagesPerMinutePerToken: 80,
+  simUsagePerMinutePerIccid: 10,
+  simUsagePerSecondPerClient: 5,
+  simPackagesPerMinutePerIccid: 10,
+};
 function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim();
   return trimmed.replace(/\/+$/, "");
@@ -402,12 +430,15 @@ interface RateLimitRetryPolicy {
 export class AiraloClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
+  private readonly clientThrottleKey: string;
   private readonly baseUrl: string;
   private readonly fetchFn: typeof fetch;
   private readonly tokenCache: TokenCache;
   private readonly tokenExpiryBufferSeconds: number;
   private readonly rateLimitRetryPolicy: RateLimitRetryPolicy;
   private readonly sendClientCredentialsWithPackages: boolean;
+  private readonly endpointThrottling: AiraloEndpointThrottlingConfig;
+  private readonly endpointRateLimiter: EndpointRateLimiter;
 
   private inFlightTokenRequest: Promise<string> | null = null;
   private tokenType = "Bearer";
@@ -415,6 +446,10 @@ export class AiraloClient {
   constructor(options: AiraloClientOptions) {
     this.clientId = options.clientId.trim();
     this.clientSecret = options.clientSecret.trim();
+    this.clientThrottleKey = createHash("sha256")
+      .update(this.clientId)
+      .digest("hex")
+      .slice(0, 16);
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
     this.fetchFn = options.fetchImplementation ?? fetch;
     this.tokenCache = options.tokenCache ?? new MemoryTokenCache();
@@ -427,6 +462,11 @@ export class AiraloClient {
     this.sendClientCredentialsWithPackages =
       options.sendClientCredentialsWithPackages ??
       process.env.AIRALO_PACKAGES_SEND_CREDENTIALS === "true";
+    this.endpointThrottling = {
+      ...DEFAULT_ENDPOINT_THROTTLING,
+      ...options.endpointThrottling,
+    };
+    this.endpointRateLimiter = options.endpointRateLimiter ?? resolveEndpointRateLimiter();
   }
 
   async getPackagesResponse(
@@ -642,6 +682,76 @@ export class AiraloClient {
     return includes.join(",");
   }
 
+  private normalizeThrottleKey(value: string): string {
+    return createHash("sha256").update(value.trim().toLowerCase()).digest("hex").slice(0, 16);
+  }
+
+  private async applyThrottle(
+    endpoint: AiraloThrottledEndpoint,
+    key: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<void> {
+    const normalizedLimit = Math.max(0, Math.floor(limit));
+    if (normalizedLimit <= 0) {
+      return;
+    }
+
+    await this.endpointRateLimiter.acquire({
+      endpoint,
+      key,
+      limit: normalizedLimit,
+      windowMs,
+    });
+  }
+
+  private async throttleTokenRequest(): Promise<void> {
+    await this.applyThrottle(
+      "token",
+      this.clientThrottleKey,
+      this.endpointThrottling.tokenPerMinute,
+      60_000,
+    );
+  }
+
+  private async throttlePackagesRequest(token: string): Promise<void> {
+    const tokenKey = this.normalizeThrottleKey(token);
+    await this.applyThrottle(
+      "packages",
+      tokenKey,
+      this.endpointThrottling.packagesPerMinutePerToken,
+      60_000,
+    );
+  }
+
+  private async throttleSimUsageRequest(iccid: string): Promise<void> {
+    const iccidKey = this.normalizeThrottleKey(iccid);
+
+    await this.applyThrottle(
+      "sim_usage",
+      `iccid:${iccidKey}`,
+      this.endpointThrottling.simUsagePerMinutePerIccid,
+      60_000,
+    );
+
+    await this.applyThrottle(
+      "sim_usage",
+      `client:${this.clientThrottleKey}`,
+      this.endpointThrottling.simUsagePerSecondPerClient,
+      1_000,
+    );
+  }
+
+  private async throttleSimPackagesRequest(iccid: string): Promise<void> {
+    const iccidKey = this.normalizeThrottleKey(iccid);
+    await this.applyThrottle(
+      "sim_packages",
+      `iccid:${iccidKey}`,
+      this.endpointThrottling.simPackagesPerMinutePerIccid,
+      60_000,
+    );
+  }
+
   async getPackages(options: GetPackagesOptions = {}): Promise<Package[]> {
     const raw = await this.fetchPackagesRaw(options);
     return normalizePackagesData(extractRawPackagesData(raw));
@@ -747,6 +857,8 @@ export class AiraloClient {
     return this.request({
       path: `/sims/${encodeURIComponent(iccid)}/usage`,
       schema: UsageResponseSchema,
+      endpoint: "sim_usage",
+      throttle: () => this.throttleSimUsageRequest(iccid),
     });
   }
 
@@ -763,6 +875,8 @@ export class AiraloClient {
     return this.request({
       path: `/sims/${encodeURIComponent(iccid)}/packages`,
       schema: PackagesResponseSchema,
+      endpoint: "sim_packages",
+      throttle: () => this.throttleSimPackagesRequest(iccid),
     });
   }
 
@@ -773,6 +887,7 @@ export class AiraloClient {
     const maxAuthAttempts = 4;
     let attemptedBearerCaseFallback = false;
     let preserveTokenTypeForNextAttempt = false;
+    let refreshTokenForNextAttempt = false;
     let includeClientCredentials = this.sendClientCredentialsWithPackages;
     let attemptedCredentialsFallback = includeClientCredentials;
 
@@ -786,12 +901,15 @@ export class AiraloClient {
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      console.info("[airalo-sync][step-3][packages] Requesting fresh access token before packages request", {
+      console.info("[airalo-sync][step-3][packages] Resolving access token for packages request", {
         attempt,
-        cacheBypass: true,
+        cacheBypass: refreshTokenForNextAttempt,
       });
-      const token = await this.getFreshAccessToken(preserveTokenTypeForNextAttempt);
+      const token = refreshTokenForNextAttempt
+        ? await this.getFreshAccessToken(preserveTokenTypeForNextAttempt)
+        : await this.getAccessToken(preserveTokenTypeForNextAttempt);
       preserveTokenTypeForNextAttempt = false;
+      refreshTokenForNextAttempt = false;
 
       console.info("[airalo-sync][step-3][packages] Using access token for request", {
         attempt,
@@ -799,8 +917,12 @@ export class AiraloClient {
         token: this.formatTokenForLog(token),
       });
 
-      const response = await this.executeWithRateLimitRetry(() =>
-        this.fetchFn(url, this.buildPackagesRequestInit(token)),
+      const response = await this.executeWithRateLimitRetry(
+        async () => {
+          await this.throttlePackagesRequest(token);
+          return this.fetchFn(url, this.buildPackagesRequestInit(token));
+        },
+        { endpoint: "packages" },
       );
 
       if (response.ok) {
@@ -820,6 +942,7 @@ export class AiraloClient {
           attemptedCredentialsFallback = true;
           path = this.buildPackagesPath(options, includeClientCredentials);
           url = this.resolveUrl(path);
+          refreshTokenForNextAttempt = true;
           await this.clearCachedToken();
           console.warn(
             "[airalo-sync][step-3][packages] Unauthorized response indicates credential mismatch; retrying with client credential query fallback",
@@ -835,6 +958,7 @@ export class AiraloClient {
         if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
           attemptedBearerCaseFallback = true;
           preserveTokenTypeForNextAttempt = true;
+          refreshTokenForNextAttempt = true;
           console.warn(
             "[airalo-sync][step-3][packages] Unauthorized response after token refresh, retrying with alternate bearer scheme casing",
             {
@@ -850,6 +974,7 @@ export class AiraloClient {
           attempt,
           ...unauthorizedDetails,
         });
+        refreshTokenForNextAttempt = true;
         await this.clearCachedToken();
         continue;
       }
@@ -1015,6 +1140,8 @@ export class AiraloClient {
     schema,
     init,
     requiresAuth = true,
+    endpoint,
+    throttle,
   }: AiraloRequestOptions<T>): Promise<T> {
     const url = this.resolveUrl(path);
     const maxAuthAttempts = requiresAuth ? 3 : 1;
@@ -1022,21 +1149,28 @@ export class AiraloClient {
     let preserveTokenTypeForNextAttempt = false;
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      const response = await this.executeWithRateLimitRetry(async () => {
-        const headers = await this.buildHeaders(
-          init?.headers,
-          requiresAuth,
-          preserveTokenTypeForNextAttempt,
-        );
-        preserveTokenTypeForNextAttempt = false;
-        const initWithDefaults: RequestInit = {
-          method: "GET",
-          ...init,
-          headers,
-        };
+      const response = await this.executeWithRateLimitRetry(
+        async () => {
+          if (throttle) {
+            await throttle();
+          }
 
-        return this.fetchFn(url, initWithDefaults);
-      });
+          const headers = await this.buildHeaders(
+            init?.headers,
+            requiresAuth,
+            preserveTokenTypeForNextAttempt,
+          );
+          preserveTokenTypeForNextAttempt = false;
+          const initWithDefaults: RequestInit = {
+            method: "GET",
+            ...init,
+            headers,
+          };
+
+          return this.fetchFn(url, initWithDefaults);
+        },
+        { endpoint },
+      );
 
       if (response.ok) {
         const parsedBody = await this.parseJson(response);
@@ -1105,7 +1239,15 @@ export class AiraloClient {
 
   private async getAccessToken(preserveTokenType = false): Promise<string> {
     const cached = await this.tokenCache.get();
-    if (cached && !this.isExpired(cached.expiresAt)) {
+    const cachedToken = cached?.token?.trim();
+    const cachedExpiresAt = cached?.expiresAt;
+    const hasValidExpiry = typeof cachedExpiresAt === "number" && Number.isFinite(cachedExpiresAt);
+    const hasUsableCachedToken = Boolean(cachedToken && cachedToken.length > 0);
+
+    if (cached && (!hasValidExpiry || !hasUsableCachedToken)) {
+      console.warn("[airalo-sync][step-2][token] Ignoring malformed cached access token record");
+      await this.clearCachedToken();
+    } else if (cached && !this.isExpired(cached.expiresAt)) {
       if (!preserveTokenType) {
         this.tokenType = this.normalizeTokenType(cached.tokenType);
       }
@@ -1114,7 +1256,7 @@ export class AiraloClient {
         tokenType: this.tokenType,
         token: this.formatTokenForLog(cached.token),
       });
-      return cached.token.trim();
+      return cachedToken!;
     }
 
     if (cached && this.isExpired(cached.expiresAt)) {
@@ -1145,19 +1287,24 @@ export class AiraloClient {
     body.set("client_secret", this.clientSecret);
     body.set("grant_type", "client_credentials");
 
-    const response = await this.executeWithRateLimitRetry(() =>
-      this.fetchFn(`${this.baseUrl}/token`, {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Cache-Control": "no-cache, no-store, max-age=0",
-          Pragma: "no-cache",
-          "X-Airalo-Token-Request-Id": tokenRequestId,
-        },
-        body,
-      }),
+    const response = await this.executeWithRateLimitRetry(
+      async () => {
+        await this.throttleTokenRequest();
+
+        return this.fetchFn(`${this.baseUrl}/token`, {
+          method: "POST",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Cache-Control": "no-cache, no-store, max-age=0",
+            Pragma: "no-cache",
+            "X-Airalo-Token-Request-Id": tokenRequestId,
+          },
+          body,
+        });
+      },
+      { endpoint: "token" },
     );
 
     if (!response.ok) {
@@ -1342,14 +1489,24 @@ export class AiraloClient {
 
   private async executeWithRateLimitRetry(
     makeRequest: () => Promise<Response>,
+    options: { endpoint?: AiraloThrottledEndpoint } = {},
   ): Promise<Response> {
     const maxAttempts = this.rateLimitRetryPolicy.maxRetries + 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const response = await makeRequest();
+      if (options.endpoint) {
+        recordAiraloEndpointRequest({
+          endpoint: options.endpoint,
+          status: response.status,
+        });
+      }
 
       const shouldRetry =
         response.status === 429 || response.status >= 500;
+      if (response.status === 429 && options.endpoint) {
+        recordRateLimit(options.endpoint);
+      }
 
       if (!shouldRetry) {
         return response;
