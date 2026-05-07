@@ -34,7 +34,7 @@ Local correctness:
 
 ```bash
 npx tsc --noEmit
-npx tsx --test lib/airalo/client.test.ts
+npm run airalo:test
 ```
 
 Live smoke (with `.env.local`):
@@ -67,6 +67,7 @@ A release is blocked if any of these fail:
 Monitor and alert on:
 
 - `airalo_endpoint_requests_total` by `endpoint`, `result`, `status`
+- `airalo_api_errors_total` by `endpoint`, `status`, `code`, `category`, `retriable`
 - `airalo_rate_limit_events_total` by `source`
 - `airalo_token_refresh_total`
 - `airalo_order_requests_total`
@@ -83,7 +84,7 @@ Minimum dashboard panels:
 
 1. PR pipeline:
 - `npx tsc --noEmit`
-- `npx tsx --test lib/airalo/client.test.ts`
+- `npm run airalo:test`
 
 2. Pre-deploy manual gate:
 - Run `npm run airalo:smoke-live` with deployment credentials.
@@ -102,3 +103,19 @@ If smoke fails:
 4. If rate-limit-related, reduce request fan-out and re-run smoke.
 5. If persistent, open an Airalo support ticket with timestamps and request IDs.
 
+## 8) Error-Handling Matrix
+
+Application behavior for documented Airalo API errors:
+
+- `401`: clear token cache, refresh token, retry auth path; if persistent, fail as credentials/config issue.
+- `429`: exponential backoff retry with jitter and `Retry-After` support.
+- `5xx`: exponential backoff retry with jitter.
+- `422 code 11` (insufficient credit): fail fast, surface `402` upstream behavior.
+- `422 code 13` (operator maintenance): retry as transient, surface `503` if exhausted.
+- `422 code 14` (invalid checksum): fail fast as validation.
+- `422 code 23` (top-up disabled): fail fast as conflict/business rule.
+- `422 code 33` (insufficient stock): retry as transient, then treat as out-of-stock.
+- `422 code 34` (invalid package/out of stock): fail validation and auto-pause package when applicable.
+- `422 code 43` (bad request): fail fast as validation.
+- `422 code 53` (unexpected temporary issue): retry as transient and surface `503` if exhausted.
+- `422 code 73` (recycled ICCID): fail fast as non-recoverable (`410` semantics).

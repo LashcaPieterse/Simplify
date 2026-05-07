@@ -332,6 +332,112 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
   assert.equal(tokenCache.clearCount, 5, "should clear on auth retries and before each forced refresh");
 });
 
+test("AiraloClient retries retriable 422 maintenance errors", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let packageCalls = 0;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      packageCalls += 1;
+      if (packageCalls === 1) {
+        return jsonResponse(
+          {
+            meta: {
+              code: 13,
+              reason:
+                "The requested operator is currently undergoing maintenance. Please try again later.",
+            },
+          },
+          { status: 422 },
+        );
+      }
+
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const packages = await client.getPackages();
+  assert.deepEqual(packages, []);
+  assert.equal(packageCalls, 2, "should retry after a retriable 422 maintenance error");
+});
+
+test("AiraloClient does not retry non-retriable 422 checksum errors", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let packageCalls = 0;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("packages")) {
+      packageCalls += 1;
+      return jsonResponse(
+        {
+          meta: {
+            code: 14,
+            reason: "Invalid checksum: iccid mismatch",
+          },
+        },
+        { status: 422 },
+      );
+    }
+
+    if (target.endsWith("/token")) {
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await assert.rejects(client.getPackages(), (error: unknown) => {
+    assert(error instanceof AiraloError);
+    assert.equal(error.details.status, 422);
+    assert.equal(error.details.code, 14);
+    assert.equal(error.details.category, "checksum_failed");
+    assert.equal(error.details.retriable, false);
+    return true;
+  });
+
+  assert.equal(packageCalls, 1, "should not retry non-retriable 422 errors");
+});
+
 test("AiraloClient uses include=topup for package requests", async () => {
   const tokenCache = new MockTokenCache();
   let requestedUrl: string | null = null;

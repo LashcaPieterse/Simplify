@@ -1,6 +1,7 @@
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
 import { metrics } from "@opentelemetry/api";
 import type { AiraloThrottledEndpoint } from "../airalo/throttle";
+import type { AiraloErrorCategory } from "../airalo/errors";
 
 type OrderResult = "success" | "error";
 type OrderReason =
@@ -14,7 +15,10 @@ type OrderReason =
   | "insufficient_credit"
   | "operator_maintenance"
   | "iccid_recycled"
-  | "checksum_failed";
+  | "checksum_failed"
+  | "topup_disabled"
+  | "airalo_bad_request"
+  | "airalo_unexpected";
 
 type WebhookResult = "processed" | "duplicate" | "rejected" | "error";
 
@@ -45,6 +49,7 @@ let rateLimitCounter: Counter<string>;
 let tokenRefreshCounter: Counter<string>;
 let packageSyncGauge: Gauge<string>;
 let endpointRequestCounter: Counter<string>;
+let apiErrorCounter: Counter<string>;
 const orderOtelCounter = meter.createCounter("airalo.order.requests", {
   description: "Number of order creation attempts.",
 });
@@ -64,6 +69,9 @@ const rateLimitOtelCounter = meter.createCounter("airalo.rate_limit.events", {
 });
 const endpointRequestOtelCounter = meter.createCounter("airalo.endpoint.requests", {
   description: "Outbound Airalo endpoint request attempts and outcomes.",
+});
+const apiErrorOtelCounter = meter.createCounter("airalo.api.errors", {
+  description: "Outbound Airalo API errors by endpoint, status, and business code classification.",
 });
 const tokenRefreshOtelCounter = meter.createCounter("airalo.token.refreshes", {
   description: "Number of times the Airalo access token was refreshed.",
@@ -136,6 +144,13 @@ function ensureCounters(): void {
     name: "airalo_endpoint_requests_total",
     help: "Outbound Airalo endpoint request attempts by endpoint and result.",
     labelNames: ["endpoint", "result", "status"],
+    registers: [register],
+  });
+
+  apiErrorCounter = new Counter({
+    name: "airalo_api_errors_total",
+    help: "Outbound Airalo API errors by endpoint, status, business code, and retryability.",
+    labelNames: ["endpoint", "status", "code", "category", "retriable"],
     registers: [register],
   });
 
@@ -254,6 +269,33 @@ export function recordAiraloEndpointRequest(options: RecordAiraloEndpointRequest
     endpoint: options.endpoint,
     result,
     status,
+  });
+}
+
+export interface RecordAiraloApiErrorOptions {
+  endpoint?: AiraloThrottledEndpoint;
+  status: number;
+  code?: number | null;
+  category?: AiraloErrorCategory;
+  retriable?: boolean;
+}
+
+export function recordAiraloApiError(options: RecordAiraloApiErrorOptions): void {
+  ensureCounters();
+
+  const endpoint = options.endpoint ?? "unknown";
+  const status = String(options.status);
+  const code = options.code === undefined || options.code === null ? "none" : String(options.code);
+  const category = options.category ?? "unknown";
+  const retriable = options.retriable ? "true" : "false";
+
+  apiErrorCounter.labels(endpoint, status, code, category, retriable).inc();
+  apiErrorOtelCounter.add(1, {
+    endpoint,
+    status,
+    code,
+    category,
+    retriable,
   });
 }
 

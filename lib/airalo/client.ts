@@ -19,10 +19,14 @@ import {
   type TokenCacheRecord,
 } from "./token-cache";
 import {
+  recordAiraloApiError,
   recordAiraloEndpointRequest,
   recordRateLimit,
   recordTokenRefresh,
 } from "../observability/metrics";
+import {
+  classifyAiraloError,
+} from "./errors";
 import {
   resolveEndpointRateLimiter,
   type AiraloThrottledEndpoint,
@@ -386,6 +390,10 @@ export interface AiraloErrorDetails {
   status: number;
   statusText: string;
   body?: unknown;
+  code?: number | null;
+  reason?: string | null;
+  category?: string;
+  retriable?: boolean;
 }
 
 export class AiraloError extends Error {
@@ -1009,21 +1017,18 @@ export class AiraloClient {
 
         throw new AiraloError(
           `Packages request failed with status 401${unauthorizedDetails.metaMessage ? `: ${unauthorizedDetails.metaMessage}` : ""}`,
-          {
-            status: response.status,
-            statusText: response.statusText,
+          this.buildClassifiedErrorDetails(
+            response.status,
+            response.statusText,
             body,
-          },
+            unauthorizedDetails.metaMessage,
+          ),
         );
       }
 
       throw new AiraloError(
         `Packages request failed with status ${response.status}`,
-        {
-          status: response.status,
-          statusText: response.statusText,
-          body,
-        },
+        this.buildClassifiedErrorDetails(response.status, response.statusText, body),
       );
     }
 
@@ -1225,11 +1230,33 @@ export class AiraloClient {
       // keep the raw text when JSON parsing fails
     }
 
-    return new AiraloError(`Request to ${url} failed with status ${response.status}`, {
-      status: response.status,
-      statusText: response.statusText,
+    return new AiraloError(
+      `Request to ${url} failed with status ${response.status}`,
+      this.buildClassifiedErrorDetails(response.status, response.statusText, body),
+    );
+  }
+
+  private buildClassifiedErrorDetails(
+    status: number,
+    statusText: string,
+    body: unknown,
+    fallbackMessage?: string,
+  ): AiraloErrorDetails {
+    const classification = classifyAiraloError({
+      status,
       body,
+      fallbackMessage,
     });
+
+    return {
+      status,
+      statusText,
+      body,
+      code: classification.code,
+      reason: classification.reason ?? classification.message,
+      category: classification.category,
+      retriable: classification.retriable,
+    };
   }
 
   private async getFreshAccessToken(preserveTokenType = false): Promise<string> {
@@ -1322,11 +1349,7 @@ export class AiraloClient {
 
       throw new AiraloError(
         `Token request failed with status ${response.status}`,
-        {
-          status: response.status,
-          statusText: response.statusText,
-          body,
-        },
+        this.buildClassifiedErrorDetails(response.status, response.statusText, body),
       );
     }
 
@@ -1419,11 +1442,15 @@ export class AiraloClient {
     try {
       return JSON.parse(text);
     } catch {
-      throw new AiraloError("Failed to parse JSON response", {
-        status: response.status,
-        statusText: response.statusText,
-        body: text,
-      });
+      throw new AiraloError(
+        "Failed to parse JSON response",
+        this.buildClassifiedErrorDetails(
+          response.status,
+          response.statusText,
+          text,
+          "Failed to parse JSON response",
+        ),
+      );
     }
   }
 
@@ -1502,8 +1529,29 @@ export class AiraloClient {
         });
       }
 
+      let parsedBody: unknown;
+      let retriableFromClassification = false;
+      if (!response.ok) {
+        parsedBody = await this.tryParseResponseBody(response.clone());
+        const classifiedError = classifyAiraloError({
+          status: response.status,
+          body: parsedBody,
+        });
+        retriableFromClassification = classifiedError.retriable;
+
+        recordAiraloApiError({
+          endpoint: options.endpoint,
+          status: response.status,
+          code: classifiedError.code,
+          category: classifiedError.category,
+          retriable: classifiedError.retriable,
+        });
+      }
+
       const shouldRetry =
-        response.status === 429 || response.status >= 500;
+        response.status === 429 ||
+        response.status >= 500 ||
+        (!response.ok && retriableFromClassification);
       if (response.status === 429 && options.endpoint) {
         recordRateLimit(options.endpoint);
       }

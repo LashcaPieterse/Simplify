@@ -7,6 +7,11 @@ import {
   type CreateOrderPayload,
   type SubmitOrderAsyncAck,
 } from "../airalo/client";
+import {
+  classifyAiraloError,
+  extractAiraloBusinessError,
+  type AiraloBusinessErrorInfo,
+} from "../airalo/errors";
 import type { Order as AiraloOrder } from "../airalo/schemas";
 import { resolveSharedTokenCache } from "../airalo/token-cache";
 import prismaClient from "../db/client";
@@ -347,15 +352,14 @@ function extractAiraloValidationErrors(body: unknown): AiraloValidationErrors | 
   return Object.keys(validationErrors).length > 0 ? validationErrors : null;
 }
 
-interface AiraloBusinessErrorInfo {
-  code: number | null;
-  reason: string | null;
-  message: string | null;
-}
-
 const INSUFFICIENT_CREDIT_ERROR_CODES = new Set<number>([11]);
+const MAINTENANCE_ERROR_CODES = new Set<number>([13]);
+const CHECKSUM_ERROR_CODES = new Set<number>([14]);
+const TOPUP_DISABLED_ERROR_CODES = new Set<number>([23]);
 const OUT_OF_STOCK_ERROR_CODES = new Set<number>([33]);
 const INVALID_PACKAGE_ERROR_CODES = new Set<number>([34]);
+const BAD_REQUEST_ERROR_CODES = new Set<number>([43]);
+const UNEXPECTED_ERROR_CODES = new Set<number>([53]);
 const RECYCLED_SIM_ERROR_CODES = new Set<number>([73]);
 
 const OUT_OF_STOCK_PATTERNS = [/out of stock/i, /insufficient stock/i];
@@ -364,102 +368,6 @@ const CHECKSUM_PATTERNS = [/checksum/i];
 const RECYCLED_PATTERNS = [/recycled/i];
 
 type MetricsReason = NonNullable<RecordOrderMetricsOptions["reason"]>;
-
-function toRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null) {
-    return null;
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function normaliseAiraloString(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normaliseAiraloNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const parsed = Number(trimmed);
-    if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
-function pickFirstNonNull<T>(...values: (T | null | undefined)[]): T | null {
-  for (const value of values) {
-    if (value !== undefined && value !== null) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function extractAiraloBusinessError(body: unknown): AiraloBusinessErrorInfo | null {
-  if (typeof body === "string") {
-    const text = body.trim();
-    return text ? { code: null, reason: text, message: text } : null;
-  }
-
-  const root = toRecord(body);
-  if (!root) {
-    return null;
-  }
-
-  const meta = toRecord(root.meta);
-  const error = toRecord(root.error);
-  const candidates = [root, meta, error].filter((entry): entry is Record<string, unknown> => Boolean(entry));
-
-  const code = pickFirstNonNull(
-    ...candidates.map((entry) =>
-      normaliseAiraloNumber(
-        (entry as { code?: unknown; error_code?: unknown }).code ??
-          (entry as { code?: unknown; error_code?: unknown }).error_code,
-      ),
-    ),
-  );
-
-  const reason = pickFirstNonNull(
-    ...candidates.map((entry) =>
-      normaliseAiraloString(
-        (entry as { reason?: unknown; error_reason?: unknown }).reason ??
-          (entry as { reason?: unknown; error_reason?: unknown }).error_reason,
-      ),
-    ),
-  );
-
-  const message = pickFirstNonNull(
-    ...candidates.map((entry) =>
-      normaliseAiraloString(
-        (entry as { message?: unknown; error_message?: unknown }).message ??
-          (entry as { message?: unknown; error_message?: unknown }).error_message,
-      ),
-    ),
-  );
-
-  if (code === null && !reason && !message) {
-    return null;
-  }
-
-  return { code, reason, message };
-}
 
 function matchAnyPattern(value: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(value));
@@ -484,6 +392,14 @@ function classifyAiraloBusinessReason(
     return "airalo_out_of_stock";
   }
 
+  if (status === 429) {
+    return "rate_limited";
+  }
+
+  if (status >= 500) {
+    return "airalo_unexpected";
+  }
+
   const code = info?.code ?? null;
 
   if (code !== null) {
@@ -493,6 +409,26 @@ function classifyAiraloBusinessReason(
 
     if (INSUFFICIENT_CREDIT_ERROR_CODES.has(code)) {
       return "insufficient_credit";
+    }
+
+    if (MAINTENANCE_ERROR_CODES.has(code)) {
+      return "operator_maintenance";
+    }
+
+    if (CHECKSUM_ERROR_CODES.has(code)) {
+      return "checksum_failed";
+    }
+
+    if (TOPUP_DISABLED_ERROR_CODES.has(code)) {
+      return "topup_disabled";
+    }
+
+    if (BAD_REQUEST_ERROR_CODES.has(code)) {
+      return "airalo_bad_request";
+    }
+
+    if (UNEXPECTED_ERROR_CODES.has(code)) {
+      return "airalo_unexpected";
     }
 
     if (RECYCLED_SIM_ERROR_CODES.has(code)) {
@@ -568,12 +504,18 @@ function mapAiraloError(
   const businessError = businessErrorOverride ?? extractAiraloBusinessError(error.details.body);
   const detailedMessage = businessError?.reason ?? businessError?.message ?? error.message;
   const candidateMessage = businessError?.message ?? error.message;
+  const classified = classifyAiraloError({
+    status,
+    body: error.details.body,
+    fallbackMessage: error.message,
+  });
 
   const businessCode = businessError?.code ?? null;
 
   const hasOutOfStockSignal =
     status === 409 ||
     (businessCode !== null && OUT_OF_STOCK_ERROR_CODES.has(businessCode)) ||
+    classified.category === "out_of_stock" ||
     hasPatternMatch(businessError, candidateMessage, OUT_OF_STOCK_PATTERNS);
 
   if (hasOutOfStockSignal) {
@@ -595,8 +537,18 @@ function mapAiraloError(
     );
   }
 
+  if (businessCode !== null && TOPUP_DISABLED_ERROR_CODES.has(businessCode)) {
+    return new OrderServiceError(
+      businessError?.reason ??
+        "Airalo reported that the requested top-up is currently disabled by the operator.",
+      409,
+      error,
+    );
+  }
+
   if (
     (businessCode !== null && RECYCLED_SIM_ERROR_CODES.has(businessCode)) ||
+    classified.category === "iccid_recycled" ||
     hasPatternMatch(businessError, candidateMessage, RECYCLED_PATTERNS)
   ) {
     return new OrderServiceError(
@@ -607,7 +559,11 @@ function mapAiraloError(
     );
   }
 
-  if (hasPatternMatch(businessError, candidateMessage, MAINTENANCE_PATTERNS)) {
+  if (
+    (businessCode !== null && MAINTENANCE_ERROR_CODES.has(businessCode)) ||
+    classified.category === "operator_maintenance" ||
+    hasPatternMatch(businessError, candidateMessage, MAINTENANCE_PATTERNS)
+  ) {
     return new OrderServiceError(
       businessError?.reason ??
         "Airalo reports the operator is undergoing maintenance. Pause sales for this plan and retry later.",
@@ -616,10 +572,33 @@ function mapAiraloError(
     );
   }
 
-  if (hasPatternMatch(businessError, candidateMessage, CHECKSUM_PATTERNS)) {
+  if (
+    (businessCode !== null && CHECKSUM_ERROR_CODES.has(businessCode)) ||
+    classified.category === "checksum_failed" ||
+    hasPatternMatch(businessError, candidateMessage, CHECKSUM_PATTERNS)
+  ) {
     return new OrderValidationError(
       businessError?.reason ??
         "Airalo rejected the request because of a checksum mismatch in the supplied ICCID or payload.",
+    );
+  }
+
+  if (businessCode !== null && BAD_REQUEST_ERROR_CODES.has(businessCode)) {
+    return new OrderValidationError(
+      businessError?.reason ??
+        "Airalo rejected the request as invalid. Verify the payload fields and try again.",
+    );
+  }
+
+  if (
+    (businessCode !== null && UNEXPECTED_ERROR_CODES.has(businessCode)) ||
+    classified.category === "unexpected"
+  ) {
+    return new OrderServiceError(
+      businessError?.reason ??
+        "Airalo reported an unexpected temporary issue. Please retry shortly.",
+      503,
+      error,
     );
   }
 

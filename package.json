@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
+    "airalo:test": "tsx --test lib/airalo/*.test.ts",
     "airalo:recover-orders": "tsx scripts/recover-airalo-orders.ts",
     "checkouts:recover-paid": "tsx scripts/recover-paid-checkouts.ts",
     "airalo:smoke-live": "tsx scripts/airalo-live-smoke.ts"

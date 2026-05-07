@@ -1,4 +1,5 @@
 import { AiraloClient, AiraloError } from "./client";
+import { classifyAiraloError } from "./errors";
 import type {
   InstallationInstructions as RawInstallationInstructions,
   InstallationStepDictionary,
@@ -339,11 +340,22 @@ export async function getInstallationInstructions(
 
     if (error instanceof AiraloError) {
       const status = error.details.status ?? 502;
+      const classified = classifyAiraloError({
+        status,
+        body: error.details.body,
+        fallbackMessage: error.message,
+      });
       const message =
         status === 404
           ? "We couldn't find instructions for that ICCID. Double-check the number and try again."
           : status === 401 || status === 403
             ? "We couldn't authenticate with Airalo. Verify your API credentials."
+            : classified.category === "operator_maintenance"
+              ? "Airalo reported operator maintenance while loading instructions. Please retry shortly."
+              : classified.category === "rate_limited"
+                ? "Airalo rate-limited instruction requests. Please retry in a moment."
+                : classified.category === "server_error" || classified.category === "unexpected"
+                  ? "Airalo is temporarily unavailable while loading instructions. Please retry shortly."
             : "Airalo returned an unexpected response while loading the instructions.";
 
       throw new InstallationInstructionsError(message, status);
