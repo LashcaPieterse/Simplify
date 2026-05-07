@@ -630,6 +630,24 @@ function mapAiraloError(
   return new OrderServiceError(detailedMessage, status, error);
 }
 
+function shouldFallbackAsyncToSync(error: unknown): boolean {
+  if (!(error instanceof AiraloError) || error.details.status !== 422) {
+    return false;
+  }
+
+  const businessError = extractAiraloBusinessError(error.details.body);
+  const signals = [businessError?.reason, businessError?.message, error.message]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.toLowerCase());
+
+  return signals.some(
+    (value) =>
+      value.includes("not opted in") ||
+      value.includes("no webhook url provided") ||
+      value.includes("webhook url"),
+  );
+}
+
 function extractAiraloRequestId(body: unknown): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
@@ -671,7 +689,7 @@ export async function createOrder(
   const db = options.prisma ?? prismaClient;
   const airalo = options.airaloClient ?? resolveAiraloClient();
   const submissionMode = options.submissionMode ?? "async";
-  const isAsyncSubmission = submissionMode !== "sync";
+  let resolvedSubmissionMode: "async" | "sync" = submissionMode === "sync" ? "sync" : "async";
   const uuidRegex =
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
   const packageLookup: Prisma.PackageWhereInput = uuidRegex.test(packageId)
@@ -778,8 +796,26 @@ export async function createOrder(
   };
 
   try {
-    if (isAsyncSubmission) {
-      airaloAck = await invokeWithBackoff(() => airalo.createOrderAsync(orderPayload));
+    if (resolvedSubmissionMode === "async") {
+      try {
+        airaloAck = await invokeWithBackoff(() => airalo.createOrderAsync(orderPayload));
+      } catch (asyncError: unknown) {
+        if (!shouldFallbackAsyncToSync(asyncError)) {
+          throw asyncError;
+        }
+
+        logOrderWarn("airalo.order.async_fallback_sync", {
+          packageId: pkg.id,
+          packageExternalId: pkg.airaloPackageId,
+          reason:
+            asyncError instanceof Error
+              ? asyncError.message
+              : "Airalo async order endpoint unavailable for this account.",
+        });
+
+        resolvedSubmissionMode = "sync";
+        airaloOrder = await invokeWithBackoff(() => airalo.createOrder(orderPayload));
+      }
     } else {
       airaloOrder = await invokeWithBackoff(() => airalo.createOrder(orderPayload));
     }
@@ -882,7 +918,7 @@ export async function createOrder(
 
   airaloLatencyMs = Date.now() - airaloCallStartedAt;
 
-  if (isAsyncSubmission && airaloAck) {
+  if (resolvedSubmissionMode === "async" && airaloAck) {
     logOrderInfo("airalo.order.async.accepted", {
       packageId: pkg.id,
       packageExternalId: pkg.airaloPackageId,
@@ -959,7 +995,7 @@ export async function createOrder(
       packageId: pkg.id,
       airaloRequestId: airaloAck?.request_id ?? airaloOrder?.order_reference ?? null,
       airaloAcceptedAt: airaloAck?.accepted_at ?? null,
-      submissionMode,
+      submissionMode: resolvedSubmissionMode,
       airaloLatencyMs,
       totalDurationMs: totalDuration,
     });
@@ -968,7 +1004,7 @@ export async function createOrder(
       result: "success",
       reason: "ok",
       durationMs: totalDuration,
-      airaloStatus: isAsyncSubmission ? "accepted" : airaloOrder?.status ?? "completed",
+      airaloStatus: resolvedSubmissionMode === "async" ? "accepted" : airaloOrder?.status ?? "completed",
     });
 
     return {
@@ -996,7 +1032,7 @@ export async function createOrder(
       result: "error",
       reason: "persistence_failed",
       durationMs: Date.now() - startedAt,
-      airaloStatus: isAsyncSubmission ? "accepted" : airaloOrder?.status ?? "completed",
+      airaloStatus: resolvedSubmissionMode === "async" ? "accepted" : airaloOrder?.status ?? "completed",
     });
 
     if (error instanceof OrderServiceError) {

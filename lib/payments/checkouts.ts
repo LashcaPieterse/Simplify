@@ -50,6 +50,7 @@ const STATUS_PENDING = "pending";
 const STATUS_PAID = "paid";
 const STATUS_FAILED = "failed";
 const STATUS_APPROVED = "approved";
+const STATUS_FINALIZING = "finalizing";
 const PROVIDER = "dpo";
 
 const UUID_REGEX =
@@ -457,25 +458,68 @@ export async function finaliseOrderFromCheckout(
   options: FinaliseOptions = {},
 ): Promise<CreateOrderResult> {
   const db = options.prisma ?? prismaClient;
-
-  const result = await db.$transaction(async (tx) => {
-    const checkout = await tx.checkoutSession.findUnique({
-      where: { id: checkoutId },
-      include: {
-        payments: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
+  const checkout = await db.checkoutSession.findUnique({
+    where: { id: checkoutId },
+    include: {
+      payments: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
       },
+    },
+  });
+
+  if (!checkout) {
+    throw new Error("Checkout not found.");
+  }
+
+  if (checkout.orderId) {
+    const existingOrder = await db.esimOrder.findUnique({
+      where: { id: checkout.orderId },
     });
 
-    if (!checkout) {
-      throw new Error("Checkout not found.");
+    if (!existingOrder) {
+      throw new Error("Checkout references a missing order.");
     }
 
-    if (checkout.orderId) {
-      const existingOrder = await tx.esimOrder.findUnique({
-        where: { id: checkout.orderId },
+    return {
+      orderId: existingOrder.id,
+      orderNumber: existingOrder.orderNumber ?? null,
+      requestId: existingOrder.requestId ?? existingOrder.orderNumber ?? existingOrder.id,
+    };
+  }
+
+  const payment = checkout.payments[0];
+
+  if (!payment) {
+    throw new Error("Checkout has no payment record.");
+  }
+
+  const status = options.forceStatus ?? payment.status ?? STATUS_PENDING;
+  const isApproved = status.toLowerCase() === STATUS_APPROVED || status.toLowerCase() === STATUS_PAID;
+
+  if (!isApproved) {
+    throw new Error("Payment has not been approved.");
+  }
+
+  const lockResult = await db.checkoutSession.updateMany({
+    where: {
+      id: checkout.id,
+      orderId: null,
+    },
+    data: {
+      status: STATUS_FINALIZING,
+    },
+  });
+
+  if (lockResult.count === 0) {
+    const lockedCheckout = await db.checkoutSession.findUnique({
+      where: { id: checkout.id },
+      select: { orderId: true },
+    });
+
+    if (lockedCheckout?.orderId) {
+      const existingOrder = await db.esimOrder.findUnique({
+        where: { id: lockedCheckout.orderId },
       });
 
       if (!existingOrder) {
@@ -489,19 +533,12 @@ export async function finaliseOrderFromCheckout(
       };
     }
 
-    const payment = checkout.payments[0];
+    throw new Error("Checkout finalization is already in progress.");
+  }
 
-    if (!payment) {
-      throw new Error("Checkout has no payment record.");
-    }
+  let locked = true;
 
-    const status = options.forceStatus ?? payment.status ?? STATUS_PENDING;
-    const isApproved = status.toLowerCase() === STATUS_APPROVED || status.toLowerCase() === STATUS_PAID;
-
-    if (!isApproved) {
-      throw new Error("Payment has not been approved.");
-    }
-
+  try {
     const order = await createOrder(
       {
         packageId: checkout.packageId,
@@ -510,56 +547,101 @@ export async function finaliseOrderFromCheckout(
       },
       {
         ...options.airaloOptions,
-        prisma: tx,
-        submissionMode: options.airaloOptions?.submissionMode ?? "sync",
+        prisma: db,
+        // Prefer async submission so paid checkouts get an order record immediately
+        // even when synchronous Airalo fulfillment is slow or intermittently unavailable.
+        submissionMode: options.airaloOptions?.submissionMode ?? "async",
         userId: checkout.userId ?? undefined,
       },
     );
 
-    await tx.checkoutSession.update({
-      where: { id: checkout.id },
-      data: {
-        orderId: order.orderId,
-        status: STATUS_PAID,
-      },
-    });
+    const result = await db.$transaction(async (tx) => {
+      const currentCheckout = await tx.checkoutSession.findUnique({
+        where: { id: checkout.id },
+        select: { orderId: true },
+      });
 
-    await tx.paymentTransaction.update({
-      where: { id: payment.id },
-      data: {
-        status: STATUS_APPROVED,
-        statusHistory: appendStatusHistory(payment.statusHistory, {
+      if (!currentCheckout) {
+        throw new Error("Checkout not found.");
+      }
+
+      if (currentCheckout.orderId) {
+        const existingOrder = await tx.esimOrder.findUnique({
+          where: { id: currentCheckout.orderId },
+        });
+
+        if (!existingOrder) {
+          throw new Error("Checkout references a missing order.");
+        }
+
+        return {
+          orderId: existingOrder.id,
+          orderNumber: existingOrder.orderNumber ?? null,
+          requestId: existingOrder.requestId ?? existingOrder.orderNumber ?? existingOrder.id,
+        };
+      }
+
+      const currentPayment = await tx.paymentTransaction.findUnique({
+        where: { id: payment.id },
+        select: { statusHistory: true },
+      });
+
+      await tx.checkoutSession.update({
+        where: { id: checkout.id },
+        data: {
+          orderId: order.orderId,
+          status: STATUS_PAID,
+        },
+      });
+
+      await tx.paymentTransaction.update({
+        where: { id: payment.id },
+        data: {
           status: STATUS_APPROVED,
-          at: new Date().toISOString(),
-          source: "finalize",
-        }),
-      },
+          statusHistory: appendStatusHistory(currentPayment?.statusHistory ?? payment.statusHistory, {
+            status: STATUS_APPROVED,
+            at: new Date().toISOString(),
+            source: "finalize",
+          }),
+        },
+      });
+
+      await tx.esimOrder.update({
+        where: { id: order.orderId },
+        data: {
+          paymentTransactionId: payment.id,
+        },
+      });
+
+      return order;
     });
 
-    await tx.esimOrder.update({
-      where: { id: order.orderId },
-      data: {
-        paymentTransactionId: payment.id,
-      },
-    });
+    locked = false;
 
     logOrderInfo("payments.checkout.finalized", {
       checkoutId,
-      orderId: order.orderId,
+      orderId: result.orderId,
       paymentId: payment.id,
     });
 
-    return order;
-  });
-
-  sendOrderReceipt(result.orderId, { prisma: options.prisma ?? prismaClient }).catch((error) => {
-    logOrderError("payments.receipt.send_failed", {
-      orderId: result.orderId,
-      error: error instanceof Error ? error.message : String(error),
+    sendOrderReceipt(result.orderId, { prisma: options.prisma ?? prismaClient }).catch((error) => {
+      logOrderError("payments.receipt.send_failed", {
+        orderId: result.orderId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
-  });
 
-  return result;
+    return result;
+  } catch (error) {
+    if (locked) {
+      await db.checkoutSession.updateMany({
+        where: { id: checkout.id, orderId: null },
+        data: { status: STATUS_PAID },
+      });
+    }
+
+    throw error;
+  }
 }
 
 export async function recordPaymentEvent(
