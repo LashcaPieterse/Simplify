@@ -81,6 +81,8 @@ Without notification settings enabled, failed runs will not automatically email 
 The sync endpoint now acts as the **single source of truth** for package availability and pricing:
 
 - Sync writes latest Airalo package details into Prisma (including updated prices).
+- Sync uses paginated `GET /v2/packages` requests with `include=topup` and `limit=100` rather than the no-limit full-catalog response. This keeps serverless memory use predictable while still following Airalo's documented `links.next` / `meta.current_page` / `meta.last_page` pagination contract.
+- Each Airalo page response is stored as a raw JSON snapshot on `package_sync_pages.raw_payload_json` alongside the extracted `links`, `meta`, and `pricing` envelopes.
 - Packages missing from the latest upstream dataset are automatically marked inactive (`isActive=false`).
 - After a successful sync, the route triggers `revalidatePath` for home/country/plan pages so static pages refresh without a full redeploy.
 

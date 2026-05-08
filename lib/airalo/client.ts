@@ -124,13 +124,14 @@ export interface AiraloPackageNode {
   amount?: number | string;
   is_unlimited?: boolean;
   isUnlimited?: boolean;
+  net_price?: number | string;
   currency?: string;
   validity?: number;
-  short_info?: string;
+  short_info?: string | null;
   qr_installation?: string;
   manual_installation?: string;
   is_fair_usage_policy?: boolean;
-  fair_usage_policy?: string;
+  fair_usage_policy?: string | null;
   image?: { url?: string | null } | null;
   prices?: {
     net_price?: AiraloPackagePriceMap;

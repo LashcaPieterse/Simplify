@@ -1,96 +1,32 @@
-# Get Packages Endpoint Schema Review
+# Get Packages Endpoint Alignment Review
 
-## Checklist
+This review tracks how the Simplify catalog schema and sync job align with the local Airalo `getPackages` OpenAPI export.
 
-### public.countries
-- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), NOT NULL — ❌ Missing table
-- country_code text NOT NULL UNIQUE — ❌ Missing
-- name text NOT NULL — ❌ Missing
-- slug text NOT NULL UNIQUE — ❌ Missing
-- image_url text — ❌ Missing
-- metadata jsonb DEFAULT '{}'::jsonb — ❌ Missing
-- created_at timestamptz NOT NULL DEFAULT now() — ❌ Missing
-- updated_at timestamptz NOT NULL DEFAULT now() — ❌ Missing
+## Current status
 
-### public.operators
-- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), NOT NULL — ❌ Missing table
-- country_id uuid NOT NULL REFERENCES public.countries(id) ON DELETE RESTRICT — ❌ Missing
-- name text NOT NULL — ❌ Missing
-- api_operator_id integer — ❌ Missing
-- operator_code text — ❌ Missing
-- metadata jsonb DEFAULT '{}'::jsonb — ❌ Missing
-- created_at timestamptz NOT NULL DEFAULT now() — ❌ Missing
-- updated_at timestamptz NOT NULL DEFAULT now() — ❌ Missing
+The previous review stated that the catalog tables were missing. That is no longer true. The current Prisma schema includes:
 
-### public.packages
-- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), NOT NULL — ❌ Missing table
-- country_id uuid NOT NULL REFERENCES public.countries(id) ON DELETE RESTRICT — ❌ Missing
-- operator_id uuid NOT NULL REFERENCES public.operators(id) ON DELETE RESTRICT — ❌ Missing
-- external_id text NOT NULL — ❌ Missing
-- name text NOT NULL — ❌ Missing
-- data_amount_mb integer — ❌ Missing
-- validity_days integer — ❌ Missing
-- is_unlimited boolean NOT NULL DEFAULT false — ❌ Missing
-- price numeric(10,2) NOT NULL — ❌ Missing
-- currency_code text DEFAULT 'USD' — ❌ Missing
-- short_info text — ❌ Missing
-- qr_installation text — ❌ Missing
-- manual_installation text — ❌ Missing
-- is_fair_usage_policy boolean — ❌ Missing
-- fair_usage_policy text — ❌ Missing
-- metadata jsonb DEFAULT '{}'::jsonb — ❌ Missing
-- created_at timestamptz NOT NULL DEFAULT now() — ❌ Missing
-- updated_at timestamptz NOT NULL DEFAULT now() — ❌ Missing
+- `countries`: Airalo country code/slug/title/image metadata.
+- `operators`: Airalo operator metadata, coverage, APN, plan type, KYC, rechargeability, roaming, image, and related fields.
+- `packages`: Airalo package identity and API fields such as `type`, `title`, `amount`, `data`, `day`, unlimited status, install instructions, fair-usage policy, voice/text, net price, retail price, and multi-currency price maps.
+- `package_state`: internal commerce and availability state, kept separate from the API-shaped package row.
+- `package_sync_pages`: one row per Airalo page response, including `links`, `meta`, `pricing`, country count, and the complete raw page payload.
 
-## SQL Migration
-```sql
--- Enable gen_random_uuid for UUID defaults (available by default on Supabase)
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+## Sync contract
 
--- Countries table
-CREATE TABLE IF NOT EXISTS public.countries (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  country_code text NOT NULL UNIQUE,
-  name text NOT NULL,
-  slug text NOT NULL UNIQUE,
-  image_url text,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+- Scheduled syncs call `GET /v2/packages` hourly.
+- The request includes `Authorization: Bearer <token>` and `Accept: application/json`.
+- Scheduled syncs intentionally use `include=topup` and `limit=100` with pagination instead of the no-limit full-catalog response. This keeps serverless memory predictable while still following the Airalo pagination contract.
+- Pagination follows `links.next`, `meta.current_page`, and `meta.last_page`; it does not infer completion from the number of countries returned.
+- Missing packages from a full unfiltered sync are marked inactive in `package_state`.
+- Every raw Airalo page response is stored in `package_sync_pages.raw_payload_json` for audit/debug replay.
 
--- Operators table
-CREATE TABLE IF NOT EXISTS public.operators (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  country_id uuid NOT NULL REFERENCES public.countries(id) ON DELETE RESTRICT,
-  name text NOT NULL,
-  api_operator_id integer,
-  operator_code text,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+## Rate limits
 
--- Packages table
-CREATE TABLE IF NOT EXISTS public.packages (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  country_id uuid NOT NULL REFERENCES public.countries(id) ON DELETE RESTRICT,
-  operator_id uuid NOT NULL REFERENCES public.operators(id) ON DELETE RESTRICT,
-  external_id text NOT NULL,
-  name text NOT NULL,
-  data_amount_mb integer,
-  validity_days integer,
-  is_unlimited boolean NOT NULL DEFAULT false,
-  price numeric(10,2) NOT NULL,
-  currency_code text DEFAULT 'USD',
-  short_info text,
-  qr_installation text,
-  manual_installation text,
-  is_fair_usage_policy boolean,
-  fair_usage_policy text,
-  metadata jsonb DEFAULT '{}'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+The local Airalo export identifies the package endpoint limit as 80 requests per minute per authentication token. Simplify keeps an internal sync pacing limit of 40 requests per minute for unattended catalog jobs. This is intentionally conservative and still far above the hourly scheduler's normal needs.
 
-```
+## Notes for future changes
+
+- Keep the Airalo API-shaped package data in `packages`; put Simplify-specific selling state in `package_state`.
+- When adding fields from the OpenAPI export, prefer first-class columns for documented package/operator fields and JSON columns for nested provider blobs.
+- Keep regression coverage for page 2+ indexed country responses, global packages with missing `country_code`, multi-currency pricing, fair-usage policies, voice/text plans, raw snapshots, and stale-package deactivation.

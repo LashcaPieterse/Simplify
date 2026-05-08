@@ -144,6 +144,7 @@ model PackageSyncPage {
   linksJson   Json?    @map("links_json")
   metaJson    Json?    @map("meta_json")
   pricingJson Json?    @map("pricing_json")
+  rawPayloadJson Json?    @map("raw_payload_json")
   countryCount Int     @map("country_count")
   capturedAt  DateTime @default(now()) @map("captured_at")
 

@@ -17,8 +17,11 @@ interface SyncLogger {
   error?: (message: string) => void;
 }
 
-const AIRALO_REQUESTS_PER_MINUTE_LIMIT = 40;
-const AIRALO_RATE_LIMIT_DELAY_MS = Math.ceil(60000 / AIRALO_REQUESTS_PER_MINUTE_LIMIT);
+// Airalo documents an 80 requests/minute package endpoint limit. Catalog sync
+// keeps a lower pacing limit because it runs unattended and does not need to
+// approach the endpoint ceiling.
+const AIRALO_SYNC_REQUESTS_PER_MINUTE_LIMIT = 40;
+const AIRALO_RATE_LIMIT_DELAY_MS = Math.ceil(60000 / AIRALO_SYNC_REQUESTS_PER_MINUTE_LIMIT);
 const CHUNK_SIZE = 500;
 
 const DEFAULT_LOGGER: Required<SyncLogger> = {
@@ -220,6 +223,49 @@ function extractEnvelope(raw: unknown): {
   return { links, meta, pricing };
 }
 
+function readObjectField(source: unknown, field: string): unknown {
+  return isObject(source) && field in source ? source[field] : null;
+}
+
+function parsePageNumber(value: unknown): number | null {
+  const parsed = parseInteger(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
+function pageFromNextLink(nextLink: unknown): number | null {
+  if (typeof nextLink !== "string" || !nextLink.trim()) {
+    return null;
+  }
+
+  try {
+    const url = new URL(nextLink, "https://partners-api.airalo.com");
+    return parsePageNumber(url.searchParams.get("page"));
+  } catch {
+    return null;
+  }
+}
+
+function resolveNextCatalogPage(envelope: { links: unknown; meta: unknown }, currentPage: number): number | null {
+  const nextLink = readObjectField(envelope.links, "next");
+  if (typeof nextLink === "string" && nextLink.trim()) {
+    const linkedPage = pageFromNextLink(nextLink);
+    return linkedPage && linkedPage > currentPage ? linkedPage : currentPage + 1;
+  }
+
+  const metaCurrentPage = parsePageNumber(readObjectField(envelope.meta, "current_page")) ?? currentPage;
+  const metaLastPage = parsePageNumber(readObjectField(envelope.meta, "last_page"));
+
+  if (metaLastPage !== null) {
+    return metaCurrentPage < metaLastPage ? metaCurrentPage + 1 : null;
+  }
+
+  if (nextLink === null && isObject(envelope.links) && "next" in envelope.links) {
+    return null;
+  }
+
+  return null;
+}
+
 function normalizePackageData(pkg: AiraloPackageNode, operatorId: string) {
   const airaloPackageId = normalizeString(pkg.id ?? pkg.slug ?? pkg.title);
   if (!airaloPackageId) {
@@ -242,8 +288,9 @@ function normalizePackageData(pkg: AiraloPackageNode, operatorId: string) {
   const netPriceResolved = resolveFirstCurrencyAmount(pkg.prices?.net_price);
   const rrpResolved = resolveFirstCurrencyAmount(pkg.prices?.recommended_retail_price);
   const fallbackPrice = parseNumber(pkg.price);
+  const directNetPrice = parseNumber((pkg as Record<string, unknown>).net_price);
 
-  const netPrice = netPriceResolved?.amount ?? null;
+  const netPrice = netPriceResolved?.amount ?? directNetPrice ?? null;
   const price = rrpResolved?.amount ?? fallbackPrice ?? netPriceResolved?.amount ?? 0;
   const currency = normalizeString(
     (pkg as Record<string, unknown>).currency,
@@ -425,6 +472,7 @@ export async function syncAiraloCatalog(
           linksJson: toPrismaJson(envelope.links),
           metaJson: toPrismaJson(envelope.meta),
           pricingJson: toPrismaJson(envelope.pricing),
+          rawPayloadJson: toPrismaJson(pageResult.rawResponse),
           countryCount: countriesPage.length,
           capturedAt: now,
         },
@@ -433,6 +481,7 @@ export async function syncAiraloCatalog(
           linksJson: toPrismaJson(envelope.links),
           metaJson: toPrismaJson(envelope.meta),
           pricingJson: toPrismaJson(envelope.pricing),
+          rawPayloadJson: toPrismaJson(pageResult.rawResponse),
           countryCount: countriesPage.length,
           capturedAt: now,
         },
@@ -652,11 +701,12 @@ export async function syncAiraloCatalog(
       }
 
       logger.info(`[airalo-sync] Fetched ${countriesPage.length} countries from page ${page}`);
-      if (countriesPage.length < limit) {
+      const nextPage = resolveNextCatalogPage(envelope, page);
+      if (nextPage === null) {
         break;
       }
 
-      page += 1;
+      page = nextPage;
       await delay(AIRALO_RATE_LIMIT_DELAY_MS);
     }
 

@@ -43,7 +43,7 @@ paths:
         - **Limit**: Set the `limit` parameter to a high value (e.g., 1,000) to
         fetch all packages in a single request without using pagination.  
 
-        - **Include Top-Up**: Use the `include:top-up` parameter to fetch eSIM
+        - **Include Top-Up**: Use the `include=topup` query parameter to fetch eSIM
         packages along with their associated top-up packages.  
 
 
@@ -86,8 +86,10 @@ paths:
 
         ### Rate-Limit Context
 
-        - The API allows up to 40 requests per minute. One request per hour is
-        far below this threshold and safe to run continuously.
+        - The browse packages endpoint allows up to 80 requests per minute per
+        unique authentication token. Simplify intentionally paces unattended
+        catalog sync below that ceiling at 40 requests per minute. One sync per
+        hour is far below the threshold and safe to run continuously.
 
 
         ### Snapshot-Based Processing

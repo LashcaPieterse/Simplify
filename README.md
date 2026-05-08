@@ -101,9 +101,11 @@ npx tsx scripts/sync-airalo-packages.ts
 ```
 
 Sync package requests default to:
-- query params: `limit`, `page` (plus optional filters/include)
+- query params: `limit=100`, `page`, and `include=topup` for scheduled syncs (plus optional filters)
 - headers: `Accept: application/json` and `Authorization: Bearer <token>`
+
+Airalo supports a single full-catalog response when no `limit` is provided, but Simplify intentionally uses paginated syncs. Paging keeps Vercel function memory predictable, preserves each raw response page for audit/debug replay, and handles Airalo's documented page 2+ indexed-country response shape. Pagination follows Airalo `links.next` / `meta.current_page` / `meta.last_page` values instead of inferring completion from country counts.
 
 If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
 
-> Recommended cadence: execute the script every 60 minutes via cron or a background worker to keep pricing and availability fresh while respecting upstream rate limits.
+> Recommended cadence: execute the script every 60 minutes via cron or a background worker. The Airalo package endpoint is documented at 80 requests/minute per token; Simplify sync paces itself at 40 requests/minute as a conservative unattended-job limit.
