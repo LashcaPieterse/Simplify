@@ -92,6 +92,8 @@ AIRALO_CLIENT_SECRET=<airalo-client-secret>
 # Optional: force credential passthrough on every /packages request.
 # The client also auto-retries with credential passthrough after an auth-rejected 401.
 AIRALO_PACKAGES_SEND_CREDENTIALS=true
+AIRALO_ASYNC_WEBHOOK_URL=https://<your-domain>/api/airalo/webhooks
+AIRALO_WEBHOOK_SECRET=<airalo-webhook-secret>
 ```
 
 Then run the sync script:
@@ -101,6 +103,7 @@ npx tsx scripts/sync-airalo-packages.ts
 ```
 
 Sync package requests default to:
+
 - query params: `limit=100`, `page`, and `include=topup` for scheduled syncs (plus optional filters)
 - headers: `Accept: application/json` and `Authorization: Bearer <token>`
 
@@ -109,5 +112,7 @@ Airalo supports a single full-catalog response when no `limit` is provided, but 
 Deploy pending Prisma migrations with `npx prisma migrate deploy` before or during production releases. If `package_sync_pages.raw_payload_json` is not present yet, the sync job will continue without raw page snapshots and log a warning until the migration is applied.
 
 If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
+
+Async order submissions send `AIRALO_ASYNC_WEBHOOK_URL` as the per-request `webhook_url`. Leave it unset only if Airalo has confirmed a dashboard-level async order webhook; in that case set `AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true` so the service can distinguish intentional global opt-in from missing configuration.
 
 > Recommended cadence: execute the script every 60 minutes via cron or a background worker. The Airalo package endpoint is documented at 80 requests/minute per token; Simplify sync paces itself at 40 requests/minute as a conservative unattended-job limit.

@@ -36,7 +36,10 @@ export function extractUsage(metadata: unknown): UsageMetadata | null {
   }
 
   const maybeContainer = (metadata as { usage?: unknown }).usage;
-  const source = typeof maybeContainer === "object" && maybeContainer !== null ? maybeContainer : metadata;
+  const source =
+    typeof maybeContainer === "object" && maybeContainer !== null
+      ? maybeContainer
+      : metadata;
 
   const usedMb =
     readNumber((source as { used_mb?: unknown }).used_mb) ??
@@ -63,18 +66,60 @@ export function extractUsage(metadata: unknown): UsageMetadata | null {
   return usage;
 }
 
+function resolveStringValue(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return null;
+}
+
+export function resolveAiraloOrderApn(
+  order: AiraloOrder | null | undefined,
+): string | null {
+  if (!order) {
+    return null;
+  }
+
+  const firstSim = Array.isArray(order.sims) ? order.sims[0] : undefined;
+  const orderRecord = order as Record<string, unknown>;
+  const firstSimRecord =
+    firstSim && typeof firstSim === "object"
+      ? (firstSim as Record<string, unknown>)
+      : null;
+
+  return (
+    resolveStringValue(orderRecord.apn) ??
+    resolveStringValue(orderRecord.apn_value) ??
+    resolveStringValue(firstSimRecord?.apn) ??
+    resolveStringValue(firstSimRecord?.apn_value)
+  );
+}
+
 export function createInstallationPayload(order: AiraloOrder): string {
   const firstSim = Array.isArray(order.sims) ? order.sims[0] : undefined;
-  const resolvedOrderId =
-    order.order_id ?? order.code ?? order.id ?? null;
+  const resolvedOrderId = order.order_id ?? order.code ?? order.id ?? null;
   const payload = {
     orderId: resolvedOrderId,
     orderReference: order.order_reference ?? null,
     iccid: order.iccid ?? firstSim?.iccid ?? null,
     activationCode: order.activation_code ?? firstSim?.activation_code ?? null,
-    qrCode: order.qr_code ?? firstSim?.qrcode ?? firstSim?.qrcode_url ?? order.qr_code_data ?? null,
+    qrCode:
+      order.qr_code ??
+      firstSim?.qrcode ??
+      firstSim?.qrcode_url ??
+      order.qr_code_data ??
+      null,
     esim: order.esim ?? firstSim?.lpa ?? null,
-    directAppleUrl: order.direct_apple_installation_url ?? firstSim?.direct_apple_installation_url ?? null,
+    directAppleUrl:
+      order.direct_apple_installation_url ??
+      firstSim?.direct_apple_installation_url ??
+      null,
+    apn: resolveAiraloOrderApn(order),
   };
 
   return JSON.stringify(payload);

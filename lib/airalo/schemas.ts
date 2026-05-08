@@ -30,9 +30,7 @@ const MultiCurrencyPriceSchema = z
   })
   .passthrough();
 
-const MultiCurrencyPricesSchema = z
-  .record(MultiCurrencyPriceSchema)
-  .optional();
+const MultiCurrencyPricesSchema = z.record(MultiCurrencyPriceSchema).optional();
 
 const CurrencyAmountMapSchema = z.record(z.coerce.number()).optional();
 
@@ -123,7 +121,10 @@ export const PackageSchema = z
     smdp_address: z.string().optional(),
     iccid: z.string().optional(),
     activation_code: z.string().optional(),
-    top_up_parent_package_id: z.union([z.string(), z.number()]).transform(String).optional(),
+    top_up_parent_package_id: z
+      .union([z.string(), z.number()])
+      .transform(String)
+      .optional(),
     net_prices: MultiCurrencyPricesSchema,
     recommended_retail_prices: MultiCurrencyPricesSchema,
   })
@@ -155,7 +156,10 @@ const PaginationMetaSchema = z
 
 const PackagesArraySchema = z.array(PackageSchema);
 const PackagesIndexSchema = z.record(PackagesArraySchema);
-export const LegacyPackagesDataSchema = z.union([PackagesArraySchema, PackagesIndexSchema]);
+export const LegacyPackagesDataSchema = z.union([
+  PackagesArraySchema,
+  PackagesIndexSchema,
+]);
 
 export const PackagesResponseSchema = BaseResponseSchema.extend({
   data: LegacyPackagesDataSchema,
@@ -181,10 +185,22 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
     .object({
       // Airalo has shipped multiple response shapes; accept both the classic webhook-style payload
       // and the richer synchronous /orders response with SIM details.
-      order_id: z.union([z.string(), z.number(), z.null()]).transform((value) => (value == null ? undefined : String(value))).optional(),
-      id: z.union([z.string(), z.number(), z.null()]).transform((value) => (value == null ? undefined : String(value))).optional(),
-      code: z.union([z.string(), z.number(), z.null()]).transform((value) => (value == null ? undefined : String(value))).optional(),
-      package_id: z.union([z.string(), z.number(), z.null()]).transform((value) => (value == null ? undefined : String(value))).optional(),
+      order_id: z
+        .union([z.string(), z.number(), z.null()])
+        .transform((value) => (value == null ? undefined : String(value)))
+        .optional(),
+      id: z
+        .union([z.string(), z.number(), z.null()])
+        .transform((value) => (value == null ? undefined : String(value)))
+        .optional(),
+      code: z
+        .union([z.string(), z.number(), z.null()])
+        .transform((value) => (value == null ? undefined : String(value)))
+        .optional(),
+      package_id: z
+        .union([z.string(), z.number(), z.null()])
+        .transform((value) => (value == null ? undefined : String(value)))
+        .optional(),
       status: z.string().nullable().optional(),
       qr_code: z.string().nullable().optional(),
       qr_code_data: z.string().nullable().optional(),
@@ -193,10 +209,19 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
       iccid: z.string().nullable().optional(),
       esim: z.string().nullable().optional(),
       order_reference: z.string().nullable().optional(),
-      top_up_parent_package_id: z.union([z.string(), z.number(), z.null()]).transform((value) => (value == null ? undefined : String(value))).optional(),
+      top_up_parent_package_id: z
+        .union([z.string(), z.number(), z.null()])
+        .transform((value) => (value == null ? undefined : String(value)))
+        .optional(),
       manual_installation: z.string().nullable().optional(),
       qrcode_installation: z.string().nullable().optional(),
       direct_apple_installation_url: z.string().nullable().optional(),
+      apn: z.string().nullable().optional(),
+      apn_type: z.string().nullable().optional(),
+      apn_value: z.string().nullable().optional(),
+      net_price: z.union([z.string(), z.number(), z.null()]).optional(),
+      voice: z.union([z.string(), z.number(), z.null()]).optional(),
+      text: z.union([z.string(), z.number(), z.null()]).optional(),
       sims: z
         .array(
           z
@@ -208,8 +233,12 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
               lpa: z.string().nullable().optional(),
               matching_id: z.string().nullable().optional(),
               activation_code: z.string().nullable().optional(),
+              apn: z.string().nullable().optional(),
               apn_type: z.string().nullable().optional(),
               apn_value: z.string().nullable().optional(),
+              net_price: z.union([z.string(), z.number(), z.null()]).optional(),
+              voice: z.union([z.string(), z.number(), z.null()]).optional(),
+              text: z.union([z.string(), z.number(), z.null()]).optional(),
               is_roaming: z.boolean().nullable().optional(),
             })
             .passthrough(),
@@ -236,7 +265,9 @@ export const SubmitOrderAsyncResponseSchema = BaseResponseSchema.extend({
     .passthrough(),
 });
 
-export type SubmitOrderAsyncResponse = z.infer<typeof SubmitOrderAsyncResponseSchema>;
+export type SubmitOrderAsyncResponse = z.infer<
+  typeof SubmitOrderAsyncResponseSchema
+>;
 export type SubmitOrderAsyncAck = SubmitOrderAsyncResponse["data"];
 
 const UsageMetricSchema = z
@@ -275,9 +306,14 @@ export const WebhookPayloadSchema = z
         order_id: z.union([z.string(), z.number()]).transform(String),
         status: z.string(),
         previous_status: z.string().optional(),
-        package_id: z.union([z.string(), z.number()]).transform(String).optional(),
+        package_id: z
+          .union([z.string(), z.number()])
+          .transform(String)
+          .optional(),
         iccid: z.string().optional(),
         reference: z.string().optional(),
+        request_id: z.string().optional(),
+        requestId: z.string().optional(),
         metadata: z.record(z.unknown()).optional(),
       })
       .passthrough(),
@@ -338,23 +374,28 @@ export const InstallationInstructionsSchema = z
   })
   .passthrough();
 
-export const SimInstallationInstructionsResponseSchema = BaseResponseSchema.extend({
-  data: z.object({
-    instructions: InstallationInstructionsSchema,
-    share: InstallationShareSchema.nullable().optional(),
-  }),
-});
+export const SimInstallationInstructionsResponseSchema =
+  BaseResponseSchema.extend({
+    data: z.object({
+      instructions: InstallationInstructionsSchema,
+      share: InstallationShareSchema.nullable().optional(),
+    }),
+  });
 
 export type PlatformInstallationInstructions = z.infer<
   typeof PlatformInstallationInstructionsSchema
 >;
-export type InstallationInstructions = z.infer<typeof InstallationInstructionsSchema>;
+export type InstallationInstructions = z.infer<
+  typeof InstallationInstructionsSchema
+>;
 export type SimInstallationInstructionsResponse = z.infer<
   typeof SimInstallationInstructionsResponseSchema
 >;
 export type SimInstallationInstructionsPayload =
   SimInstallationInstructionsResponse["data"];
-export type InstallationStepDictionary = z.infer<typeof InstallationStepsSchema>;
+export type InstallationStepDictionary = z.infer<
+  typeof InstallationStepsSchema
+>;
 
 const SimStatusSchema = z
   .object({

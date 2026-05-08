@@ -6,9 +6,32 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/db/client";
 import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
 import { logOrderError, logOrderInfo } from "@/lib/observability/logging";
-import { recordRateLimit, recordWebhookMetrics } from "@/lib/observability/metrics";
-import { WebhookPayloadSchema, type WebhookPayload } from "@/lib/airalo/schemas";
-import { extractActivationCode, extractUsage } from "@/lib/orders/airalo-metadata";
+import {
+  recordRateLimit,
+  recordWebhookMetrics,
+} from "@/lib/observability/metrics";
+import {
+  WebhookPayloadSchema,
+  type WebhookPayload,
+} from "@/lib/airalo/schemas";
+import {
+  extractActivationCode,
+  extractUsage,
+} from "@/lib/orders/airalo-metadata";
+import {
+  buildWebhookOrderClauses,
+  resolveWebhookRequestId,
+} from "@/lib/orders/webhook-matching";
+
+function toPrismaJson(
+  value: unknown,
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (value === null || value === undefined) {
+    return Prisma.JsonNull;
+  }
+
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 function decodeSignature(signature: string): Buffer | null {
   const trimmed = signature.trim();
@@ -29,7 +52,11 @@ function decodeSignature(signature: string): Buffer | null {
   }
 }
 
-function isValidSignature(body: string, signature: string | null, secret: string): boolean {
+function isValidSignature(
+  body: string,
+  signature: string | null,
+  secret: string,
+): boolean {
   if (!signature) {
     return false;
   }
@@ -48,7 +75,11 @@ function isValidSignature(body: string, signature: string | null, secret: string
   return timingSafeEqual(provided, expected);
 }
 
-function resolveEventId(headers: Headers, payload: WebhookPayload, rawBody: string): string {
+function resolveEventId(
+  headers: Headers,
+  payload: WebhookPayload,
+  rawBody: string,
+): string {
   const headerId =
     headers.get("x-airalo-event-id") ??
     headers.get("x-airalo-request-id") ??
@@ -59,12 +90,15 @@ function resolveEventId(headers: Headers, payload: WebhookPayload, rawBody: stri
   }
 
   const composite = [
-    payload.data.reference,
+    resolveWebhookRequestId(payload.data),
     payload.event,
     payload.data.order_id,
     payload.timestamp,
   ]
-    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .filter(
+      (part): part is string =>
+        typeof part === "string" && part.trim().length > 0,
+    )
     .join(":");
 
   if (composite.trim()) {
@@ -74,26 +108,62 @@ function resolveEventId(headers: Headers, payload: WebhookPayload, rawBody: stri
   return createHash("sha256").update(rawBody).digest("hex");
 }
 
+async function recordWebhookSnapshot({
+  tx,
+  orderId,
+  payload,
+}: {
+  tx: Prisma.TransactionClient;
+  orderId: string | null;
+  payload: WebhookPayload;
+}): Promise<void> {
+  await tx.airaloOrderSnapshot.create({
+    data: {
+      orderId,
+      source: "webhook",
+      requestId: resolveWebhookRequestId(payload.data),
+      orderNumber: payload.data.order_id,
+      rawPayloadJson: toPrismaJson(payload),
+    },
+  });
+}
+
 export async function POST(request: Request) {
   const secret = process.env.AIRALO_WEBHOOK_SECRET;
   if (!secret) {
     logOrderError("webhook.secret.missing");
-    return NextResponse.json({ message: "Webhook secret is not configured." }, { status: 500 });
+    return NextResponse.json(
+      { message: "Webhook secret is not configured." },
+      { status: 500 },
+    );
   }
 
   const rawBody = await request.text();
   const signature = request.headers.get("x-airalo-signature");
 
   if (!isValidSignature(rawBody, signature, secret)) {
-    recordWebhookMetrics({ eventType: "unknown", result: "rejected", durationMs: 0, reason: "invalid_signature" });
-    return NextResponse.json({ message: "Invalid signature." }, { status: 401 });
+    recordWebhookMetrics({
+      eventType: "unknown",
+      result: "rejected",
+      durationMs: 0,
+      reason: "invalid_signature",
+    });
+    return NextResponse.json(
+      { message: "Invalid signature." },
+      { status: 401 },
+    );
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawBody);
   } catch {
-    recordWebhookMetrics({ eventType: "unknown", result: "rejected", durationMs: 0, reason: "invalid_json" });
+    recordWebhookMetrics({
+      eventType: "unknown",
+      result: "rejected",
+      durationMs: 0,
+      reason: "invalid_json",
+    });
     return jsonInvalidJson();
   }
 
@@ -122,13 +192,7 @@ export async function POST(request: Request) {
         return { status: "duplicate" as const };
       }
 
-      const orderClauses: Prisma.EsimOrderWhereInput[] = [
-        { orderNumber: payload.data.order_id },
-      ];
-
-      if (payload.data.reference) {
-        orderClauses.push({ requestId: payload.data.reference });
-      }
+      const orderClauses = buildWebhookOrderClauses(payload.data);
 
       const order = await tx.esimOrder.findFirst({
         where: { OR: orderClauses },
@@ -167,8 +231,9 @@ export async function POST(request: Request) {
           updateData.orderNumber = payload.data.order_id;
         }
 
-        if (!order.requestId && payload.data.reference) {
-          updateData.requestId = payload.data.reference;
+        const requestId = resolveWebhookRequestId(payload.data);
+        if (!order.requestId && requestId) {
+          updateData.requestId = requestId;
         }
 
         await tx.esimOrder.update({
@@ -211,6 +276,12 @@ export async function POST(request: Request) {
           });
         }
       }
+
+      await recordWebhookSnapshot({
+        tx,
+        orderId: order?.id ?? null,
+        payload,
+      });
 
       await tx.webhookEvent.update({
         where: { id: eventRecord.id },
@@ -293,14 +364,27 @@ export async function POST(request: Request) {
       reason: "processing_failed",
     });
 
-    return NextResponse.json({ message: "Failed to process webhook." }, { status: 500 });
+    return NextResponse.json(
+      { message: "Failed to process webhook." },
+      { status: 500 },
+    );
   }
 }
 
-function isWebhookDuplicateError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+function isWebhookDuplicateError(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
 }
 
-function isPrismaRetryableTransactionError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+function isPrismaRetryableTransactionError(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2034"
+  );
 }

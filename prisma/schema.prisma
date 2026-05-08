@@ -8,13 +8,13 @@ datasource db {
 }
 
 model Country {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  countryCode String    @unique @map("country_code")
-  slug        String    @unique
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  countryCode String     @unique @map("country_code")
+  slug        String     @unique
   title       String
-  imageJson   Json?     @map("image_json")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
+  imageJson   Json?      @map("image_json")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at")
   operators   Operator[]
 
   @@map("countries")
@@ -57,29 +57,29 @@ model Operator {
 }
 
 model Package {
-  id                           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  operator                     Operator     @relation(fields: [operatorId], references: [id], onDelete: Restrict)
-  operatorId                   String       @map("operator_id") @db.Uuid
-  airaloPackageId              String       @unique @map("airalo_package_id")
+  id                           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  operator                     Operator          @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  operatorId                   String            @map("operator_id") @db.Uuid
+  airaloPackageId              String            @unique @map("airalo_package_id")
   type                         String
   title                        String
   amount                       Int
   data                         String
   day                          Int
-  isUnlimited                  Boolean      @default(false) @map("is_unlimited")
-  manualInstallation           String       @map("manual_installation")
-  qrInstallation               String       @map("qr_installation")
-  isFairUsagePolicy            Boolean?     @map("is_fair_usage_policy")
-  fairUsagePolicy              String?      @map("fair_usage_policy")
-  netPrice                     Decimal?     @db.Decimal(12, 4) @map("net_price")
-  price                        Decimal      @db.Decimal(12, 4)
-  pricesNetPrice               Json?        @map("prices_net_price")
-  pricesRecommendedRetailPrice Json?        @map("prices_recommended_retail_price")
-  shortInfo                    String?      @map("short_info")
+  isUnlimited                  Boolean           @default(false) @map("is_unlimited")
+  manualInstallation           String            @map("manual_installation")
+  qrInstallation               String            @map("qr_installation")
+  isFairUsagePolicy            Boolean?          @map("is_fair_usage_policy")
+  fairUsagePolicy              String?           @map("fair_usage_policy")
+  netPrice                     Decimal?          @map("net_price") @db.Decimal(12, 4)
+  price                        Decimal           @db.Decimal(12, 4)
+  pricesNetPrice               Json?             @map("prices_net_price")
+  pricesRecommendedRetailPrice Json?             @map("prices_recommended_retail_price")
+  shortInfo                    String?           @map("short_info")
   text                         Int?
   voice                        Int?
-  createdAt                    DateTime     @default(now()) @map("created_at")
-  updatedAt                    DateTime     @default(now()) @updatedAt @map("updated_at")
+  createdAt                    DateTime          @default(now()) @map("created_at")
+  updatedAt                    DateTime          @default(now()) @updatedAt @map("updated_at")
   state                        PackageState?
   esimOrders                   EsimOrder[]
   checkoutSessions             CheckoutSession[]
@@ -89,19 +89,19 @@ model Package {
 }
 
 model PackageState {
-  package             Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  packageId           String    @id @map("package_id") @db.Uuid
-  isActive            Boolean   @default(true) @map("is_active")
-  deactivatedAt       DateTime? @map("deactivated_at")
-  basePriceCents      Int       @default(0) @map("base_price_cents")
-  sellingPriceCents   Int?      @map("selling_price_cents")
-  currencyCode        String    @default("USD") @map("currency_code")
-  sourcePriceDecimal  Decimal?  @db.Decimal(12, 4) @map("source_price_decimal")
-  sellPriceDecimal    Decimal?  @db.Decimal(12, 4) @map("sell_price_decimal")
-  lastSyncedAt        DateTime? @map("last_synced_at")
-  sourceHash          String?   @map("source_hash")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at")
+  package            Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageId          String    @id @map("package_id") @db.Uuid
+  isActive           Boolean   @default(true) @map("is_active")
+  deactivatedAt      DateTime? @map("deactivated_at")
+  basePriceCents     Int       @default(0) @map("base_price_cents")
+  sellingPriceCents  Int?      @map("selling_price_cents")
+  currencyCode       String    @default("USD") @map("currency_code")
+  sourcePriceDecimal Decimal?  @map("source_price_decimal") @db.Decimal(12, 4)
+  sellPriceDecimal   Decimal?  @map("sell_price_decimal") @db.Decimal(12, 4)
+  lastSyncedAt       DateTime? @map("last_synced_at")
+  sourceHash         String?   @map("source_hash")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
 
   @@index([isActive])
   @@index([lastSyncedAt])
@@ -109,26 +109,26 @@ model PackageState {
 }
 
 model SyncRun {
-  id             String         @id @default(cuid())
-  startedAt      DateTime       @default(now()) @map("started_at")
-  finishedAt     DateTime?      @map("finished_at")
-  status         String
-  source         String         @default("airalo")
-  triggeredBy    String         @default("system") @map("triggered_by")
-  version        String?
-  notes          String?
-  errorSummary   String?        @map("error_summary")
-  insertedCount  Int            @default(0) @map("inserted_count")
-  updatedCount   Int            @default(0) @map("updated_count")
-  skippedCount   Int            @default(0) @map("skipped_count")
-  warningCount   Int            @default(0) @map("warning_count")
-  failureCount   Int            @default(0) @map("failure_count")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  items          SyncRunItem[]
-  snapshots      EntitySnapshot[]
-  pricingAudits  PricingAudit[]
-  packagePages   PackageSyncPage[]
+  id            String            @id @default(cuid())
+  startedAt     DateTime          @default(now()) @map("started_at")
+  finishedAt    DateTime?         @map("finished_at")
+  status        String
+  source        String            @default("airalo")
+  triggeredBy   String            @default("system") @map("triggered_by")
+  version       String?
+  notes         String?
+  errorSummary  String?           @map("error_summary")
+  insertedCount Int               @default(0) @map("inserted_count")
+  updatedCount  Int               @default(0) @map("updated_count")
+  skippedCount  Int               @default(0) @map("skipped_count")
+  warningCount  Int               @default(0) @map("warning_count")
+  failureCount  Int               @default(0) @map("failure_count")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  items         SyncRunItem[]
+  snapshots     EntitySnapshot[]
+  pricingAudits PricingAudit[]
+  packagePages  PackageSyncPage[]
 
   @@index([startedAt])
   @@index([status])
@@ -136,17 +136,17 @@ model SyncRun {
 }
 
 model PackageSyncPage {
-  id          String   @id @default(cuid())
-  run         SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
-  runId       String   @map("run_id")
-  page        Int
-  limit       Int
-  linksJson   Json?    @map("links_json")
-  metaJson    Json?    @map("meta_json")
-  pricingJson Json?    @map("pricing_json")
+  id             String   @id @default(cuid())
+  run            SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId          String   @map("run_id")
+  page           Int
+  limit          Int
+  linksJson      Json?    @map("links_json")
+  metaJson       Json?    @map("meta_json")
+  pricingJson    Json?    @map("pricing_json")
   rawPayloadJson Json?    @map("raw_payload_json")
-  countryCount Int     @map("country_count")
-  capturedAt  DateTime @default(now()) @map("captured_at")
+  countryCount   Int      @map("country_count")
+  capturedAt     DateTime @default(now()) @map("captured_at")
 
   @@unique([runId, page])
   @@index([capturedAt])
@@ -167,9 +167,9 @@ model SyncRunItem {
   errorText    String?  @map("error_text")
   createdAt    DateTime @default(now()) @map("created_at")
 
+  @@unique([runId, entityType, entityKey])
   @@index([runId, entityType])
   @@index([entityType, entityKey])
-  @@unique([runId, entityType, entityKey])
   @@map("sync_run_items")
 }
 
@@ -193,12 +193,12 @@ model PricingAudit {
   packageAiraloId String    @map("package_airalo_id")
   run             SyncRun?  @relation(fields: [runId], references: [id], onDelete: SetNull)
   runId           String?   @map("run_id")
-  sourcePrice     Decimal   @db.Decimal(12, 4) @map("source_price")
-  dbPrice         Decimal?  @db.Decimal(12, 4) @map("db_price")
-  publishedPrice  Decimal?  @db.Decimal(12, 4) @map("published_price")
+  sourcePrice     Decimal   @map("source_price") @db.Decimal(12, 4)
+  dbPrice         Decimal?  @map("db_price") @db.Decimal(12, 4)
+  publishedPrice  Decimal?  @map("published_price") @db.Decimal(12, 4)
   currency        String
-  deltaAbs        Decimal   @db.Decimal(12, 4) @map("delta_abs")
-  deltaPct        Decimal   @db.Decimal(8, 4) @map("delta_pct")
+  deltaAbs        Decimal   @map("delta_abs") @db.Decimal(12, 4)
+  deltaPct        Decimal   @map("delta_pct") @db.Decimal(8, 4)
   severity        String
   status          String    @default("open")
   resolutionNotes String?   @map("resolution_notes")
@@ -214,12 +214,12 @@ model PricingAudit {
 }
 
 model PublishingState {
-  packageAiraloId   String   @id @map("package_airalo_id")
-  sanityDocumentId  String?  @map("sanity_document_id")
+  packageAiraloId   String    @id @map("package_airalo_id")
+  sanityDocumentId  String?   @map("sanity_document_id")
   publishedAt       DateTime? @map("published_at")
-  publishedPrice    Decimal? @db.Decimal(12, 4) @map("published_price")
-  publishedCurrency String?  @map("published_currency")
-  lastSeenAt        DateTime @default(now()) @map("last_seen_at")
+  publishedPrice    Decimal?  @map("published_price") @db.Decimal(12, 4)
+  publishedCurrency String?   @map("published_currency")
+  lastSeenAt        DateTime  @default(now()) @map("last_seen_at")
 
   @@index([lastSeenAt])
   @@map("publishing_state")
@@ -249,6 +249,7 @@ model EsimOrder {
   receiptEmail         String?                    @map("receipt_email")
   receiptSentAt        DateTime?                  @map("receipt_sent_at")
   recoveryAttempts     EsimOrderRecoveryAttempt[]
+  airaloSnapshots      AiraloOrderSnapshot[]
 }
 
 model EsimProfile {
@@ -290,6 +291,23 @@ model WebhookEvent {
   payload     String
   createdAt   DateTime   @default(now())
   processedAt DateTime?
+}
+
+model AiraloOrderSnapshot {
+  id             String     @id @default(cuid())
+  order          EsimOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId        String?    @map("order_id")
+  source         String
+  requestId      String?    @map("request_id")
+  orderNumber    String?    @map("order_number")
+  rawPayloadJson Json       @map("raw_payload_json")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([requestId])
+  @@index([orderNumber])
+  @@index([source, createdAt])
+  @@map("airalo_order_snapshots")
 }
 
 model EsimOrderRecoveryAttempt {
@@ -371,40 +389,40 @@ model AiraloAccessToken {
 }
 
 model AdminUser {
-  id           String        @id @default(cuid())
-  email        String        @unique
+  id           String     @id @default(cuid())
+  email        String     @unique
   passwordHash String
   name         String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   auditLogs    AuditLog[]
 }
 
 model SyncJob {
-  id               String          @id @default(cuid())
-  status           String          @default("pending")
-  startedAt        DateTime        @default(now())
+  id               String    @id @default(cuid())
+  status           String    @default("pending")
+  startedAt        DateTime  @default(now())
   finishedAt       DateTime?
-  itemsCreated     Int             @default(0)
-  itemsUpdated     Int             @default(0)
-  itemsDeactivated Int             @default(0)
+  itemsCreated     Int       @default(0)
+  itemsUpdated     Int       @default(0)
+  itemsDeactivated Int       @default(0)
   diffPreview      String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model User {
-  id         String               @id @default(cuid())
-  email      String               @unique
-  name       String?
-  phone      String?
-  passwordHash String?            @map("password_hash")
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  checkouts  CheckoutSession[]
-  orders     EsimOrder[]
-  payments   PaymentTransaction[]
-  identities UserIdentity[]
+  id           String               @id @default(cuid())
+  email        String               @unique
+  name         String?
+  phone        String?
+  passwordHash String?              @map("password_hash")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  checkouts    CheckoutSession[]
+  orders       EsimOrder[]
+  payments     PaymentTransaction[]
+  identities   UserIdentity[]
 }
 
 model UserIdentity {
@@ -430,7 +448,7 @@ model UserIdentity {
 
 model VerificationToken {
   identifier String
-  token      String  @unique
+  token      String   @unique
   expires    DateTime
 
   @@id([identifier, token])

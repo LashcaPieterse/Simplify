@@ -59,8 +59,14 @@ function authHeader(init?: RequestInit): string | null {
     return null;
   }
 
-  const headers = init.headers instanceof Headers ? init.headers : new Headers(init.headers);
+  const headers =
+    init.headers instanceof Headers ? init.headers : new Headers(init.headers);
   return headers.get("Authorization");
+}
+
+function requireFormData(value: FormData | null): FormData {
+  assert.ok(value, "orders-async request should include FormData body");
+  return value;
 }
 
 test("AiraloClient clears the cached token and retries once after a 401", async () => {
@@ -87,7 +93,13 @@ test("AiraloClient clears the cached token and retries once after a 401", async 
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -105,9 +117,17 @@ test("AiraloClient clears the cached token and retries once after a 401", async 
 
   const packages = await client.getPackages();
 
-  assert.equal(packageCalls, 2, "should retry the packages request exactly once");
+  assert.equal(
+    packageCalls,
+    2,
+    "should retry the packages request exactly once",
+  );
   assert.deepEqual(packages, []);
-  assert.equal(tokenCache.clearCount, 2, "should clear once on auth failure and once for forced refresh");
+  assert.equal(
+    tokenCache.clearCount,
+    2,
+    "should clear once on auth failure and once for forced refresh",
+  );
   assert.deepEqual(authHeaders, ["Bearer stale-token", "Bearer fresh-token"]);
 });
 
@@ -127,7 +147,13 @@ test("AiraloClient reuses a cached token for /packages requests", async () => {
     if (target.endsWith("/token")) {
       tokenCalls += 1;
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -152,7 +178,11 @@ test("AiraloClient reuses a cached token for /packages requests", async () => {
   await client.getPackages();
 
   assert.equal(packageCalls, 1);
-  assert.equal(tokenCalls, 0, "should not hit /token when a valid cached token exists");
+  assert.equal(
+    tokenCalls,
+    0,
+    "should not hit /token when a valid cached token exists",
+  );
   assert.equal(capturedAuthHeader, "Bearer cached-token");
 });
 
@@ -167,7 +197,13 @@ test("AiraloClient appends /v2 when base URL is configured as the root host", as
     if (target.endsWith("/token")) {
       tokenUrl = target;
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -203,7 +239,13 @@ test("AiraloClient honors the token_type returned by the token endpoint", async 
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Token" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "Token",
+          },
+        },
         { status: 200 },
       );
     }
@@ -238,7 +280,13 @@ test("AiraloClient normalizes bearer token_type casing", async () => {
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -293,7 +341,13 @@ test("AiraloClient retries with alternate bearer casing after a second 401", asy
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -312,8 +366,16 @@ test("AiraloClient retries with alternate bearer casing after a second 401", asy
   const packages = await client.getPackages();
 
   assert.deepEqual(packages, []);
-  assert.equal(packageCalls, 3, "should attempt stale token, refreshed token, then alternate casing");
-  assert.equal(tokenCache.clearCount, 3, "should clear on auth failure and before each forced refresh");
+  assert.equal(
+    packageCalls,
+    3,
+    "should attempt stale token, refreshed token, then alternate casing",
+  );
+  assert.equal(
+    tokenCache.clearCount,
+    3,
+    "should clear on auth failure and before each forced refresh",
+  );
   assert.deepEqual(authHeaders, [
     "Bearer stale-token",
     "Bearer fresh-token",
@@ -366,8 +428,16 @@ test("AiraloClient surfaces an AiraloError when retries are exhausted", async ()
     return true;
   });
 
-  assert.equal(packageCalls, 4, "should stop after stale token retry, alternate casing retry, and final retry");
-  assert.equal(tokenCache.clearCount, 5, "should clear on auth retries and before each forced refresh");
+  assert.equal(
+    packageCalls,
+    4,
+    "should stop after stale token retry, alternate casing retry, and final retry",
+  );
+  assert.equal(
+    tokenCache.clearCount,
+    5,
+    "should clear on auth retries and before each forced refresh",
+  );
 });
 
 test("AiraloClient retries retriable 422 maintenance errors", async () => {
@@ -401,7 +471,13 @@ test("AiraloClient retries retriable 422 maintenance errors", async () => {
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -419,7 +495,11 @@ test("AiraloClient retries retriable 422 maintenance errors", async () => {
 
   const packages = await client.getPackages();
   assert.deepEqual(packages, []);
-  assert.equal(packageCalls, 2, "should retry after a retriable 422 maintenance error");
+  assert.equal(
+    packageCalls,
+    2,
+    "should retry after a retriable 422 maintenance error",
+  );
 });
 
 test("AiraloClient does not retry non-retriable 422 checksum errors", async () => {
@@ -448,7 +528,13 @@ test("AiraloClient does not retry non-retriable 422 checksum errors", async () =
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -670,7 +756,11 @@ test("AiraloClient getPackagesTreePageRaw returns parsed countries and preserves
     tokenCache,
   });
 
-  const page = await client.getPackagesTreePageRaw({ limit: 100, page: 1, includeTopUp: true });
+  const page = await client.getPackagesTreePageRaw({
+    limit: 100,
+    page: 1,
+    includeTopUp: true,
+  });
   assert.equal(page.countries.length, 1);
   assert.equal(page.countries[0]?.country_code, "US");
   assert.deepEqual(page.rawResponse, rawResponse);
@@ -688,7 +778,13 @@ test("AiraloClient getPackagesTreePageRaw supports root-level country arrays", a
           {
             country_code: "ZA",
             title: "South Africa",
-            operators: [{ id: 22, operator_code: "mtn", packages: [{ id: 3001, title: "ZA 2GB" }] }],
+            operators: [
+              {
+                id: 22,
+                operator_code: "mtn",
+                packages: [{ id: 3001, title: "ZA 2GB" }],
+              },
+            ],
           },
         ],
         { status: 200 },
@@ -697,7 +793,13 @@ test("AiraloClient getPackagesTreePageRaw supports root-level country arrays", a
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -747,7 +849,13 @@ test("AiraloClient getPackagesTreePageRaw supports indexed country objects", asy
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -786,8 +894,20 @@ test("AiraloClient getPackages flattens indexed country objects without dropping
                   id: 41,
                   operator_code: "mtn-ng",
                   packages: [
-                    { id: "ng-1gb", title: "NG 1GB", price: 3, day: 7, data: "1 GB" },
-                    { id: "ng-3gb", title: "NG 3GB", price: 8, day: 30, data: "3 GB" },
+                    {
+                      id: "ng-1gb",
+                      title: "NG 1GB",
+                      price: 3,
+                      day: 7,
+                      data: "1 GB",
+                    },
+                    {
+                      id: "ng-3gb",
+                      title: "NG 3GB",
+                      price: 8,
+                      day: 30,
+                      data: "3 GB",
+                    },
                   ],
                 },
               ],
@@ -800,7 +920,13 @@ test("AiraloClient getPackages flattens indexed country objects without dropping
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -834,7 +960,13 @@ test("AiraloClient getPackages throws on invalid package payload shape", async (
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -852,7 +984,10 @@ test("AiraloClient getPackages throws on invalid package payload shape", async (
 
   await assert.rejects(client.getPackages(), (error: unknown) => {
     assert(error instanceof Error);
-    assert.match(error.message, /Invalid input|Unexpected Airalo response shape/);
+    assert.match(
+      error.message,
+      /Invalid input|Unexpected Airalo response shape/,
+    );
     return true;
   });
 });
@@ -904,7 +1039,13 @@ test("AiraloClient getPackagesResponse validates documented list-packages payloa
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -926,10 +1067,6 @@ test("AiraloClient getPackagesResponse validates documented list-packages payloa
   assert.equal(response.pricing?.model, "default");
 });
 
-
-
-
-
 test("AiraloClient retries package sync with client credentials after auth-rejected 401", async () => {
   const tokenCache = new MockTokenCache({
     token: "stale-token",
@@ -945,7 +1082,10 @@ test("AiraloClient retries package sync with client credentials after auth-rejec
     if (target.includes("packages")) {
       packageCalls += 1;
       requestedUrls.push(target);
-      const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+      const headers =
+        init?.headers instanceof Headers
+          ? init.headers
+          : new Headers(init?.headers);
       packageRequestCronHeaders.push(headers.get("x-airalo-sync-key"));
 
       if (packageCalls === 1) {
@@ -966,7 +1106,13 @@ test("AiraloClient retries package sync with client credentials after auth-rejec
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -1012,7 +1158,13 @@ test("AiraloClient can include client credentials on package requests when enabl
 
     if (target.endsWith("/token")) {
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "Bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "Bearer",
+          },
+        },
         { status: 200 },
       );
     }
@@ -1036,6 +1188,67 @@ test("AiraloClient can include client credentials on package requests when enabl
   assert.equal(url.searchParams.get("client_id"), "client-id");
   assert.equal(url.searchParams.get("client_secret"), "client-secret");
 });
+
+test("AiraloClient sends /orders-async as multipart form fields", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let capturedForm: FormData | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/orders-async")) {
+      assert.ok(init?.body instanceof FormData);
+      capturedForm = init.body;
+      return jsonResponse(
+        {
+          data: {
+            request_id: "req_123",
+            accepted_at: "2026-05-09T10:00:00Z",
+          },
+          meta: { message: "success" },
+        },
+        { status: 202 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const response = await client.createOrderAsyncResponse({
+    package_id: "pkg-test",
+    quantity: "2",
+    type: "sim",
+    description: "2 x Test plan",
+    webhook_url: "https://example.com/api/airalo/webhooks",
+    to_email: "customer@example.com",
+    "sharing_option[]": ["link", "pdf"],
+  });
+
+  assert.equal(response.data.request_id, "req_123");
+  const form = requireFormData(capturedForm);
+  assert.equal(form.get("package_id"), "pkg-test");
+  assert.equal(form.get("quantity"), "2");
+  assert.equal(form.get("type"), "sim");
+  assert.equal(form.get("description"), "2 x Test plan");
+  assert.equal(
+    form.get("webhook_url"),
+    "https://example.com/api/airalo/webhooks",
+  );
+  assert.equal(form.get("to_email"), "customer@example.com");
+  assert.deepEqual(form.getAll("sharing_option[]"), ["link", "pdf"]);
+});
 const hasLiveAiraloCredentials = Boolean(
   process.env.AIRALO_CLIENT_ID && process.env.AIRALO_CLIENT_SECRET,
 );
@@ -1047,8 +1260,14 @@ test(
     const clientId = process.env.AIRALO_CLIENT_ID;
     const clientSecret = process.env.AIRALO_CLIENT_SECRET;
 
-    assert.ok(clientId, "AIRALO_CLIENT_ID must be set for live Airalo API tests");
-    assert.ok(clientSecret, "AIRALO_CLIENT_SECRET must be set for live Airalo API tests");
+    assert.ok(
+      clientId,
+      "AIRALO_CLIENT_ID must be set for live Airalo API tests",
+    );
+    assert.ok(
+      clientSecret,
+      "AIRALO_CLIENT_SECRET must be set for live Airalo API tests",
+    );
 
     const client = createTestClient({
       clientId,
@@ -1058,11 +1277,13 @@ test(
     const packages = await client.getPackages({ limit: 1 });
 
     assert.ok(Array.isArray(packages));
-    assert.ok(packages.length > 0, "live Airalo API should return at least one package");
+    assert.ok(
+      packages.length > 0,
+      "live Airalo API should return at least one package",
+    );
     assert.ok(packages[0]?.id, "returned package should include an id");
   },
 );
-
 
 test("AiraloClient sends OAuth token requests as form-urlencoded", async () => {
   const tokenCache = new MockTokenCache();
@@ -1073,11 +1294,23 @@ test("AiraloClient sends OAuth token requests as form-urlencoded", async () => {
     const target = typeof url === "string" ? url : url.toString();
 
     if (target.endsWith("/token")) {
-      const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers);
+      const headers =
+        init?.headers instanceof Headers
+          ? init.headers
+          : new Headers(init?.headers);
       tokenContentType = headers.get("Content-Type");
-      tokenBody = init?.body instanceof URLSearchParams ? init.body.toString() : String(init?.body ?? "");
+      tokenBody =
+        init?.body instanceof URLSearchParams
+          ? init.body.toString()
+          : String(init?.body ?? "");
       return jsonResponse(
-        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        {
+          data: {
+            access_token: "fresh-token",
+            expires_in: 3600,
+            token_type: "bearer",
+          },
+        },
         { status: 200 },
       );
     }

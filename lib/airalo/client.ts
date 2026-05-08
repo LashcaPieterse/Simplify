@@ -24,9 +24,7 @@ import {
   recordRateLimit,
   recordTokenRefresh,
 } from "../observability/metrics";
-import {
-  classifyAiraloError,
-} from "./errors";
+import { classifyAiraloError } from "./errors";
 import {
   resolveEndpointRateLimiter,
   type AiraloThrottledEndpoint,
@@ -83,6 +81,7 @@ export interface CreateOrderPayload extends AdditionalOrderFields {
   quantity?: FormValue;
   type?: FormValue;
   description?: FormValue;
+  webhook_url?: FormValue;
   brand_settings_name?: FormValue;
   to_email?: FormValue;
   "sharing_option[]"?: FormValue[];
@@ -173,13 +172,18 @@ function isCountryTree(data: unknown): data is AiraloCountryNode[] {
   );
 }
 
-function isCountryIndexMap(data: unknown): data is Record<string, AiraloCountryNode> {
+function isCountryIndexMap(
+  data: unknown,
+): data is Record<string, AiraloCountryNode> {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return false;
   }
 
   return Object.values(data).every(
-    (country) => country !== null && typeof country === "object" && !Array.isArray(country),
+    (country) =>
+      country !== null &&
+      typeof country === "object" &&
+      !Array.isArray(country),
   );
 }
 
@@ -196,7 +200,11 @@ function toCountryTree(data: unknown): AiraloCountryNode[] | null {
 }
 
 function extractRawPackagesData(raw: PackagesRawResponse): unknown {
-  if (raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)) {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "data" in (raw as Record<string, unknown>)
+  ) {
     return (raw as { data?: unknown }).data;
   }
 
@@ -232,7 +240,9 @@ function extractCountryTree(raw: PackagesRawResponse): AiraloCountryNode[] {
   }
 
   const rootCountriesRaw =
-    raw && typeof raw === "object" ? (raw as { countries?: unknown }).countries : undefined;
+    raw && typeof raw === "object"
+      ? (raw as { countries?: unknown }).countries
+      : undefined;
   const rootCountries = toCountryTree(rootCountriesRaw);
   if (rootCountries) {
     return rootCountries;
@@ -246,9 +256,13 @@ function extractCountryTree(raw: PackagesRawResponse): AiraloCountryNode[] {
   }
 
   const rootKeys =
-    raw && typeof raw === "object" ? Object.keys(raw as Record<string, unknown>) : [];
+    raw && typeof raw === "object"
+      ? Object.keys(raw as Record<string, unknown>)
+      : [];
   const dataKeys =
-    data && typeof data === "object" ? Object.keys(data as Record<string, unknown>) : [];
+    data && typeof data === "object"
+      ? Object.keys(data as Record<string, unknown>)
+      : [];
 
   throw new Error(
     `Unexpected Airalo response shape; expected country array or indexed country object. rootKeys=${rootKeys.join(",")}, dataKeys=${dataKeys.join(",")}`,
@@ -258,27 +272,39 @@ function extractCountryTree(raw: PackagesRawResponse): AiraloCountryNode[] {
 function flattenCountryTree(countries: AiraloCountryNode[]): Package[] {
   const flattened: Package[] = [];
   for (const country of countries) {
-    const destination = country.country_code ?? country.slug ?? country.title ?? "unknown";
+    const destination =
+      country.country_code ?? country.slug ?? country.title ?? "unknown";
     const destinationName = country.title ?? country.slug ?? destination;
     for (const operator of country.operators ?? []) {
       for (const pkg of operator.packages ?? []) {
         const netPrices =
           pkg?.prices?.net_price && typeof pkg.prices.net_price === "object"
             ? Object.fromEntries(
-                Object.entries(pkg.prices.net_price).map(([currency, amount]) => [
-                  currency,
-                  { amount: typeof amount === "number" ? amount : Number(amount) },
-                ]),
+                Object.entries(pkg.prices.net_price).map(
+                  ([currency, amount]) => [
+                    currency,
+                    {
+                      amount:
+                        typeof amount === "number" ? amount : Number(amount),
+                    },
+                  ],
+                ),
               )
             : undefined;
 
         const rrps =
-          pkg?.prices?.recommended_retail_price && typeof pkg.prices.recommended_retail_price === "object"
+          pkg?.prices?.recommended_retail_price &&
+          typeof pkg.prices.recommended_retail_price === "object"
             ? Object.fromEntries(
-                Object.entries(pkg.prices.recommended_retail_price).map(([currency, amount]) => [
-                  currency,
-                  { amount: typeof amount === "number" ? amount : Number(amount) },
-                ]),
+                Object.entries(pkg.prices.recommended_retail_price).map(
+                  ([currency, amount]) => [
+                    currency,
+                    {
+                      amount:
+                        typeof amount === "number" ? amount : Number(amount),
+                    },
+                  ],
+                ),
               )
             : undefined;
 
@@ -288,19 +314,32 @@ function flattenCountryTree(countries: AiraloCountryNode[]): Package[] {
           destination,
           destination_name: destinationName,
           region: country.region ?? country.title ?? undefined,
-          currency: (pkg as Record<string, unknown>).currency?.toString() ?? "USD",
+          currency:
+            (pkg as Record<string, unknown>).currency?.toString() ?? "USD",
           price: typeof pkg?.price === "number" ? pkg.price : undefined,
           validity: typeof pkg?.day === "number" ? pkg.day : undefined,
-          data_amount: pkg?.data ?? (pkg?.is_unlimited ? "Unlimited" : pkg?.amount ? String(pkg.amount) : undefined),
+          data_amount:
+            pkg?.data ??
+            (pkg?.is_unlimited
+              ? "Unlimited"
+              : pkg?.amount
+                ? String(pkg.amount)
+                : undefined),
           is_unlimited: Boolean(pkg?.is_unlimited),
           net_prices: netPrices,
           recommended_retail_prices: rrps,
           sku: pkg?.id ? String(pkg.id) : undefined,
           status: (pkg as Record<string, unknown>).status?.toString(),
           sim_type: (pkg as Record<string, unknown>).sim_type?.toString(),
-          is_rechargeable: Boolean((pkg as Record<string, unknown>).is_rechargeable ?? false),
-          network_types: Array.isArray((pkg as Record<string, unknown>).network_types)
-            ? ((pkg as Record<string, unknown>).network_types as unknown[]).map((n) => n?.toString?.() ?? "")
+          is_rechargeable: Boolean(
+            (pkg as Record<string, unknown>).is_rechargeable ?? false,
+          ),
+          network_types: Array.isArray(
+            (pkg as Record<string, unknown>).network_types,
+          )
+            ? ((pkg as Record<string, unknown>).network_types as unknown[]).map(
+                (n) => n?.toString?.() ?? "",
+              )
             : undefined,
           voice:
             typeof (pkg as Record<string, unknown>).voice === "number"
@@ -311,13 +350,22 @@ function flattenCountryTree(countries: AiraloCountryNode[]): Package[] {
               ? Number((pkg as Record<string, unknown>).sms)
               : undefined,
           apn: (pkg as Record<string, unknown>).apn?.toString(),
-          qr_code_data: (pkg as Record<string, unknown>).qr_code_data?.toString(),
+          qr_code_data: (
+            pkg as Record<string, unknown>
+          ).qr_code_data?.toString(),
           qr_code_url: (pkg as Record<string, unknown>).qr_code_url?.toString(),
-          smdp_address: (pkg as Record<string, unknown>).smdp_address?.toString(),
+          smdp_address: (
+            pkg as Record<string, unknown>
+          ).smdp_address?.toString(),
           iccid: (pkg as Record<string, unknown>).iccid?.toString(),
-          activation_code: (pkg as Record<string, unknown>).activation_code?.toString(),
-          top_up_parent_package_id: (pkg as Record<string, unknown>).top_up_parent_package_id
-            ? (pkg as Record<string, unknown>).top_up_parent_package_id!.toString()
+          activation_code: (
+            pkg as Record<string, unknown>
+          ).activation_code?.toString(),
+          top_up_parent_package_id: (pkg as Record<string, unknown>)
+            .top_up_parent_package_id
+            ? (
+                pkg as Record<string, unknown>
+              ).top_up_parent_package_id!.toString()
             : undefined,
         });
       }
@@ -334,7 +382,9 @@ function normalizePackagesData(data: unknown): Package[] {
   }
 
   if (data && typeof data === "object") {
-    const nestedCountries = toCountryTree((data as { countries?: unknown }).countries);
+    const nestedCountries = toCountryTree(
+      (data as { countries?: unknown }).countries,
+    );
     if (nestedCountries) {
       return flattenCountryTree(nestedCountries);
     }
@@ -489,7 +539,8 @@ export class AiraloClient {
       ...DEFAULT_ENDPOINT_THROTTLING,
       ...options.endpointThrottling,
     };
-    this.endpointRateLimiter = options.endpointRateLimiter ?? resolveEndpointRateLimiter();
+    this.endpointRateLimiter =
+      options.endpointRateLimiter ?? resolveEndpointRateLimiter();
   }
 
   async getPackagesResponse(
@@ -628,14 +679,21 @@ export class AiraloClient {
     return serialized ? `${basePath}?${serialized}` : basePath;
   }
 
-  private parseJwtForLog(token: string): { iat?: string; exp?: string; iss?: string; aud?: string | string[] } | null {
+  private parseJwtForLog(token: string): {
+    iat?: string;
+    exp?: string;
+    iss?: string;
+    aud?: string | string[];
+  } | null {
     const parts = token.split(".");
     if (parts.length !== 3) {
       return null;
     }
 
     try {
-      const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as {
+      const payload = JSON.parse(
+        Buffer.from(parts[1], "base64url").toString("utf8"),
+      ) as {
         iat?: number;
         exp?: number;
         iss?: string;
@@ -643,10 +701,19 @@ export class AiraloClient {
       };
 
       return {
-        iat: typeof payload.iat === "number" ? new Date(payload.iat * 1000).toISOString() : undefined,
-        exp: typeof payload.exp === "number" ? new Date(payload.exp * 1000).toISOString() : undefined,
+        iat:
+          typeof payload.iat === "number"
+            ? new Date(payload.iat * 1000).toISOString()
+            : undefined,
+        exp:
+          typeof payload.exp === "number"
+            ? new Date(payload.exp * 1000).toISOString()
+            : undefined,
         iss: typeof payload.iss === "string" ? payload.iss : undefined,
-        aud: typeof payload.aud === "string" || Array.isArray(payload.aud) ? payload.aud : undefined,
+        aud:
+          typeof payload.aud === "string" || Array.isArray(payload.aud)
+            ? payload.aud
+            : undefined,
       };
     } catch {
       return null;
@@ -657,25 +724,42 @@ export class AiraloClient {
     preview: string;
     length: number;
     fingerprint: string;
-    jwt: { iat?: string; exp?: string; iss?: string; aud?: string | string[] } | null;
+    jwt: {
+      iat?: string;
+      exp?: string;
+      iss?: string;
+      aud?: string | string[];
+    } | null;
   } {
     const trimmed = token.trim();
     if (!trimmed) {
-      return { preview: "[EMPTY]", length: 0, fingerprint: "[EMPTY]", jwt: null };
+      return {
+        preview: "[EMPTY]",
+        length: 0,
+        fingerprint: "[EMPTY]",
+        jwt: null,
+      };
     }
 
     const preview =
-      trimmed.length <= 12 ? trimmed : `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
+      trimmed.length <= 12
+        ? trimmed
+        : `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
 
     return {
       preview,
       length: trimmed.length,
-      fingerprint: createHash("sha256").update(trimmed).digest("hex").slice(0, 12),
+      fingerprint: createHash("sha256")
+        .update(trimmed)
+        .digest("hex")
+        .slice(0, 12),
       jwt: this.parseJwtForLog(trimmed),
     };
   }
 
-  private formatIncludeParam(include?: string | string[] | null): string | null {
+  private formatIncludeParam(
+    include?: string | string[] | null,
+  ): string | null {
     if (!include) {
       return null;
     }
@@ -706,7 +790,10 @@ export class AiraloClient {
   }
 
   private normalizeThrottleKey(value: string): string {
-    return createHash("sha256").update(value.trim().toLowerCase()).digest("hex").slice(0, 16);
+    return createHash("sha256")
+      .update(value.trim().toLowerCase())
+      .digest("hex")
+      .slice(0, 16);
   }
 
   private async applyThrottle(
@@ -783,7 +870,9 @@ export class AiraloClient {
   /**
    * Fetch packages while preserving the raw country/operator/package hierarchy.
    */
-  async getPackagesTree(options: GetPackagesOptions = {}): Promise<AiraloCountryNode[]> {
+  async getPackagesTree(
+    options: GetPackagesOptions = {},
+  ): Promise<AiraloCountryNode[]> {
     const page = await this.getPackagesTreePageRaw(options);
     return page.countries;
   }
@@ -814,7 +903,9 @@ export class AiraloClient {
     return response.data;
   }
 
-  async createOrderResponse(payload: CreateOrderPayload): Promise<OrderResponse> {
+  async createOrderResponse(
+    payload: CreateOrderPayload,
+  ): Promise<OrderResponse> {
     const body = this.buildMultipartPayload(payload);
     return this.request({
       path: "/orders",
@@ -831,7 +922,9 @@ export class AiraloClient {
     return response.data;
   }
 
-  async createOrderAsyncResponse(payload: CreateOrderPayload): Promise<SubmitOrderAsyncResponse> {
+  async createOrderAsyncResponse(
+    payload: CreateOrderPayload,
+  ): Promise<SubmitOrderAsyncResponse> {
     const body = this.buildMultipartPayload(payload);
 
     return this.request({
@@ -844,7 +937,9 @@ export class AiraloClient {
     });
   }
 
-  async createOrderAsync(payload: CreateOrderPayload): Promise<SubmitOrderAsyncAck> {
+  async createOrderAsync(
+    payload: CreateOrderPayload,
+  ): Promise<SubmitOrderAsyncAck> {
     const response = await this.createOrderAsyncResponse(payload);
     return response.data;
   }
@@ -906,7 +1001,9 @@ export class AiraloClient {
   /**
    * Fetch packages without strict schema validation so we can tolerate upstream shape changes.
    */
-  private async fetchPackagesRaw(options: GetPackagesOptions = {}): Promise<PackagesRawResponse> {
+  private async fetchPackagesRaw(
+    options: GetPackagesOptions = {},
+  ): Promise<PackagesRawResponse> {
     const maxAuthAttempts = 4;
     let attemptedBearerCaseFallback = false;
     let preserveTokenTypeForNextAttempt = false;
@@ -924,21 +1021,27 @@ export class AiraloClient {
     });
 
     for (let attempt = 1; attempt <= maxAuthAttempts; attempt++) {
-      console.info("[airalo-sync][step-3][packages] Resolving access token for packages request", {
-        attempt,
-        cacheBypass: refreshTokenForNextAttempt,
-      });
+      console.info(
+        "[airalo-sync][step-3][packages] Resolving access token for packages request",
+        {
+          attempt,
+          cacheBypass: refreshTokenForNextAttempt,
+        },
+      );
       const token = refreshTokenForNextAttempt
         ? await this.getFreshAccessToken(preserveTokenTypeForNextAttempt)
         : await this.getAccessToken(preserveTokenTypeForNextAttempt);
       preserveTokenTypeForNextAttempt = false;
       refreshTokenForNextAttempt = false;
 
-      console.info("[airalo-sync][step-3][packages] Using access token for request", {
-        attempt,
-        tokenType: this.tokenType,
-        token: this.formatTokenForLog(token),
-      });
+      console.info(
+        "[airalo-sync][step-3][packages] Using access token for request",
+        {
+          attempt,
+          tokenType: this.tokenType,
+          token: this.formatTokenForLog(token),
+        },
+      );
 
       const response = await this.executeWithRateLimitRetry(
         async () => {
@@ -950,15 +1053,20 @@ export class AiraloClient {
 
       if (response.ok) {
         const parsed = await this.parseJson(response);
-        console.info("[airalo-sync][step-3][packages] Packages request succeeded", {
-          status: response.status,
-        });
+        console.info(
+          "[airalo-sync][step-3][packages] Packages request succeeded",
+          {
+            status: response.status,
+          },
+        );
         return parsed as PackagesRawResponse;
       }
 
       const isUnauthorized = response.status === 401;
       if (isUnauthorized && attempt < maxAuthAttempts) {
-        const unauthorizedDetails = await this.parseUnauthorizedDetails(response.clone());
+        const unauthorizedDetails = await this.parseUnauthorizedDetails(
+          response.clone(),
+        );
 
         if (!attemptedCredentialsFallback && unauthorizedDetails.authRejected) {
           includeClientCredentials = true;
@@ -978,7 +1086,11 @@ export class AiraloClient {
           continue;
         }
 
-        if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
+        if (
+          attempt > 1 &&
+          !attemptedBearerCaseFallback &&
+          this.toggleBearerTokenTypeCase()
+        ) {
           attemptedBearerCaseFallback = true;
           preserveTokenTypeForNextAttempt = true;
           refreshTokenForNextAttempt = true;
@@ -993,10 +1105,13 @@ export class AiraloClient {
           continue;
         }
 
-        console.warn("[airalo-sync][step-3][packages] Unauthorized response, clearing cached token and retrying", {
-          attempt,
-          ...unauthorizedDetails,
-        });
+        console.warn(
+          "[airalo-sync][step-3][packages] Unauthorized response, clearing cached token and retrying",
+          {
+            attempt,
+            ...unauthorizedDetails,
+          },
+        );
         refreshTokenForNextAttempt = true;
         await this.clearCachedToken();
         continue;
@@ -1011,7 +1126,8 @@ export class AiraloClient {
       }
 
       if (response.status === 401) {
-        const unauthorizedDetails = await this.parseUnauthorizedDetailsFromBody(body);
+        const unauthorizedDetails =
+          await this.parseUnauthorizedDetailsFromBody(body);
 
         if (unauthorizedDetails.authRejected) {
           console.error(
@@ -1043,13 +1159,16 @@ export class AiraloClient {
 
       throw new AiraloError(
         `Packages request failed with status ${response.status}`,
-        this.buildClassifiedErrorDetails(response.status, response.statusText, body),
+        this.buildClassifiedErrorDetails(
+          response.status,
+          response.statusText,
+          body,
+        ),
       );
     }
 
     throw new Error(`Failed to complete request to ${url}`);
   }
-
 
   async getSimPackages(iccid: string): Promise<Package[]> {
     const response = await this.getSimPackagesResponse(iccid);
@@ -1061,12 +1180,15 @@ export class AiraloClient {
     options: { acceptLanguage?: string } = {},
   ): Promise<SimInstallationInstructionsResponse> {
     if (!iccid) {
-      throw new Error("An ICCID is required to request installation instructions.");
+      throw new Error(
+        "An ICCID is required to request installation instructions.",
+      );
     }
 
     const languageHint = options.acceptLanguage?.trim();
     const headers: Record<string, string> = {
-      "Accept-Language": languageHint && languageHint.length > 0 ? languageHint : "en",
+      "Accept-Language":
+        languageHint && languageHint.length > 0 ? languageHint : "en",
     };
 
     const searchParams = new URLSearchParams({ include: "share" });
@@ -1085,11 +1207,17 @@ export class AiraloClient {
     iccid: string,
     options: { acceptLanguage?: string } = {},
   ): Promise<SimInstallationInstructionsPayload> {
-    const response = await this.getSimInstallationInstructionsResponse(iccid, options);
+    const response = await this.getSimInstallationInstructionsResponse(
+      iccid,
+      options,
+    );
     return response.data;
   }
 
-  async getSimResponse(iccid: string, options: GetSimOptions = {}): Promise<SimResponse> {
+  async getSimResponse(
+    iccid: string,
+    options: GetSimOptions = {},
+  ): Promise<SimResponse> {
     if (!iccid) {
       throw new Error("A SIM ICCID is required to fetch SIM details.");
     }
@@ -1201,7 +1329,11 @@ export class AiraloClient {
       const shouldRetry = isUnauthorized && attempt < maxAuthAttempts;
 
       if (shouldRetry) {
-        if (attempt > 1 && !attemptedBearerCaseFallback && this.toggleBearerTokenTypeCase()) {
+        if (
+          attempt > 1 &&
+          !attemptedBearerCaseFallback &&
+          this.toggleBearerTokenTypeCase()
+        ) {
           attemptedBearerCaseFallback = true;
           preserveTokenTypeForNextAttempt = true;
           continue;
@@ -1236,7 +1368,10 @@ export class AiraloClient {
     return resolvedHeaders;
   }
 
-  private async buildAiraloError(url: string, response: Response): Promise<AiraloError> {
+  private async buildAiraloError(
+    url: string,
+    response: Response,
+  ): Promise<AiraloError> {
     const bodyText = await response.text();
     let body: unknown = bodyText;
     try {
@@ -1247,7 +1382,11 @@ export class AiraloClient {
 
     return new AiraloError(
       `Request to ${url} failed with status ${response.status}`,
-      this.buildClassifiedErrorDetails(response.status, response.statusText, body),
+      this.buildClassifiedErrorDetails(
+        response.status,
+        response.statusText,
+        body,
+      ),
     );
   }
 
@@ -1274,7 +1413,9 @@ export class AiraloClient {
     };
   }
 
-  private async getFreshAccessToken(preserveTokenType = false): Promise<string> {
+  private async getFreshAccessToken(
+    preserveTokenType = false,
+  ): Promise<string> {
     await this.clearCachedToken();
     return this.getAccessToken(preserveTokenType);
   }
@@ -1283,11 +1424,14 @@ export class AiraloClient {
     const cached = await this.tokenCache.get();
     const cachedToken = cached?.token?.trim();
     const cachedExpiresAt = cached?.expiresAt;
-    const hasValidExpiry = typeof cachedExpiresAt === "number" && Number.isFinite(cachedExpiresAt);
+    const hasValidExpiry =
+      typeof cachedExpiresAt === "number" && Number.isFinite(cachedExpiresAt);
     const hasUsableCachedToken = Boolean(cachedToken && cachedToken.length > 0);
 
     if (cached && (!hasValidExpiry || !hasUsableCachedToken)) {
-      console.warn("[airalo-sync][step-2][token] Ignoring malformed cached access token record");
+      console.warn(
+        "[airalo-sync][step-2][token] Ignoring malformed cached access token record",
+      );
       await this.clearCachedToken();
     } else if (cached && !this.isExpired(cached.expiresAt)) {
       if (!preserveTokenType) {
@@ -1302,9 +1446,12 @@ export class AiraloClient {
     }
 
     if (cached && this.isExpired(cached.expiresAt)) {
-      console.info("[airalo-sync][step-2][token] Cached token expired; requesting new token", {
-        expiresAt: new Date(cached.expiresAt).toISOString(),
-      });
+      console.info(
+        "[airalo-sync][step-2][token] Cached token expired; requesting new token",
+        {
+          expiresAt: new Date(cached.expiresAt).toISOString(),
+        },
+      );
     }
 
     if (!this.inFlightTokenRequest) {
@@ -1321,9 +1468,12 @@ export class AiraloClient {
 
   private async requestAccessToken(): Promise<string> {
     const tokenRequestId = randomUUID();
-    console.info("[airalo-sync][step-2][token] Requesting Airalo access token", {
-      tokenRequestId,
-    });
+    console.info(
+      "[airalo-sync][step-2][token] Requesting Airalo access token",
+      {
+        tokenRequestId,
+      },
+    );
     const body = new URLSearchParams();
     body.set("client_id", this.clientId);
     body.set("client_secret", this.clientSecret);
@@ -1364,7 +1514,11 @@ export class AiraloClient {
 
       throw new AiraloError(
         `Token request failed with status ${response.status}`,
-        this.buildClassifiedErrorDetails(response.status, response.statusText, body),
+        this.buildClassifiedErrorDetails(
+          response.status,
+          response.statusText,
+          body,
+        ),
       );
     }
 
@@ -1469,12 +1623,16 @@ export class AiraloClient {
     }
   }
 
-  private async parseUnauthorizedDetails(response: Response): Promise<AiraloUnauthorizedDetails> {
+  private async parseUnauthorizedDetails(
+    response: Response,
+  ): Promise<AiraloUnauthorizedDetails> {
     const body = await this.tryParseResponseBody(response);
     return this.parseUnauthorizedDetailsFromBody(body);
   }
 
-  private parseUnauthorizedDetailsFromBody(body: unknown): AiraloUnauthorizedDetails {
+  private parseUnauthorizedDetailsFromBody(
+    body: unknown,
+  ): AiraloUnauthorizedDetails {
     if (!body || typeof body !== "object") {
       return {
         bodySnippet: this.stringifyForLog(body),
@@ -1488,18 +1646,28 @@ export class AiraloClient {
       };
     }
 
-    const metaRecord = meta as { message?: unknown; code?: unknown } & Record<string, unknown>;
-    const metaMessage = typeof metaRecord.message === "string" ? metaRecord.message : undefined;
+    const metaRecord = meta as { message?: unknown; code?: unknown } & Record<
+      string,
+      unknown
+    >;
+    const metaMessage =
+      typeof metaRecord.message === "string" ? metaRecord.message : undefined;
 
     return {
       meta: metaRecord,
       metaMessage,
       metaCode:
-        typeof metaRecord.code === "string" || typeof metaRecord.code === "number"
+        typeof metaRecord.code === "string" ||
+        typeof metaRecord.code === "number"
           ? metaRecord.code
           : undefined,
       bodySnippet: this.stringifyForLog(body),
-      authRejected: Boolean(metaMessage && /authentication failed|verify your client_id and client_secret/i.test(metaMessage)),
+      authRejected: Boolean(
+        metaMessage &&
+        /authentication failed|verify your client_id and client_secret/i.test(
+          metaMessage,
+        ),
+      ),
     };
   }
 
@@ -1633,8 +1801,9 @@ export const defaultTokenCache = new MemoryTokenCache();
 export { MemoryTokenCache } from "./token-cache";
 export type { TokenCache, TokenCacheRecord } from "./token-cache";
 
-export const defaultAiraloClientFactory = (options: AiraloClientOptions): AiraloClient =>
-  new AiraloClient(options);
+export const defaultAiraloClientFactory = (
+  options: AiraloClientOptions,
+): AiraloClient => new AiraloClient(options);
 
 export const parseAiraloWebhookPayload = (payload: unknown): WebhookPayload =>
   WebhookPayloadSchema.parse(payload);
