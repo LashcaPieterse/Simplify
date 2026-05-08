@@ -156,6 +156,44 @@ test("AiraloClient reuses a cached token for /packages requests", async () => {
   assert.equal(capturedAuthHeader, "Bearer cached-token");
 });
 
+test("AiraloClient appends /v2 when base URL is configured as the root host", async () => {
+  const tokenCache = new MockTokenCache();
+  let tokenUrl: string | null = null;
+  let packagesUrl: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/token")) {
+      tokenUrl = target;
+      return jsonResponse(
+        { data: { access_token: "fresh-token", expires_in: 3600, token_type: "bearer" } },
+        { status: 200 },
+      );
+    }
+
+    if (target.includes("packages")) {
+      packagesUrl = target;
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://partners-api.airalo.com",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await client.getPackages();
+
+  assert.equal(tokenUrl, "https://partners-api.airalo.com/v2/token");
+  assert.equal(packagesUrl, "https://partners-api.airalo.com/v2/packages");
+});
+
 test("AiraloClient honors the token_type returned by the token endpoint", async () => {
   const tokenCache = new MockTokenCache();
   let capturedAuthHeader: string | null = null;

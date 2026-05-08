@@ -425,8 +425,22 @@ const DEFAULT_ENDPOINT_THROTTLING: AiraloEndpointThrottlingConfig = {
   simPackagesPerMinutePerIccid: 10,
 };
 function normalizeBaseUrl(value: string): string {
-  const trimmed = value.trim();
-  return trimmed.replace(/\/+$/, "");
+  const trimmed = value.trim().replace(/\/+$/, "");
+
+  try {
+    const parsed = new URL(trimmed);
+    const normalizedPath = parsed.pathname.replace(/\/+$/, "");
+
+    if (normalizedPath === "" || normalizedPath === "/") {
+      parsed.pathname = "/v2";
+    } else {
+      parsed.pathname = normalizedPath;
+    }
+
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return trimmed;
+  }
 }
 
 interface RateLimitRetryPolicy {

@@ -7,6 +7,7 @@ import {
   type AiraloOperatorNode,
   type AiraloPackageNode,
 } from "@/lib/airalo/client";
+import { resolveSharedTokenCache } from "@/lib/airalo/token-cache";
 import { syncAiraloCatalog } from "@/lib/catalog/sync";
 import { logOrderInfo, logOrderWarn } from "@/lib/observability/logging";
 import { getAuditSeverity } from "./utils";
@@ -155,6 +156,7 @@ export async function runSyncAuditJob(options: RunSyncOptions): Promise<RunSyncA
       clientId: requiredEnv("AIRALO_CLIENT_ID"),
       clientSecret: requiredEnv("AIRALO_CLIENT_SECRET"),
       baseUrl: process.env.AIRALO_BASE_URL,
+      tokenCache: resolveSharedTokenCache(),
     });
 
     const syncResult = await syncAiraloCatalog({
