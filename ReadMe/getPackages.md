@@ -2,11 +2,11 @@
 
 ## OpenAPI Specification
 
-```yaml
+````yaml
 openapi: 3.0.1
 info:
-  title: ''
-  description: ''
+  title: ""
+  description: ""
   version: 1.0.0
 paths:
   /v2/packages:
@@ -17,7 +17,7 @@ paths:
         :::highlight blue 💡
 
         This endpoint comes with a Rate Limit:  **80 requests per minute to
-        fetch packages** per unique authentication token. 
+        fetch packages** per unique authentication token.
 
         :::
 
@@ -27,24 +27,24 @@ paths:
         packages span multiple countries and regions. This endpoint helps you
         synchronize eSIM plans/packages with your system, ensuring newly
         introduced packages are available to your clients and out-of-stock
-        packages are handled properly.  
+        packages are handled properly.
 
-        ## Features  
+        ## Features
 
         - **Package Types**: Supports standard data packages and the new "Voice
-        and Text" packages.  
+        and Text" packages.
 
         - **Filtering**: Filter results by operator type or country code to
-        tailor the package list to your needs.  
+        tailor the package list to your needs.
 
         - **Pagination**: Adjust pagination settings to retrieve results in
-        manageable chunks.  
+        manageable chunks.
 
         - **Limit**: Set the `limit` parameter to a high value (e.g., 1,000) to
-        fetch all packages in a single request without using pagination.  
+        fetch all packages in a single request without using pagination.
 
         - **Include Top-Up**: Use the `include=topup` query parameter to fetch eSIM
-        packages along with their associated top-up packages.  
+        packages along with their associated top-up packages.
 
 
         ## Multi-Currency
@@ -58,7 +58,7 @@ paths:
 
         To keep your catalog up to date, including stock availability, new
         packages, and pricing, while avoiding performance or rate-limit issues,
-        it’s important to run an hourly backend sync. 
+        it’s important to run an hourly backend sync.
 
         Below, we provide a step-by-step guide to help you successfully sync
         your packages:
@@ -107,7 +107,7 @@ paths:
         ## Throtlling policy
 
         Identify unlimited packages with usage restrictions by checking the
-        `is_fair_usage_policy` boolean. If enabled, the `fair_usage_policy` 
+        `is_fair_usage_policy` boolean. If enabled, the `fair_usage_policy`
         field contains a string describing the specific limitations.
 
         Example:
@@ -128,7 +128,7 @@ paths:
           description: >-
             Optional. A string to filter packages by operator type. Possible
             values are "local" and "global".
-              
+
             If the filter is set to "global," the output will include only
             global and regional eSims. Global and regional packages do not use
             the "country_code" field, which will be empty. The "type" field in
@@ -136,13 +136,13 @@ paths:
             package is considered worldwide if its "slug" field is set to
             "world" and regional if "slug" contains a region name, for example,
             "europe" or "Africa".
-              
+
             If the filter is set to "local," the response will contain only
             country-specific packages. To get the list of packages for a single
             country, you can use it in combination with filter[country]
             parameter. The "type" field in the operator object of the response
             will indicate a "local" type.
-              
+
             When the filter is not set, we return all types of eSIMs: local,
             regional, and global.
           required: false
@@ -164,19 +164,19 @@ paths:
             Optional. An integer specifying how many items will be returned on
             each page.
           required: false
-          example: ''
+          example: ""
           schema:
             type: string
         - name: page
           in: query
           description: >-
-            Optional. An integer specifying the pagination's current page. 
+            Optional. An integer specifying the pagination's current page.
 
             If the page is set to 2 or beyond, the response will have different
             format and contain an object representing the country's index in the
             list of packages.
           required: false
-          example: '1'
+          example: "1"
           schema:
             type: string
         - name: include
@@ -190,28 +190,28 @@ paths:
             type: string
         - name: Accept
           in: header
-          description: ''
+          description: ""
           required: true
           example: application/json
           schema:
             type: string
         - name: Authorization
           in: header
-          description: ''
+          description: ""
           required: true
           example: Bearer {{token}}
           schema:
             type: string
         - name: url
           in: header
-          description: ''
+          description: ""
           example: https://partners-api.airalo.com
           schema:
             type: string
             default: https://partners-api.airalo.com
       responses:
-        '200':
-          description: ''
+        "200":
+          description: ""
           content:
             application/json:
               schema:
@@ -280,7 +280,7 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
@@ -438,7 +438,7 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     data:
                                       type: string
                                     voice:
@@ -746,7 +746,7 @@ paths:
                       last:
                         type: string
                       prev:
-                        type: 'null'
+                        type: "null"
                       next:
                         type: string
                     required:
@@ -807,7 +807,7 @@ paths:
                   - links
                   - meta
               examples:
-                '1':
+                "1":
                   summary: List Packages (200)
                   value:
                     pricing:
@@ -825,8 +825,8 @@ paths:
                         operators:
                           - id: 1181
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -1226,8 +1226,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 823
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -1340,8 +1340,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1180
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -1729,8 +1729,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1522
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -2570,8 +2570,8 @@ paths:
                         operators:
                           - id: 826
                             style: dark
-                            gradient_start: '#F1D4FB'
-                            gradient_end: '#EEC0FF'
+                            gradient_start: "#F1D4FB"
+                            gradient_end: "#EEC0FF"
                             type: local
                             is_prepaid: false
                             title: Élan
@@ -2967,10 +2967,10 @@ paths:
                       from: 1
                       last_page: 107
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '2'
+                      per_page: "2"
                       to: 2
                       total: 213
-                '2':
+                "2":
                   summary: List Packages with topup (200)
                   value:
                     pricing:
@@ -2988,8 +2988,8 @@ paths:
                         operators:
                           - id: 1181
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -3731,8 +3731,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 823
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -3900,8 +3900,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1180
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -4619,8 +4619,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1522
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -6230,8 +6230,8 @@ paths:
                         operators:
                           - id: 826
                             style: dark
-                            gradient_start: '#F1D4FB'
-                            gradient_end: '#EEC0FF'
+                            gradient_start: "#F1D4FB"
+                            gradient_end: "#EEC0FF"
                             type: local
                             is_prepaid: false
                             title: Élan
@@ -6957,10 +6957,10 @@ paths:
                       from: 1
                       last_page: 107
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '2'
+                      per_page: "2"
                       to: 2
                       total: 213
-                '3':
+                "3":
                   summary: List Global Packages (200)
                   value:
                     pricing:
@@ -6968,7 +6968,7 @@ paths:
                       discount_percentage: 0
                     data:
                       - slug: eu-plus-uk
-                        country_code: ''
+                        country_code: ""
                         title: European Union and United Kingdom
                         image:
                           width: 264
@@ -6978,8 +6978,8 @@ paths:
                         operators:
                           - id: 1416
                             style: light
-                            gradient_start: '#17418E'
-                            gradient_end: '#375FB9'
+                            gradient_start: "#17418E"
+                            gradient_end: "#375FB9"
                             type: global
                             is_prepaid: false
                             title: EUconnect
@@ -7109,7 +7109,7 @@ paths:
                               - name: IE
                                 code: IE
                                 networks:
-                                  - name: '3'
+                                  - name: "3"
                                     types:
                                       - 4G
                               - name: LT
@@ -7726,8 +7726,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/38db53aa-6e44-4e65-a106-9465b8e25182.png
                           - id: 1433
                             style: light
-                            gradient_start: '#17418E'
-                            gradient_end: '#375FB9'
+                            gradient_start: "#17418E"
+                            gradient_end: "#375FB9"
                             type: global
                             is_prepaid: false
                             title: EUconnect
@@ -7857,7 +7857,7 @@ paths:
                               - name: IE
                                 code: IE
                                 networks:
-                                  - name: '3'
+                                  - name: "3"
                                     types:
                                       - 4G
                               - name: LT
@@ -8498,10 +8498,10 @@ paths:
                       from: 1
                       last_page: 11
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '1'
+                      per_page: "1"
                       to: 1
                       total: 11
-                '4':
+                "4":
                   summary: List Local Packages (200)
                   value:
                     pricing:
@@ -8519,8 +8519,8 @@ paths:
                         operators:
                           - id: 1181
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -8920,8 +8920,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 823
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -9034,8 +9034,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1180
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -9423,8 +9423,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1522
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -10264,8 +10264,8 @@ paths:
                         operators:
                           - id: 826
                             style: dark
-                            gradient_start: '#F1D4FB'
-                            gradient_end: '#EEC0FF'
+                            gradient_start: "#F1D4FB"
+                            gradient_end: "#EEC0FF"
                             type: local
                             is_prepaid: false
                             title: Élan
@@ -10658,8 +10658,8 @@ paths:
                         operators:
                           - id: 1113
                             style: light
-                            gradient_start: '#ff2d2f'
-                            gradient_end: '#de2627'
+                            gradient_start: "#ff2d2f"
+                            gradient_end: "#de2627"
                             type: local
                             is_prepaid: false
                             title: Chinacom
@@ -11051,8 +11051,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/301616a0-cd3e-4151-a4ec-78c8ddb04ca9.png
                           - id: 1112
                             style: light
-                            gradient_start: '#ff2d2f'
-                            gradient_end: '#de2627'
+                            gradient_start: "#ff2d2f"
+                            gradient_end: "#de2627"
                             type: local
                             is_prepaid: false
                             title: Chinacom
@@ -11444,10 +11444,10 @@ paths:
                       from: 1
                       last_page: 68
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '3'
+                      per_page: "3"
                       to: 3
                       total: 202
-                '5':
+                "5":
                   summary: List Local Packages for Specific Country (200)
                   value:
                     pricing:
@@ -11465,8 +11465,8 @@ paths:
                         operators:
                           - id: 38
                             style: light
-                            gradient_start: '#75428c'
-                            gradient_end: '#a765c6'
+                            gradient_start: "#75428c"
+                            gradient_end: "#a765c6"
                             type: local
                             is_prepaid: false
                             title: Bultel
@@ -11857,10 +11857,10 @@ paths:
                       from: 1
                       last_page: 1
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '3'
+                      per_page: "3"
                       to: 1
                       total: 1
-                '6':
+                "6":
                   summary: List Packages with Pagination (200)
                   value:
                     pricing:
@@ -11878,8 +11878,8 @@ paths:
                         operators:
                           - id: 1189
                             style: light
-                            gradient_start: '#b40b1e'
-                            gradient_end: '#d20d23'
+                            gradient_start: "#b40b1e"
+                            gradient_end: "#d20d23"
                             type: local
                             is_prepaid: false
                             title: Guay Mobile
@@ -12259,8 +12259,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/c9c87a09-69f5-4c5c-8d20-633539ab5aca.png
                           - id: 1190
                             style: light
-                            gradient_start: '#b40b1e'
-                            gradient_end: '#d20d23'
+                            gradient_start: "#b40b1e"
+                            gradient_end: "#d20d23"
                             type: local
                             is_prepaid: false
                             title: Guay Mobile
@@ -12661,8 +12661,8 @@ paths:
                         operators:
                           - id: 1207
                             style: light
-                            gradient_start: '#ce2c38'
-                            gradient_end: '#c10207'
+                            gradient_start: "#ce2c38"
+                            gradient_end: "#c10207"
                             type: local
                             is_prepaid: false
                             title: Mamma Mia
@@ -12672,7 +12672,7 @@ paths:
                             apn_value: null
                             is_roaming: true
                             info:
-                              - ''
+                              - ""
                             image:
                               width: 1035
                               height: 653
@@ -13046,8 +13046,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/5d7cdb58-591c-45d6-a9d1-050829acd0ab.png
                           - id: 1208
                             style: light
-                            gradient_start: '#ce2c38'
-                            gradient_end: '#c10207'
+                            gradient_start: "#ce2c38"
+                            gradient_end: "#c10207"
                             type: local
                             is_prepaid: false
                             title: Mamma Mia
@@ -13057,7 +13057,7 @@ paths:
                             apn_value: null
                             is_roaming: true
                             info:
-                              - ''
+                              - ""
                             image:
                               width: 1035
                               height: 653
@@ -13452,8 +13452,8 @@ paths:
                         operators:
                           - id: 516
                             style: light
-                            gradient_start: '#b91f35'
-                            gradient_end: '#ad1e35'
+                            gradient_start: "#b91f35"
+                            gradient_end: "#ad1e35"
                             type: local
                             is_prepaid: false
                             title: Merhaba
@@ -14010,8 +14010,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/8efbff32-b788-4098-a957-7fc4b9febb50.png
                           - id: 1012
                             style: light
-                            gradient_start: '#b91f35'
-                            gradient_end: '#ad1e35'
+                            gradient_start: "#b91f35"
+                            gradient_end: "#ad1e35"
                             type: local
                             is_prepaid: false
                             title: Merhaba
@@ -14428,10 +14428,10 @@ paths:
                       from: 4
                       last_page: 68
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '3'
+                      per_page: "3"
                       to: 6
                       total: 202
-                '7':
+                "7":
                   summary: List Packages with Pagination page>=2 (200)
                   value:
                     pricing:
@@ -14449,8 +14449,8 @@ paths:
                         operators:
                           - id: 838
                             style: light
-                            gradient_start: '#ce2c38'
-                            gradient_end: '#c10207'
+                            gradient_start: "#ce2c38"
+                            gradient_end: "#c10207"
                             type: local
                             is_prepaid: false
                             title: Mamma Mia
@@ -14565,8 +14565,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/5d7cdb58-591c-45d6-a9d1-050829acd0ab.png
                           - id: 1207
                             style: light
-                            gradient_start: '#ce2c38'
-                            gradient_end: '#c10207'
+                            gradient_start: "#ce2c38"
+                            gradient_end: "#c10207"
                             type: local
                             is_prepaid: false
                             title: Mamma Mia
@@ -14576,7 +14576,7 @@ paths:
                             apn_value: null
                             is_roaming: true
                             info:
-                              - ''
+                              - ""
                             image:
                               width: 1035
                               height: 653
@@ -15280,8 +15280,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/5d7cdb58-591c-45d6-a9d1-050829acd0ab.png
                           - id: 1208
                             style: light
-                            gradient_start: '#ce2c38'
-                            gradient_end: '#c10207'
+                            gradient_start: "#ce2c38"
+                            gradient_end: "#c10207"
                             type: local
                             is_prepaid: false
                             title: Mamma Mia
@@ -15291,7 +15291,7 @@ paths:
                             apn_value: null
                             is_roaming: true
                             info:
-                              - ''
+                              - ""
                             image:
                               width: 1035
                               height: 653
@@ -16028,8 +16028,8 @@ paths:
                         operators:
                           - id: 516
                             style: light
-                            gradient_start: '#b91f35'
-                            gradient_end: '#ad1e35'
+                            gradient_start: "#b91f35"
+                            gradient_end: "#ad1e35"
                             type: local
                             is_prepaid: false
                             title: Merhaba
@@ -17081,8 +17081,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/8efbff32-b788-4098-a957-7fc4b9febb50.png
                           - id: 1012
                             style: light
-                            gradient_start: '#b91f35'
-                            gradient_end: '#ad1e35'
+                            gradient_start: "#b91f35"
+                            gradient_end: "#ad1e35"
                             type: local
                             is_prepaid: false
                             title: Merhaba
@@ -17841,10 +17841,10 @@ paths:
                       from: 5
                       last_page: 107
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '2'
+                      per_page: "2"
                       to: 6
                       total: 213
-                '8':
+                "8":
                   summary: (Discount pricing) List Packages
                   value:
                     pricing:
@@ -17862,8 +17862,8 @@ paths:
                         operators:
                           - id: 1181
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -18143,8 +18143,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 823
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -18237,8 +18237,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1180
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change
@@ -18506,8 +18506,8 @@ paths:
                                     https://cdn-revamp.airalo.com/images/ad19c2a2-40b8-4dac-b95e-269703c8561b.png
                           - id: 1522
                             style: light
-                            gradient_start: '#0f1b3f'
-                            gradient_end: '#194281'
+                            gradient_start: "#0f1b3f"
+                            gradient_end: "#194281"
                             type: local
                             is_prepaid: false
                             title: Change+
@@ -19067,8 +19067,8 @@ paths:
                         operators:
                           - id: 826
                             style: dark
-                            gradient_start: '#F1D4FB'
-                            gradient_end: '#EEC0FF'
+                            gradient_start: "#F1D4FB"
+                            gradient_end: "#EEC0FF"
                             type: local
                             is_prepaid: false
                             title: Élan
@@ -19344,10 +19344,10 @@ paths:
                       from: 1
                       last_page: 107
                       path: https://partners-api.airalo.com/v2/packages
-                      per_page: '2'
+                      per_page: "2"
                       to: 2
                       total: 213
-                '9':
+                "9":
                   summary: List Packages (422)
                   value:
                     data:
@@ -19362,8 +19362,8 @@ paths:
                       message: the parameter is invalid
           headers: {}
           x-apidog-name: List Packages (200)
-        '422':
-          description: ''
+        "422":
+          description: ""
           content:
             application/json:
               schema:
@@ -19396,7 +19396,7 @@ paths:
           headers: {}
           x-apidog-name: List Packages (422)
         x-200:List Packages with topup (200):
-          description: ''
+          description: ""
           content:
             application/json:
               schema:
@@ -19465,7 +19465,7 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
@@ -19623,7 +19623,7 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     data:
                                       type: string
                                     voice:
@@ -19931,7 +19931,7 @@ paths:
                       last:
                         type: string
                       prev:
-                        type: 'null'
+                        type: "null"
                       next:
                         type: string
                     required:
@@ -19994,7 +19994,7 @@ paths:
           headers: {}
           x-apidog-name: List Packages with topup (200)
         x-200:List Global Packages (200):
-          description: ''
+          description: ""
           content:
             application/json:
               schema:
@@ -20063,7 +20063,7 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
@@ -20137,14 +20137,14 @@ paths:
                                     - code
                                     - networks
                               install_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is bought from
                                   operator until it can be installed on a
                                   device. If this time passes - the sim is
                                   recycled and gone (cannot be used/ topped up)
                               topup_grace_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is exhausted
                                   or expired until a topup is bought. If this
@@ -20216,13 +20216,13 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     data:
                                       type: string
                                     voice:
-                                      type: 'null'
+                                      type: "null"
                                     text:
-                                      type: 'null'
+                                      type: "null"
                                     net_price:
                                       type: number
                                     prices:
@@ -20522,7 +20522,7 @@ paths:
                       last:
                         type: string
                       prev:
-                        type: 'null'
+                        type: "null"
                       next:
                         type: string
                     required:
@@ -20585,7 +20585,7 @@ paths:
           headers: {}
           x-apidog-name: List Global Packages (200)
         x-200:List Local Packages (200):
-          description: ''
+          description: ""
           content:
             application/json:
               schema:
@@ -20654,7 +20654,7 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
@@ -20812,7 +20812,7 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     data:
                                       type: string
                                     voice:
@@ -21120,7 +21120,7 @@ paths:
                       last:
                         type: string
                       prev:
-                        type: 'null'
+                        type: "null"
                       next:
                         type: string
                     required:
@@ -21183,7 +21183,7 @@ paths:
           headers: {}
           x-apidog-name: List Local Packages (200)
         x-200:List Local Packages for Specific Country (200):
-          description: ''
+          description: ""
           content:
             application/json:
               schema:
@@ -21252,7 +21252,7 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
@@ -21289,7 +21289,7 @@ paths:
                               rechargeability:
                                 type: boolean
                               other_info:
-                                type: 'null'
+                                type: "null"
                               coverages:
                                 type: array
                                 items:
@@ -21321,14 +21321,14 @@ paths:
                                     - code
                                     - networks
                               install_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is bought from
                                   operator until it can be installed on a
                                   device. If this time passes - the sim is
                                   recycled and gone (cannot be used/ topped up)
                               topup_grace_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is exhausted
                                   or expired until a topup is bought. If this
@@ -21400,13 +21400,13 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     data:
                                       type: string
                                     voice:
-                                      type: 'null'
+                                      type: "null"
                                     text:
-                                      type: 'null'
+                                      type: "null"
                                     net_price:
                                       type: number
                                     prices:
@@ -21673,9 +21673,9 @@ paths:
                       last:
                         type: string
                       prev:
-                        type: 'null'
+                        type: "null"
                       next:
-                        type: 'null'
+                        type: "null"
                     required:
                       - first
                       - last
@@ -21736,7 +21736,7 @@ paths:
           headers: {}
           x-apidog-name: List Local Packages for Specific Country (200)
         x-200:List Packages with Pagination (200):
-          description: ''
+          description: ""
           content:
             application/json:
               schema:
@@ -21805,7 +21805,7 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
@@ -21879,14 +21879,14 @@ paths:
                                     - code
                                     - networks
                               install_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is bought from
                                   operator until it can be installed on a
                                   device. If this time passes - the sim is
                                   recycled and gone (cannot be used/ topped up)
                               topup_grace_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is exhausted
                                   or expired until a topup is bought. If this
@@ -21958,13 +21958,13 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     data:
                                       type: string
                                     voice:
-                                      type: 'null'
+                                      type: "null"
                                     text:
-                                      type: 'null'
+                                      type: "null"
                                     net_price:
                                       type: number
                                     prices:
@@ -22327,7 +22327,7 @@ paths:
           headers: {}
           x-apidog-name: List Packages with Pagination (200)
         x-200:List Packages with Pagination page>=2 (200):
-          description: ''
+          description: ""
           content:
             application/json:
               schema:
@@ -22396,11 +22396,11 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
-                                type: 'null'
+                                type: "null"
                               is_roaming:
                                 type: boolean
                               info:
@@ -22469,14 +22469,14 @@ paths:
                                     - code
                                     - networks
                               install_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is bought from
                                   operator until it can be installed on a
                                   device. If this time passes - the sim is
                                   recycled and gone (cannot be used/ topped up)
                               topup_grace_window_days:
-                                type: 'null'
+                                type: "null"
                                 description: >-
                                   The # of days from when an eSIM is exhausted
                                   or expired until a topup is bought. If this
@@ -22493,7 +22493,7 @@ paths:
                                       apn_type:
                                         type: string
                                       apn_value:
-                                        type: 'null'
+                                        type: "null"
                                     required:
                                       - apn_type
                                       - apn_value
@@ -22506,7 +22506,7 @@ paths:
                                       apn_type:
                                         type: string
                                       apn_value:
-                                        type: 'null'
+                                        type: "null"
                                     required:
                                       - apn_type
                                       - apn_value
@@ -22550,11 +22550,11 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     voice:
-                                      type: 'null'
+                                      type: "null"
                                     text:
-                                      type: 'null'
+                                      type: "null"
                                     net_price:
                                       type: number
                                     prices:
@@ -22896,7 +22896,7 @@ paths:
           headers: {}
           x-apidog-name: List Packages with Pagination page>=2 (200)
         x-200:(Discount pricing) List Packages:
-          description: ''
+          description: ""
           content:
             application/json:
               schema:
@@ -22965,7 +22965,7 @@ paths:
                               esim_type:
                                 type: string
                               warning:
-                                type: 'null'
+                                type: "null"
                               apn_type:
                                 type: string
                               apn_value:
@@ -23111,7 +23111,7 @@ paths:
                                     is_fair_usage_policy:
                                       type: boolean
                                     fair_usage_policy:
-                                      type: 'null'
+                                      type: "null"
                                     data:
                                       type: string
                                     voice:
@@ -23340,7 +23340,7 @@ paths:
                       last:
                         type: string
                       prev:
-                        type: 'null'
+                        type: "null"
                       next:
                         type: string
                     required:
@@ -23413,5 +23413,4 @@ servers:
   - url: https://partners-api.airalo.com
     description: Prod Env
 security: []
-
-```
+````

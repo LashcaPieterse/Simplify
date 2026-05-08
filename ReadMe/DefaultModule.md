@@ -16,7 +16,6 @@ code_clipboard: true
 highlight_theme: darkula
 headingLevel: 2
 generator: "@tarslib/widdershins v4.0.30"
-
 ---
 
 # Default module
@@ -31,12 +30,13 @@ Base URLs:
 
 POST /v2/token
 
-This endpoint provides an access token required for making authenticated requests to the Airalo Partners API. Submit your client ID and client secret to obtain a token valid for **24 hours**. While the token remains valid for a year, we recommend refreshing it more frequently for enhanced security.  
+This endpoint provides an access token required for making authenticated requests to the Airalo Partners API. Submit your client ID and client secret to obtain a token valid for **24 hours**. While the token remains valid for a year, we recommend refreshing it more frequently for enhanced security.
 
-#### Important Notes  
-- The response contains the access token, which must be cached and reused for subsequent API calls until it expires or is refreshed.  
-- Store the client ID and client secret securely in an **encrypted format** on your systems.  
-- All actions performed using these credentials will be considered valid transactions, and the partner will be responsible for any associated costs.  
+#### Important Notes
+
+- The response contains the access token, which must be cached and reused for subsequent API calls until it expires or is refreshed.
+- Store the client ID and client secret securely in an **encrypted format** on your systems.
+- All actions performed using these credentials will be considered valid transactions, and the partner will be responsible for any associated costs.
 
 > Body Parameters
 
@@ -44,22 +44,21 @@ This endpoint provides an access token required for making authenticated request
 client_id: <replace with client id>
 client_secret: <replace with client secret>
 grant_type: client_credentials
-
 ```
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|body|body|object| no |none|
-|» client_id|body|string| yes |Required. Unique identifier of your application. Must be kept secure and never exposed publicly.|
-|» client_secret|body|string| yes |Required. Confidential key associated with your client ID. Must be kept secure and never exposed publicly.|
-|» grant_type|body|string| yes |Required. The grant type should be set to "client_credentials". |
+| Name            | Location | Type   | Required | Description                                                                                                |
+| --------------- | -------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------- |
+| Accept          | header   | string | yes      | none                                                                                                       |
+| body            | body     | object | no       | none                                                                                                       |
+| » client_id     | body     | string | yes      | Required. Unique identifier of your application. Must be kept secure and never exposed publicly.           |
+| » client_secret | body     | string | yes      | Required. Confidential key associated with your client ID. Must be kept secure and never exposed publicly. |
+| » grant_type    | body     | string | yes      | Required. The grant type should be set to "client_credentials".                                            |
 
 #### Description
 
-**» grant_type**: Required. The grant type should be set to "client_credentials". 
+**» grant_type**: Required. The grant type should be set to "client_credentials".
 It indicates server-to-server authentication, where the client application directly requests an access token without user intervention.
 
 > Response Examples
@@ -94,32 +93,32 @@ It indicates server-to-server authentication, where the client application direc
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» token_type|string|true|none||none|
-|»» expires_in|integer|true|none||none|
-|»» access_token|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name            | Type    | Required | Restrictions | Title | description |
+| --------------- | ------- | -------- | ------------ | ----- | ----------- |
+| » data          | object  | true     | none         |       | none        |
+| »» token_type   | string  | true     | none         |       | none        |
+| »» expires_in   | integer | true     | none         |       | none        |
+| »» access_token | string  | true     | none         |       | none        |
+| » meta          | object  | true     | none         |       | none        |
+| »» message      | string  | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» client_id|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name         | Type   | Required | Restrictions | Title | description |
+| ------------ | ------ | -------- | ------------ | ----- | ----------- |
+| » data       | object | true     | none         |       | none        |
+| »» client_id | string | true     | none         |       | none        |
+| » meta       | object | true     | none         |       | none        |
+| »» message   | string | true     | none         |       | none        |
 
 # REST API/Endpoints/Browse packages
 
@@ -132,47 +131,51 @@ GET /v2/packages
 This step is vital for ensuring newly introduced packages are available and out-of-stock packages are excluded.
 :::
 
-Retrieve a list of local and global eSIM packages available through the Airalo Partners API. Local packages cover a single country, while global packages span multiple countries and regions. This endpoint helps you synchronize eSIM plans/packages with your system, ensuring newly introduced packages are available to your clients and out-of-stock packages are handled properly.  
+Retrieve a list of local and global eSIM packages available through the Airalo Partners API. Local packages cover a single country, while global packages span multiple countries and regions. This endpoint helps you synchronize eSIM plans/packages with your system, ensuring newly introduced packages are available to your clients and out-of-stock packages are handled properly.
 
-#### Features  
-- **Package Types**: Supports standard data packages and the new "Voice and Text" packages.  
-- **Filtering**: Filter results by operator type or country code to tailor the package list to your needs.  
-- **Pagination**: Adjust pagination settings to retrieve results in manageable chunks.  
-- **Limit**: Set the `limit` parameter to a high value (e.g., 1,000) to fetch all packages in a single request without using pagination.  
-- **Include Top-Up**: Use the `include:top-up` parameter to fetch eSIM packages along with their associated top-up packages.  
+#### Features
 
-#### Rate Limit  
-- This endpoint allows up to **40 requests per minute**. Ensure your implementation respects this limit to avoid rate limit errors.  
+- **Package Types**: Supports standard data packages and the new "Voice and Text" packages.
+- **Filtering**: Filter results by operator type or country code to tailor the package list to your needs.
+- **Pagination**: Adjust pagination settings to retrieve results in manageable chunks.
+- **Limit**: Set the `limit` parameter to a high value (e.g., 1,000) to fetch all packages in a single request without using pagination.
+- **Include Top-Up**: Use the `include:top-up` parameter to fetch eSIM packages along with their associated top-up packages.
+
+#### Rate Limit
+
+- This endpoint allows up to **40 requests per minute**. Ensure your implementation respects this limit to avoid rate limit errors.
 
 #### Multi-Currency
+
 - This endpoint provides pricing information in multiple currencies for both net prices and recommended retail prices. All currency conversion rates are updated once daily at 00:00 UTC.
 
-#### Important Notes  
-- Include the access token, obtained from the **Request Access Token** endpoint, in the request headers for authentication.  
+#### Important Notes
+
+- Include the access token, obtained from the **Request Access Token** endpoint, in the request headers for authentication.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|filter[type]|query|string| no |Optional. A string to filter packages by operator type. Possible values are "local" and "global".|
-|filter[country]|query|string| no |Optional. A string to filter packages by country code. Examples include US, DE, GB, IT, and UA.|
-|limit|query|string| no |Optional. An integer specifying how many items will be returned on each page.|
-|page|query|string| no |Optional. An integer specifying the pagination's current page. |
-|include|query|string| no |Optional. Valid value is topup. Includes topup packages to the response|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name            | Location | Type   | Required | Description                                                                                       |
+| --------------- | -------- | ------ | -------- | ------------------------------------------------------------------------------------------------- |
+| filter[type]    | query    | string | no       | Optional. A string to filter packages by operator type. Possible values are "local" and "global". |
+| filter[country] | query    | string | no       | Optional. A string to filter packages by country code. Examples include US, DE, GB, IT, and UA.   |
+| limit           | query    | string | no       | Optional. An integer specifying how many items will be returned on each page.                     |
+| page            | query    | string | no       | Optional. An integer specifying the pagination's current page.                                    |
+| include         | query    | string | no       | Optional. Valid value is topup. Includes topup packages to the response                           |
+| Accept          | header   | string | yes      | none                                                                                              |
+| Authorization   | header   | string | yes      | none                                                                                              |
 
 #### Description
 
 **filter[type]**: Optional. A string to filter packages by operator type. Possible values are "local" and "global".
-  
+
 If the filter is set to "global," the output will include only global and regional eSims. Global and regional packages do not use the "country_code" field, which will be empty. The "type" field in the operator object within the response will be set to "global." A package is considered worldwide if its "slug" field is set to "world" and regional if "slug" contains a region name, for example, "europe" or "Africa".
-  
+
 If the filter is set to "local," the response will contain only country-specific packages. To get the list of packages for a single country, you can use it in combination with filter[country] parameter. The "type" field in the operator object of the response will indicate a "local" type.
-  
+
 When the filter is not set, we return all types of eSIMs: local, regional, and global.
 
-**page**: Optional. An integer specifying the pagination's current page. 
+**page**: Optional. An integer specifying the pagination's current page.
 If the page is set to 2 or beyond, the response will have different format and contain an object representing the country's index in the list of packages.
 
 > Response Examples
@@ -227,15 +230,11 @@ If the page is set to 2 or beyond, the response will have different format and c
               "networks": [
                 {
                   "name": "T-Mobile",
-                  "types": [
-                    "5G"
-                  ]
+                  "types": ["5G"]
                 },
                 {
                   "name": "Verizon",
-                  "types": [
-                    "5G"
-                  ]
+                  "types": ["5G"]
                 }
               ]
             }
@@ -637,9 +636,7 @@ If the page is set to 2 or beyond, the response will have different format and c
               "networks": [
                 {
                   "name": "T-Mobile",
-                  "types": [
-                    "5G"
-                  ]
+                  "types": ["5G"]
                 }
               ]
             }
@@ -1053,9 +1050,7 @@ If the page is set to 2 or beyond, the response will have different format and c
               "networks": [
                 {
                   "name": "Orange",
-                  "types": [
-                    "4G"
-                  ]
+                  "types": ["4G"]
                 }
               ]
             }
@@ -1469,9 +1464,7 @@ If the page is set to 2 or beyond, the response will have different format and c
               "networks": [
                 {
                   "name": "China Mobile",
-                  "types": [
-                    "5G"
-                  ]
+                  "types": ["5G"]
                 }
               ]
             }
@@ -1593,9 +1586,7 @@ If the page is set to 2 or beyond, the response will have different format and c
               "networks": [
                 {
                   "name": "China Mobile",
-                  "types": [
-                    "5G"
-                  ]
+                  "types": ["5G"]
                 }
               ]
             }
@@ -1999,145 +1990,145 @@ If the page is set to 2 or beyond, the response will have different format and c
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» slug|string|true|none||none|
-|»» country_code|string|true|none||none|
-|»» title|string|true|none||none|
-|»» image|object|true|none||none|
-|»»» width|integer|true|none||none|
-|»»» height|integer|true|none||none|
-|»»» url|string|true|none||none|
-|»» operators|[object]|true|none||none|
-|»»» id|integer|true|none||none|
-|»»» style|string|true|none||none|
-|»»» gradient_start|string|true|none||none|
-|»»» gradient_end|string|true|none||none|
-|»»» type|string|true|none||none|
-|»»» is_prepaid|boolean|true|none||none|
-|»»» title|string|true|none||none|
-|»»» esim_type|string|true|none||none|
-|»»» warning|null|true|none||none|
-|»»» apn_type|string|true|none||none|
-|»»» apn_value|string¦null|true|none||none|
-|»»» is_roaming|boolean|true|none||none|
-|»»» info|[string]|true|none||none|
-|»»» image|object|true|none||none|
-|»»»» width|integer|true|none||none|
-|»»»» height|integer|true|none||none|
-|»»»» url|string|true|none||none|
-|»»» plan_type|string|true|none||none|
-|»»» activation_policy|string|true|none||none|
-|»»» is_kyc_verify|boolean|true|none||none|
-|»»» rechargeability|boolean|true|none||none|
-|»»» other_info|string¦null|true|none||none|
-|»»» coverages|[object]|true|none||none|
-|»»»» name|string|true|none||none|
-|»»»» code|string|true|none||none|
-|»»»» networks|[object]|true|none||none|
-|»»»»» name|string|true|none||none|
-|»»»»» types|[string]|true|none||none|
-|»»» install_window_days|integer¦null|true|none||The # of days from when an eSIM is bought from operator until it can be installed on a device. If this time passes - the sim is recycled and gone (cannot be used/ topped up)|
-|»»» topup_grace_window_days|integer¦null|true|none||The # of days from when an eSIM is exhausted or expired until a topup is bought. If this period passes and no topup is bought, the sim is recycled and can no longer be topped up. Note that after each topup this period restarts.|
-|»»» apn|object|true|none||none|
-|»»»» ios|object|true|none||none|
-|»»»»» apn_type|string|true|none||none|
-|»»»»» apn_value|string¦null|true|none||none|
-|»»»» android|object|true|none||none|
-|»»»»» apn_type|string|true|none||none|
-|»»»»» apn_value|string¦null|true|none||none|
-|»»» packages|[object]|true|none||none|
-|»»»» id|string|true|none||none|
-|»»»» type|string|true|none||none|
-|»»»» price|number|true|none||none|
-|»»»» amount|integer|true|none||none|
-|»»»» day|integer|true|none||none|
-|»»»» is_unlimited|boolean|true|none||none|
-|»»»» title|string|true|none||none|
-|»»»» short_info|string¦null|true|none||none|
-|»»»» qr_installation|string|true|none||none|
-|»»»» manual_installation|string|true|none||none|
-|»»»» is_fair_usage_policy|boolean¦null|true|none||none|
-|»»»» fair_usage_policy|string¦null|true|none||none|
-|»»»» data|string|true|none||none|
-|»»»» voice|integer¦null|true|none||none|
-|»»»» text|integer¦null|true|none||none|
-|»»»» net_price|number|true|none||none|
-|»»»» prices|object|true|none||none|
-|»»»»» net_price|object|true|none||none|
-|»»»»»» AUD|number|true|none||none|
-|»»»»»» BRL|number|true|none||none|
-|»»»»»» GBP|number|true|none||none|
-|»»»»»» CAD|number|true|none||none|
-|»»»»»» AED|number|true|none||none|
-|»»»»»» EUR|number|true|none||none|
-|»»»»»» INR|number|true|none||none|
-|»»»»»» IDR|integer|true|none||none|
-|»»»»»» ILS|number|true|none||none|
-|»»»»»» JPY|integer|true|none||none|
-|»»»»»» MYR|number|true|none||none|
-|»»»»»» MXN|number|true|none||none|
-|»»»»»» SGD|number|true|none||none|
-|»»»»»» KRW|integer|true|none||none|
-|»»»»»» USD|number|true|none||none|
-|»»»»»» VND|integer|true|none||none|
-|»»»»» recommended_retail_price|object|true|none||none|
-|»»»»»» AUD|number|true|none||none|
-|»»»»»» BRL|number|true|none||none|
-|»»»»»» GBP|number|true|none||none|
-|»»»»»» CAD|number|true|none||none|
-|»»»»»» AED|number|true|none||none|
-|»»»»»» EUR|integer|true|none||none|
-|»»»»»» INR|number|true|none||none|
-|»»»»»» IDR|integer|true|none||none|
-|»»»»»» ILS|number|true|none||none|
-|»»»»»» JPY|integer|true|none||none|
-|»»»»»» MYR|number|true|none||none|
-|»»»»»» MXN|number|true|none||none|
-|»»»»»» SGD|number|true|none||none|
-|»»»»»» KRW|integer|true|none||none|
-|»»»»»» USD|number|true|none||none|
-|»»»»»» VND|integer|true|none||none|
-|»»» countries|[object]|true|none||none|
-|»»»» country_code|string|true|none||none|
-|»»»» title|string|true|none||none|
-|»»»» image|object|true|none||none|
-|»»»»» width|integer|true|none||none|
-|»»»»» height|integer|true|none||none|
-|»»»»» url|string|true|none||none|
-|» links|object|true|none||none|
-|»» first|string|true|none||none|
-|»» last|string|true|none||none|
-|»» prev|null|true|none||none|
-|»» next|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
-|»» current_page|integer|true|none||none|
-|»» from|integer|true|none||none|
-|»» last_page|integer|true|none||none|
-|»» path|string|true|none||none|
-|»» per_page|string|true|none||none|
-|»» to|integer|true|none||none|
-|»» total|integer|true|none||none|
+| Name                           | Type         | Required | Restrictions | Title | description                                                                                                                                                                                                                         |
+| ------------------------------ | ------------ | -------- | ------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| » data                         | [object]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» slug                        | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» country_code                | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» title                       | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» image                       | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» width                      | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» height                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» url                        | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» operators                   | [object]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» id                         | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» style                      | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» gradient_start             | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» gradient_end               | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» type                       | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» is_prepaid                 | boolean      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» title                      | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» esim_type                  | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» warning                    | null         | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» apn_type                   | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» apn_value                  | string¦null  | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» is_roaming                 | boolean      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» info                       | [string]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» image                      | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» width                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» height                    | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» url                       | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» plan_type                  | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» activation_policy          | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» is_kyc_verify              | boolean      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» rechargeability            | boolean      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» other_info                 | string¦null  | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» coverages                  | [object]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» name                      | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» code                      | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» networks                  | [object]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» name                     | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» types                    | [string]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» install_window_days        | integer¦null | true     | none         |       | The # of days from when an eSIM is bought from operator until it can be installed on a device. If this time passes - the sim is recycled and gone (cannot be used/ topped up)                                                       |
+| »»» topup_grace_window_days    | integer¦null | true     | none         |       | The # of days from when an eSIM is exhausted or expired until a topup is bought. If this period passes and no topup is bought, the sim is recycled and can no longer be topped up. Note that after each topup this period restarts. |
+| »»» apn                        | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» ios                       | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» apn_type                 | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» apn_value                | string¦null  | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» android                   | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» apn_type                 | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» apn_value                | string¦null  | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» packages                   | [object]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» id                        | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» type                      | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» price                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» amount                    | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» day                       | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» is_unlimited              | boolean      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» title                     | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» short_info                | string¦null  | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» qr_installation           | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» manual_installation       | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» is_fair_usage_policy      | boolean¦null | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» fair_usage_policy         | string¦null  | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» data                      | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» voice                     | integer¦null | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» text                      | integer¦null | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» net_price                 | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» prices                    | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» net_price                | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» AUD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» BRL                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» GBP                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» CAD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» AED                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» EUR                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» INR                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» IDR                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» ILS                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» JPY                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» MYR                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» MXN                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» SGD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» KRW                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» USD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» VND                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» recommended_retail_price | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» AUD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» BRL                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» GBP                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» CAD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» AED                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» EUR                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» INR                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» IDR                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» ILS                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» JPY                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» MYR                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» MXN                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» SGD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» KRW                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» USD                     | number       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»»» VND                     | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»» countries                  | [object]     | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» country_code              | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» title                     | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»» image                     | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» width                    | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» height                   | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »»»»» url                      | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| » links                        | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» first                       | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» last                        | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» prev                        | null         | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» next                        | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| » meta                         | object       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» message                     | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» current_page                | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» from                        | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» last_page                   | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» path                        | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» per_page                    | string       | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» to                          | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
+| »» total                       | integer      | true     | none         |       | none                                                                                                                                                                                                                                |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» limit|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name       | Type   | Required | Restrictions | Title | description |
+| ---------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data     | object | true     | none         |       | none        |
+| »» limit   | string | true     | none         |       | none        |
+| » meta     | object | true     | none         |       | none        |
+| »» message | string | true     | none         |       | none        |
 
 # REST API/Endpoints/Place order
 
@@ -2151,7 +2142,7 @@ For more information and best practices, visit our [FAQ page](https://airalopart
 
 When submitting the order, the response includes the field `direct_apple_installation_url` with installation instructions that now provide Apple’s universal link, enabling direct installation on devices running iOS 17.4 or later for a smoother user experience.
 
-You can also provide your user’s email address using the `to_email` parameter, which will send an email to your user asynchronously. The email uses a white-label template powered by our eSIM cloud feature. It provides your users with a link to access and install the eSIM, includes installation instructions, and supports multiple languages. 
+You can also provide your user’s email address using the `to_email` parameter, which will send an email to your user asynchronously. The email uses a white-label template powered by our eSIM cloud feature. It provides your users with a link to access and install the eSIM, includes installation instructions, and supports multiple languages.
 
 <img src="https://lh3.googleusercontent.com/pw/AP1GczN6x9C8NVgjy_sptiiYf262zSJWxwWu1lgCss0YNHnw8s1FJeqECe2kCCXxy9BwJkaKM8v-ADXnILoeREKxQxYjUU55qapXoGsHIUtajxf_ARivNHVWSpzw0oQoyVmEpTNPq_AdIXGBMQmU5eS2cq1F=w504-h600-s-no-gm" style="border: 1px solid lightgrey;"/>
 
@@ -2166,24 +2157,23 @@ brand_settings_name: our perfect brand
 to_email: valid_email@address.com
 "sharing_option[]": link
 "copy_address[]": valid_email@address.com
-
 ```
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» quantity|body|string| yes |Required. The quantity of items in the order. Maximum of 50.|
-|» package_id|body|string| yes |Required. The package ID associated with the order. You can obtain this from the "Packages / Get Packages" endpoint.|
-|» type|body|string| yes |Optional. The only possible value for this endpoint is "sim". If left empty, default "sim" value will be used.|
-|» description|body|string| yes |Optional. A custom description for the order, which can help you identify it later.|
-|» brand_settings_name|body|string| yes |Nullable. The definition under what brand the eSIM should be shared. Null for unbranded.|
-|» to_email|body|string| yes |Optional. If specified, email with esim sharing will be sent. sharing_option should be specified as well.|
-|» sharing_option[]|body|string| yes |Optional. Array. Required when to_email is set. Available options: link, pdf|
-|» copy_address[]|body|string| yes |Optional. Array. It uses when to_email is set.|
+| Name                  | Location | Type   | Required | Description                                                                                                          |
+| --------------------- | -------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| Accept                | header   | string | yes      | none                                                                                                                 |
+| Authorization         | header   | string | yes      | none                                                                                                                 |
+| body                  | body     | object | no       | none                                                                                                                 |
+| » quantity            | body     | string | yes      | Required. The quantity of items in the order. Maximum of 50.                                                         |
+| » package_id          | body     | string | yes      | Required. The package ID associated with the order. You can obtain this from the "Packages / Get Packages" endpoint. |
+| » type                | body     | string | yes      | Optional. The only possible value for this endpoint is "sim". If left empty, default "sim" value will be used.       |
+| » description         | body     | string | yes      | Optional. A custom description for the order, which can help you identify it later.                                  |
+| » brand_settings_name | body     | string | yes      | Nullable. The definition under what brand the eSIM should be shared. Null for unbranded.                             |
+| » to_email            | body     | string | yes      | Optional. If specified, email with esim sharing will be sent. sharing_option should be specified as well.            |
+| » sharing_option[]    | body     | string | yes      | Optional. Array. Required when to_email is set. Available options: link, pdf                                         |
+| » copy_address[]      | body     | string | yes      | Optional. Array. It uses when to_email is set.                                                                       |
 
 > Response Examples
 
@@ -2311,69 +2301,69 @@ to_email: valid_email@address.com
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» package_id|string|true|none||none|
-|»» quantity|string|true|none||none|
-|»» type|string|true|none||none|
-|»» description|string|true|none||none|
-|»» esim_type|string|true|none||none|
-|»» validity|integer|true|none||none|
-|»» package|string|true|none||none|
-|»» data|string|true|none||none|
-|»» price|number|true|none||none|
-|»» created_at|string|true|none||none|
-|»» id|integer|true|none||none|
-|»» code|string|true|none||none|
-|»» currency|string|true|none||none|
-|»» manual_installation|string|true|none||none|
-|»» qrcode_installation|string|true|none||none|
-|»» installation_guides|object|true|none||none|
-|»»» en|string|true|none||none|
-|»» brand_settings_name|string|true|none||none|
-|»» sims|[object]|true|none||none|
-|»»» id|integer|false|none||none|
-|»»» created_at|string|false|none||none|
-|»»» iccid|string|false|none||none|
-|»»» lpa|string|false|none||none|
-|»»» imsis|null|false|none||none|
-|»»» matching_id|string|false|none||none|
-|»»» qrcode|string|false|none||none|
-|»»» qrcode_url|string|false|none||none|
-|»»» direct_apple_installation_url|string|false|none||none|
-|»»» airalo_code|null|false|none||none|
-|»»» apn_type|string|false|none||none|
-|»»» apn_value|null|false|none||none|
-|»»» is_roaming|boolean|false|none||none|
-|»»» confirmation_code|null|false|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                              | Type     | Required | Restrictions | Title | description |
+| --------------------------------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data                            | object   | true     | none         |       | none        |
+| »» package_id                     | string   | true     | none         |       | none        |
+| »» quantity                       | string   | true     | none         |       | none        |
+| »» type                           | string   | true     | none         |       | none        |
+| »» description                    | string   | true     | none         |       | none        |
+| »» esim_type                      | string   | true     | none         |       | none        |
+| »» validity                       | integer  | true     | none         |       | none        |
+| »» package                        | string   | true     | none         |       | none        |
+| »» data                           | string   | true     | none         |       | none        |
+| »» price                          | number   | true     | none         |       | none        |
+| »» created_at                     | string   | true     | none         |       | none        |
+| »» id                             | integer  | true     | none         |       | none        |
+| »» code                           | string   | true     | none         |       | none        |
+| »» currency                       | string   | true     | none         |       | none        |
+| »» manual_installation            | string   | true     | none         |       | none        |
+| »» qrcode_installation            | string   | true     | none         |       | none        |
+| »» installation_guides            | object   | true     | none         |       | none        |
+| »»» en                            | string   | true     | none         |       | none        |
+| »» brand_settings_name            | string   | true     | none         |       | none        |
+| »» sims                           | [object] | true     | none         |       | none        |
+| »»» id                            | integer  | false    | none         |       | none        |
+| »»» created_at                    | string   | false    | none         |       | none        |
+| »»» iccid                         | string   | false    | none         |       | none        |
+| »»» lpa                           | string   | false    | none         |       | none        |
+| »»» imsis                         | null     | false    | none         |       | none        |
+| »»» matching_id                   | string   | false    | none         |       | none        |
+| »»» qrcode                        | string   | false    | none         |       | none        |
+| »»» qrcode_url                    | string   | false    | none         |       | none        |
+| »»» direct_apple_installation_url | string   | false    | none         |       | none        |
+| »»» airalo_code                   | null     | false    | none         |       | none        |
+| »»» apn_type                      | string   | false    | none         |       | none        |
+| »»» apn_value                     | null     | false    | none         |       | none        |
+| »»» is_roaming                    | boolean  | false    | none         |       | none        |
+| »»» confirmation_code             | null     | false    | none         |       | none        |
+| » meta                            | object   | true     | none         |       | none        |
+| »» message                        | string   | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» package_id|string|true|none||none|
-|»» quantity|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name          | Type   | Required | Restrictions | Title | description |
+| ------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data        | object | true     | none         |       | none        |
+| »» package_id | string | true     | none         |       | none        |
+| »» quantity   | string | true     | none         |       | none        |
+| » meta        | object | true     | none         |       | none        |
+| »» message    | string | true     | none         |       | none        |
 
 ## POST Submit order async
 
 POST /v2/orders-async
 
-This endpoint allows you to submit an asynchronous order to the Airalo Partners API. This ensures greater performance and reduces the wait time for your desired flow. Each async order will generate unique `nanoid` stored in reponse's `request_id` - Make sure you store this id in your system, as it is a reference for the order which is pending processing. You should check map it for every successfully received order response on your webhook url.  
+This endpoint allows you to submit an asynchronous order to the Airalo Partners API. This ensures greater performance and reduces the wait time for your desired flow. Each async order will generate unique `nanoid` stored in reponse's `request_id` - Make sure you store this id in your system, as it is a reference for the order which is pending processing. You should check map it for every successfully received order response on your webhook url.
 
 Provide the required information, such as quantity and package ID, and include optional description if needed.
 
@@ -2393,21 +2383,20 @@ package_id: kallur-digital-7days-1gb
 type: sim
 description: 1 sim kallur-digital-7days-1gb
 webhook_url: https://your-webhook.com
-
 ```
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» quantity|body|string| yes |Required. The quantity of items in the order. Maximum of 50.|
-|» package_id|body|string| yes |Required. The package ID associated with the order. You can obtain this from the "Packages / Get Packages" endpoint.|
-|» type|body|string| yes |Optional. The only possible value for this endpoint is "sim". If left empty, default "sim" value will be used.|
-|» description|body|string| yes |Optional. A custom description for the order, which can help you identify it later.|
-|» webhook_url|body|string| yes |Optional. A custom, valid url to which you will receive the order details data asynchronously. Note that you can optin or provide in request. `The webhook_url if provided in payload will overwrite the one which is opted in.`|
+| Name          | Location | Type   | Required | Description                                                                                                                                                                                                                      |
+| ------------- | -------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accept        | header   | string | yes      | none                                                                                                                                                                                                                             |
+| Authorization | header   | string | yes      | none                                                                                                                                                                                                                             |
+| body          | body     | object | no       | none                                                                                                                                                                                                                             |
+| » quantity    | body     | string | yes      | Required. The quantity of items in the order. Maximum of 50.                                                                                                                                                                     |
+| » package_id  | body     | string | yes      | Required. The package ID associated with the order. You can obtain this from the "Packages / Get Packages" endpoint.                                                                                                             |
+| » type        | body     | string | yes      | Optional. The only possible value for this endpoint is "sim". If left empty, default "sim" value will be used.                                                                                                                   |
+| » description | body     | string | yes      | Optional. A custom description for the order, which can help you identify it later.                                                                                                                                              |
+| » webhook_url | body     | string | yes      | Optional. A custom, valid url to which you will receive the order details data asynchronously. Note that you can optin or provide in request. `The webhook_url if provided in payload will overwrite the one which is opted in.` |
 
 > Response Examples
 
@@ -2447,33 +2436,33 @@ webhook_url: https://your-webhook.com
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|202|[Accepted](https://tools.ietf.org/html/rfc7231#section-6.3.3)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 202              | [Accepted](https://tools.ietf.org/html/rfc7231#section-6.3.3)            | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **202**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» request_id|string|true|none||none|
-|»» accepted_at|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name           | Type   | Required | Restrictions | Title | description |
+| -------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data         | object | true     | none         |       | none        |
+| »» request_id  | string | true     | none         |       | none        |
+| »» accepted_at | string | true     | none         |       | none        |
+| » meta         | object | true     | none         |       | none        |
+| »» message     | string | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» package_id|string|true|none||none|
-|»» quantity|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name          | Type   | Required | Restrictions | Title | description |
+| ------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data        | object | true     | none         |       | none        |
+| »» package_id | string | true     | none         |       | none        |
+| »» quantity   | string | true     | none         |       | none        |
+| » meta        | object | true     | none         |       | none        |
+| »» message    | string | true     | none         |       | none        |
 
 ## POST Future orders
 
@@ -2482,12 +2471,14 @@ POST /v2/future-orders
 This endpoint allows you to submit an order to the Airalo Partner API, which will be created on the specified due date.
 
 To proceed, provide the required information:
+
 - Due date
 - Quantity
 - Package ID
 - Description (optional)
 
 Please note:
+
 - On success, the endpoint response will include a unique 25-character request_id.
 - You must store this value in your system to cancel the order later if needed and to know for which order you got a response on your webhook URL.
 - An access token from the "Request Access Token" endpoint is required in the request.
@@ -2499,20 +2490,20 @@ That URL should be able to receive HTTP POST requests with your order data that 
 NOTE: We check the liveness of your webhook URL with an HTTP HEAD request to which we expect 200 OK response.
 
 **What happens when the due date arrives?**
-When the due date arrives your order is processed and the order details are sent as a POST HTTP request to 
+When the due date arrives your order is processed and the order details are sent as a POST HTTP request to
 either your opted in "async_orders" notification type url (more info [here](https://partner-api-airalo.apidog.io/async-orders-11883038e0) )
 or on the "webhhok_url" optional parameter of this endpoint which overrides the above opted in URL.
 NOTE that you must have one of the above (either opted in URL or webhhok_url) provided in order to make a future order.
 
-if you provide the optional parameter "sharing_option", which goes together with the "to_email" parameter 
+if you provide the optional parameter "sharing_option", which goes together with the "to_email" parameter
 then an email with the eSim details will also be sent to the email provided in the "to_email" parameter as well.
-Depending from the selected sharing option which can be one of link or pdf or both you will get the eSim data 
+Depending from the selected sharing option which can be one of link or pdf or both you will get the eSim data
 either in a PDF format attached to the email or as a link.
 
 **What is the format of the message that is sent to the webhook URL?**
 The format of the message that is sent to the webhook URL is the same as the response of the [regular order](https://partner-api-airalo.apidog.io/submit-order-11883024e0).
-It only has one additional parameter named "request_id" which is the same request_id that you got in the response 
-when you made the future order at the time of making the order, 
+It only has one additional parameter named "request_id" which is the same request_id that you got in the response
+when you made the future order at the time of making the order,
 so that you know for which future order you got details on your webhook URL.
 
 For more details and best practices, visit our [FAQ page](https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ).
@@ -2521,11 +2512,12 @@ For more details and best practices, visit our [FAQ page](https://airalopartners
 
 NOTE that this endpoint has a slightly different behaviour in sandbox mode.
 Here are the differences.
+
 1. In sandbox mode the future orders will not be processed on the actual due date but they will be processed immediatelly upon submission.
 2. Because the future orders are not processed on the due date, their status is always processed so in order to simulate future orders with other statuses there are 3 special packages for that. Here are the pacakges with the explanations:
-    - `test-create-pending-future-order-7days-1gb` - special package for creating a future order with pending status
-    - `test-create-failed-future-order-7days-1gb` - special package for creating a future order with failed status
-    - `test-create-retry-future-order-7days-1gb` - special package for creating a future order with retry status 
+   - `test-create-pending-future-order-7days-1gb` - special package for creating a future order with pending status
+   - `test-create-failed-future-order-7days-1gb` - special package for creating a future order with failed status
+   - `test-create-retry-future-order-7days-1gb` - special package for creating a future order with retry status
 
 By using the packages above future orders with the above statuses can be created and the `request_id` from those orders can be used to test the [cancel future order API](https://app.apidog.com/link/project/742850/apis/api-14459873) to cancel the future order.
 
@@ -2534,8 +2526,8 @@ By using the above packages you can also test the [GET future orders API Endpoin
 > Body Parameters
 
 > Request with "webhook_url"
-With this request a future order will be created that will be processed on date 2025-04-09 10:00 and when the ordfer is complete the order details will be delivered to the URL provided in the "webhook_url" parameter. 
-NOTE that this URL is a URL that is hosted by your webserver.
+> With this request a future order will be created that will be processed on date 2025-04-09 10:00 and when the ordfer is complete the order details will be delivered to the URL provided in the "webhook_url" parameter.
+> NOTE that this URL is a URL that is hosted by your webserver.
 
 ```json
 {
@@ -2549,27 +2541,27 @@ NOTE that this URL is a URL that is hosted by your webserver.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» quantity|body|integer| yes |The quantity of items in the order. Maximum of 50.|
-|» package_id|body|string| yes |Required. The package ID associated with the order. You can obtain this from the "Packages / Get Packages" endpoint.|
-|» due_date|body|string(date-time)| yes |Required. Date and time string field in the format YYYY-MM-DD HH:MM. This date must be minimum two days in the future from current time and maximum 1 year in the future. The order processing starts at the moment the due date arrives.|
-|» to_email|body|string| no |If specified, email with esim sharing will be sent. sharing_option should be specified as well.|
-|» sharing_option|body|[string]| no |Array. Required when to_email is set. Available options: link, pdf|
-|» copy_address|body|string| no |Array. It is used when to_email is set.|
-|» webhook_url|body|string| no |Optional. A custom, valid url to which you will receive the order details data asynchronously. Note that you can optin or provide in request. The webhook_url if provided in payload will overwrite the one which is opted in.|
-|» description|body|string| no |Optional. A custom description for the order, which can help you identify it later.|
-|» brand_settings_name|body|string¦null| no |Nullable. The definition under what brand the eSIM should be shared. Null for unbranded.|
+| Name                  | Location | Type              | Required | Description                                                                                                                                                                                                                               |
+| --------------------- | -------- | ----------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accept                | header   | string            | yes      | none                                                                                                                                                                                                                                      |
+| Authorization         | header   | string            | yes      | none                                                                                                                                                                                                                                      |
+| body                  | body     | object            | no       | none                                                                                                                                                                                                                                      |
+| » quantity            | body     | integer           | yes      | The quantity of items in the order. Maximum of 50.                                                                                                                                                                                        |
+| » package_id          | body     | string            | yes      | Required. The package ID associated with the order. You can obtain this from the "Packages / Get Packages" endpoint.                                                                                                                      |
+| » due_date            | body     | string(date-time) | yes      | Required. Date and time string field in the format YYYY-MM-DD HH:MM. This date must be minimum two days in the future from current time and maximum 1 year in the future. The order processing starts at the moment the due date arrives. |
+| » to_email            | body     | string            | no       | If specified, email with esim sharing will be sent. sharing_option should be specified as well.                                                                                                                                           |
+| » sharing_option      | body     | [string]          | no       | Array. Required when to_email is set. Available options: link, pdf                                                                                                                                                                        |
+| » copy_address        | body     | string            | no       | Array. It is used when to_email is set.                                                                                                                                                                                                   |
+| » webhook_url         | body     | string            | no       | Optional. A custom, valid url to which you will receive the order details data asynchronously. Note that you can optin or provide in request. The webhook_url if provided in payload will overwrite the one which is opted in.            |
+| » description         | body     | string            | no       | Optional. A custom description for the order, which can help you identify it later.                                                                                                                                                       |
+| » brand_settings_name | body     | string¦null       | no       | Nullable. The definition under what brand the eSIM should be shared. Null for unbranded.                                                                                                                                                  |
 
 #### Enum
 
-|Name|Value|
-|---|---|
-|» sharing_option|link|
-|» sharing_option|pdf|
+| Name             | Value |
+| ---------------- | ----- |
+| » sharing_option | link  |
+| » sharing_option | pdf   |
 
 > Response Examples
 
@@ -2603,32 +2595,32 @@ NOTE that this URL is a URL that is hosted by your webserver.
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» request_id|string|true|none||A unique string from 25 charachers for your submitted order that you can use it later to make other operations on the order. For example to cancel it if needed.|
-|»» due_date|string|true|none||The submitted due date with the order|
-|»» latest_cancellation_date|string|true|none||Latest cancelation date|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                        | Type   | Required | Restrictions | Title | description                                                                                                                                                      |
+| --------------------------- | ------ | -------- | ------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| » data                      | object | true     | none         |       | none                                                                                                                                                             |
+| »» request_id               | string | true     | none         |       | A unique string from 25 charachers for your submitted order that you can use it later to make other operations on the order. For example to cancel it if needed. |
+| »» due_date                 | string | true     | none         |       | The submitted due date with the order                                                                                                                            |
+| »» latest_cancellation_date | string | true     | none         |       | Latest cancelation date                                                                                                                                          |
+| » meta                      | object | true     | none         |       | none                                                                                                                                                             |
+| »» message                  | string | true     | none         |       | none                                                                                                                                                             |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» quantity|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name        | Type   | Required | Restrictions | Title | description |
+| ----------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data      | object | true     | none         |       | none        |
+| »» quantity | string | true     | none         |       | none        |
+| » meta      | object | true     | none         |       | none        |
+| »» message  | string | true     | none         |       | none        |
 
 ## POST eSIM voucher
 
@@ -2642,51 +2634,39 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 **Body Structure:**
 
-``` json
+```json
 {
-    "vouchers": [
-        {
-            "package_id": "replace with actual package slug",
-            "quantity": 3,
-            "booking_reference": "123"
-        }
-    ]
+  "vouchers": [
+    {
+      "package_id": "replace with actual package slug",
+      "quantity": 3,
+      "booking_reference": "123"
+    }
+  ]
 }
-
- ```
+```
 
 **Request parameters:**
 
 - **vouchers** (array, required):
-    
-    - An array of voucher objects to be created for eSIMs. Each voucher object contains the following fields:
-        
-        - **package_id** (string, required):
-            
-            - The unique identifier (slug) of the eSIM package for which the voucher is being issued.
-                
-            - Example: "package_id": "eu-europe-5gb-30days"
-                
-        - **quantity** (integer, required):
-            
-            - The number of vouchers you wish to purchase for the specified package.
-                
-            - Example: "quantity": 3
-                
-        - **booking_reference** (string, optional):
-            
-            - An optional field used to store the booking reference for this voucher, which can be used for tracking purposes in your own system.
-                
-            - Example: "booking_reference": "123"
-                
-            - If not provided, this field will be ignored.
+  - An array of voucher objects to be created for eSIMs. Each voucher object contains the following fields:
+    - **package_id** (string, required):
+      - The unique identifier (slug) of the eSIM package for which the voucher is being issued.
+      - Example: "package_id": "eu-europe-5gb-30days"
+    - **quantity** (integer, required):
+      - The number of vouchers you wish to purchase for the specified package.
+      - Example: "quantity": 3
+    - **booking_reference** (string, optional):
+      - An optional field used to store the booking reference for this voucher, which can be used for tracking purposes in your own system.
+      - Example: "booking_reference": "123"
+      - If not provided, this field will be ignored.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Authorization|header|string| yes |none|
-|Content-Type|header|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Authorization | header   | string | yes      | none        |
+| Content-Type  | header   | string | yes      | none        |
 
 > Response Examples
 
@@ -2698,22 +2678,22 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» package_id|string|true|none||none|
-|»» codes|[string]|true|none||none|
-|»» booking_reference|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                 | Type     | Required | Restrictions | Title | description |
+| -------------------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data               | [object] | true     | none         |       | none        |
+| »» package_id        | string   | true     | none         |       | none        |
+| »» codes             | [string] | true     | none         |       | none        |
+| »» booking_reference | string   | true     | none         |       | none        |
+| » meta               | object   | true     | none         |       | none        |
+| »» message           | string   | true     | none         |       | none        |
 
 # REST API/Endpoints/Install eSIM
 
@@ -2733,12 +2713,12 @@ Partner API now supports direct installation on iOS devices. With the introducti
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|sim_iccid|path|string| yes |The ICCID of the eSIM for which you want to retrieve the details.|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|Accept-Language|header|string| yes |none|
+| Name            | Location | Type   | Required | Description                                                       |
+| --------------- | -------- | ------ | -------- | ----------------------------------------------------------------- |
+| sim_iccid       | path     | string | yes      | The ICCID of the eSIM for which you want to retrieve the details. |
+| Accept          | header   | string | yes      | none                                                              |
+| Authorization   | header   | string | yes      | none                                                              |
+| Accept-Language | header   | string | yes      | none                                                              |
 
 > Response Examples
 
@@ -2848,92 +2828,92 @@ Partner API now supports direct installation on iOS devices. With the introducti
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» instructions|object|true|none||none|
-|»»» language|string|true|none||none|
-|»»» ios|[object]|true|none||none|
-|»»»» model|null|false|none||none|
-|»»»» version|string|false|none||none|
-|»»»» installation_via_qr_code|object|false|none||none|
-|»»»»» steps|object|true|none||none|
-|»»»»»» 1|string|true|none||none|
-|»»»»»» 2|string|true|none||none|
-|»»»»»» 3|string|true|none||none|
-|»»»»»» 4|string|true|none||none|
-|»»»»»» 5|string|true|none||none|
-|»»»»»» 6|string|true|none||none|
-|»»»»»» 7|string|true|none||none|
-|»»»»»» 8|string|true|none||none|
-|»»»»» qr_code_data|string|true|none||none|
-|»»»»» qr_code_url|string|true|none||none|
-|»»»»» direct_apple_installation_url|string|true|none||none|
-|»»»» installation_manual|object|false|none||none|
-|»»»»» steps|object|true|none||none|
-|»»»»»» 1|string|true|none||none|
-|»»»»»» 2|string|true|none||none|
-|»»»»»» 3|string|true|none||none|
-|»»»»»» 4|string|true|none||none|
-|»»»»»» 5|string|true|none||none|
-|»»»»»» 6|string|true|none||none|
-|»»»»»» 7|string|true|none||none|
-|»»»»»» 8|string|true|none||none|
-|»»»»»» 9|string|true|none||none|
-|»»»»» smdp_address_and_activation_code|string|true|none||none|
-|»»»» network_setup|object|false|none||none|
-|»»»»» steps|object|true|none||none|
-|»»»»»» 1|string|true|none||none|
-|»»»»»» 2|string|true|none||none|
-|»»»»»» 3|string|true|none||none|
-|»»»»»» 4|string|true|none||none|
-|»»»»»» 5|string|true|none||none|
-|»»»»» apn_type|string|true|none||none|
-|»»»»» apn_value|string|true|none||none|
-|»»»»» is_roaming|boolean|true|none||none|
-|»»» android|[object]|true|none||none|
-|»»»» model|null|false|none||none|
-|»»»» version|null|false|none||none|
-|»»»» installation_via_qr_code|object|false|none||none|
-|»»»»» steps|object|true|none||none|
-|»»»»»» 1|string|true|none||none|
-|»»»»»» 2|string|true|none||none|
-|»»»»»» 3|string|true|none||none|
-|»»»»»» 4|string|true|none||none|
-|»»»»»» 5|string|true|none||none|
-|»»»»» qr_code_data|string|true|none||none|
-|»»»»» qr_code_url|string|true|none||none|
-|»»»» installation_manual|object|false|none||none|
-|»»»»» steps|object|true|none||none|
-|»»»»»» 1|string|true|none||none|
-|»»»»»» 2|string|true|none||none|
-|»»»»»» 3|string|true|none||none|
-|»»»»»» 4|string|true|none||none|
-|»»»»»» 5|string|true|none||none|
-|»»»»»» 6|string|true|none||none|
-|»»»»» smdp_address_and_activation_code|string|true|none||none|
-|»»»» network_setup|object|false|none||none|
-|»»»»» steps|object|true|none||none|
-|»»»»»» 1|string|true|none||none|
-|»»»»»» 2|string|true|none||none|
-|»»»»»» 3|string|true|none||none|
-|»»»»»» 4|string|true|none||none|
-|»»»»»» 5|string|true|none||none|
-|»»»»»» 6|string|true|none||none|
-|»»»»»» 7|string|true|none||none|
-|»»»»» apn_type|string|true|none||none|
-|»»»»» apn_value|string|true|none||none|
-|»»»»» is_roaming|boolean|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                                   | Type     | Required | Restrictions | Title | description |
+| -------------------------------------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data                                 | object   | true     | none         |       | none        |
+| »» instructions                        | object   | true     | none         |       | none        |
+| »»» language                           | string   | true     | none         |       | none        |
+| »»» ios                                | [object] | true     | none         |       | none        |
+| »»»» model                             | null     | false    | none         |       | none        |
+| »»»» version                           | string   | false    | none         |       | none        |
+| »»»» installation_via_qr_code          | object   | false    | none         |       | none        |
+| »»»»» steps                            | object   | true     | none         |       | none        |
+| »»»»»» 1                               | string   | true     | none         |       | none        |
+| »»»»»» 2                               | string   | true     | none         |       | none        |
+| »»»»»» 3                               | string   | true     | none         |       | none        |
+| »»»»»» 4                               | string   | true     | none         |       | none        |
+| »»»»»» 5                               | string   | true     | none         |       | none        |
+| »»»»»» 6                               | string   | true     | none         |       | none        |
+| »»»»»» 7                               | string   | true     | none         |       | none        |
+| »»»»»» 8                               | string   | true     | none         |       | none        |
+| »»»»» qr_code_data                     | string   | true     | none         |       | none        |
+| »»»»» qr_code_url                      | string   | true     | none         |       | none        |
+| »»»»» direct_apple_installation_url    | string   | true     | none         |       | none        |
+| »»»» installation_manual               | object   | false    | none         |       | none        |
+| »»»»» steps                            | object   | true     | none         |       | none        |
+| »»»»»» 1                               | string   | true     | none         |       | none        |
+| »»»»»» 2                               | string   | true     | none         |       | none        |
+| »»»»»» 3                               | string   | true     | none         |       | none        |
+| »»»»»» 4                               | string   | true     | none         |       | none        |
+| »»»»»» 5                               | string   | true     | none         |       | none        |
+| »»»»»» 6                               | string   | true     | none         |       | none        |
+| »»»»»» 7                               | string   | true     | none         |       | none        |
+| »»»»»» 8                               | string   | true     | none         |       | none        |
+| »»»»»» 9                               | string   | true     | none         |       | none        |
+| »»»»» smdp_address_and_activation_code | string   | true     | none         |       | none        |
+| »»»» network_setup                     | object   | false    | none         |       | none        |
+| »»»»» steps                            | object   | true     | none         |       | none        |
+| »»»»»» 1                               | string   | true     | none         |       | none        |
+| »»»»»» 2                               | string   | true     | none         |       | none        |
+| »»»»»» 3                               | string   | true     | none         |       | none        |
+| »»»»»» 4                               | string   | true     | none         |       | none        |
+| »»»»»» 5                               | string   | true     | none         |       | none        |
+| »»»»» apn_type                         | string   | true     | none         |       | none        |
+| »»»»» apn_value                        | string   | true     | none         |       | none        |
+| »»»»» is_roaming                       | boolean  | true     | none         |       | none        |
+| »»» android                            | [object] | true     | none         |       | none        |
+| »»»» model                             | null     | false    | none         |       | none        |
+| »»»» version                           | null     | false    | none         |       | none        |
+| »»»» installation_via_qr_code          | object   | false    | none         |       | none        |
+| »»»»» steps                            | object   | true     | none         |       | none        |
+| »»»»»» 1                               | string   | true     | none         |       | none        |
+| »»»»»» 2                               | string   | true     | none         |       | none        |
+| »»»»»» 3                               | string   | true     | none         |       | none        |
+| »»»»»» 4                               | string   | true     | none         |       | none        |
+| »»»»»» 5                               | string   | true     | none         |       | none        |
+| »»»»» qr_code_data                     | string   | true     | none         |       | none        |
+| »»»»» qr_code_url                      | string   | true     | none         |       | none        |
+| »»»» installation_manual               | object   | false    | none         |       | none        |
+| »»»»» steps                            | object   | true     | none         |       | none        |
+| »»»»»» 1                               | string   | true     | none         |       | none        |
+| »»»»»» 2                               | string   | true     | none         |       | none        |
+| »»»»»» 3                               | string   | true     | none         |       | none        |
+| »»»»»» 4                               | string   | true     | none         |       | none        |
+| »»»»»» 5                               | string   | true     | none         |       | none        |
+| »»»»»» 6                               | string   | true     | none         |       | none        |
+| »»»»» smdp_address_and_activation_code | string   | true     | none         |       | none        |
+| »»»» network_setup                     | object   | false    | none         |       | none        |
+| »»»»» steps                            | object   | true     | none         |       | none        |
+| »»»»»» 1                               | string   | true     | none         |       | none        |
+| »»»»»» 2                               | string   | true     | none         |       | none        |
+| »»»»»» 3                               | string   | true     | none         |       | none        |
+| »»»»»» 4                               | string   | true     | none         |       | none        |
+| »»»»»» 5                               | string   | true     | none         |       | none        |
+| »»»»»» 6                               | string   | true     | none         |       | none        |
+| »»»»»» 7                               | string   | true     | none         |       | none        |
+| »»»»» apn_type                         | string   | true     | none         |       | none        |
+| »»»»» apn_value                        | string   | true     | none         |       | none        |
+| »»»»» is_roaming                       | boolean  | true     | none         |       | none        |
+| » meta                                 | object   | true     | none         |       | none        |
+| »» message                             | string   | true     | none         |       | none        |
 
 ## GET Get eSIM
 
@@ -2951,12 +2931,12 @@ Partner API now supports direct installation on iOS devices. With the introducti
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|sim_iccid|path|string| yes |The ICCID of the eSIM for which you want to retrieve the details.|
-|include|query|string| no |Optional. A comma-separated string to include related data in the response. Possible values are "order", "order.status", "order.user" and "share".|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description                                                                                                                                        |
+| ------------- | -------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| sim_iccid     | path     | string | yes      | The ICCID of the eSIM for which you want to retrieve the details.                                                                                  |
+| include       | query    | string | no       | Optional. A comma-separated string to include related data in the response. Possible values are "order", "order.status", "order.user" and "share". |
+| Accept        | header   | string | yes      | none                                                                                                                                               |
+| Authorization | header   | string | yes      | none                                                                                                                                               |
 
 > Response Examples
 
@@ -3034,74 +3014,74 @@ Partner API now supports direct installation on iOS devices. With the introducti
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» id|integer|true|none||none|
-|»» created_at|string|true|none||none|
-|»» iccid|string|true|none||none|
-|»» lpa|string|true|none||none|
-|»» imsis|null|true|none||none|
-|»» matching_id|string|true|none||none|
-|»» qrcode|string|true|none||none|
-|»» qrcode_url|string|true|none||none|
-|»» direct_apple_installation_url|string|true|none||none|
-|»» voucher_code|null|true|none||none|
-|»» airalo_code|null|true|none||none|
-|»» apn_type|string|true|none||none|
-|»» apn_value|null|true|none||none|
-|»» is_roaming|boolean|true|none||none|
-|»» confirmation_code|string|true|none||none|
-|»» order|null|true|none||none|
-|»» brand_settings_name|string|true|none||none|
-|»» recycled|boolean|true|none||true - if sim is recycled. - false - otherwise|
-|»» recycled_at|string(date-time)¦null|true|none||Timestamp of when the sim was recycled in format Y-m-d H:i:s|
-|»» simable|object|true|none||none|
-|»»» id|integer|true|none||none|
-|»»» created_at|string|true|none||none|
-|»»» code|string|true|none||none|
-|»»» description|null|true|none||none|
-|»»» type|string|true|none||none|
-|»»» package_id|string|true|none||none|
-|»»» quantity|integer|true|none||none|
-|»»» package|string|true|none||none|
-|»»» esim_type|string|true|none||none|
-|»»» validity|string|true|none||none|
-|»»» price|string|true|none||none|
-|»»» data|string|true|none||none|
-|»»» currency|string|true|none||none|
-|»»» manual_installation|string|true|none||none|
-|»»» qrcode_installation|string|true|none||none|
-|»»» installation_guides|object|true|none||none|
-|»»»» en|string|true|none||none|
-|»»» status|object|true|none||none|
-|»»»» name|string|true|none||none|
-|»»»» slug|string|true|none||none|
-|»»» user|object|true|none||none|
-|»»»» id|integer|true|none||none|
-|»»»» created_at|string|true|none||none|
-|»»»» name|string|true|none||none|
-|»»»» email|string|true|none||none|
-|»»»» mobile|null|true|none||none|
-|»»»» address|null|true|none||none|
-|»»»» state|null|true|none||none|
-|»»»» city|null|true|none||none|
-|»»»» postal_code|null|true|none||none|
-|»»»» country_id|null|true|none||none|
-|»»»» company|string|true|none||none|
-|»»» sharing|object|true|none||none|
-|»»»» link|string|true|none||none|
-|»»»» access_code|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                             | Type                   | Required | Restrictions | Title | description                                                  |
+| -------------------------------- | ---------------------- | -------- | ------------ | ----- | ------------------------------------------------------------ |
+| » data                           | object                 | true     | none         |       | none                                                         |
+| »» id                            | integer                | true     | none         |       | none                                                         |
+| »» created_at                    | string                 | true     | none         |       | none                                                         |
+| »» iccid                         | string                 | true     | none         |       | none                                                         |
+| »» lpa                           | string                 | true     | none         |       | none                                                         |
+| »» imsis                         | null                   | true     | none         |       | none                                                         |
+| »» matching_id                   | string                 | true     | none         |       | none                                                         |
+| »» qrcode                        | string                 | true     | none         |       | none                                                         |
+| »» qrcode_url                    | string                 | true     | none         |       | none                                                         |
+| »» direct_apple_installation_url | string                 | true     | none         |       | none                                                         |
+| »» voucher_code                  | null                   | true     | none         |       | none                                                         |
+| »» airalo_code                   | null                   | true     | none         |       | none                                                         |
+| »» apn_type                      | string                 | true     | none         |       | none                                                         |
+| »» apn_value                     | null                   | true     | none         |       | none                                                         |
+| »» is_roaming                    | boolean                | true     | none         |       | none                                                         |
+| »» confirmation_code             | string                 | true     | none         |       | none                                                         |
+| »» order                         | null                   | true     | none         |       | none                                                         |
+| »» brand_settings_name           | string                 | true     | none         |       | none                                                         |
+| »» recycled                      | boolean                | true     | none         |       | true - if sim is recycled. - false - otherwise               |
+| »» recycled_at                   | string(date-time)¦null | true     | none         |       | Timestamp of when the sim was recycled in format Y-m-d H:i:s |
+| »» simable                       | object                 | true     | none         |       | none                                                         |
+| »»» id                           | integer                | true     | none         |       | none                                                         |
+| »»» created_at                   | string                 | true     | none         |       | none                                                         |
+| »»» code                         | string                 | true     | none         |       | none                                                         |
+| »»» description                  | null                   | true     | none         |       | none                                                         |
+| »»» type                         | string                 | true     | none         |       | none                                                         |
+| »»» package_id                   | string                 | true     | none         |       | none                                                         |
+| »»» quantity                     | integer                | true     | none         |       | none                                                         |
+| »»» package                      | string                 | true     | none         |       | none                                                         |
+| »»» esim_type                    | string                 | true     | none         |       | none                                                         |
+| »»» validity                     | string                 | true     | none         |       | none                                                         |
+| »»» price                        | string                 | true     | none         |       | none                                                         |
+| »»» data                         | string                 | true     | none         |       | none                                                         |
+| »»» currency                     | string                 | true     | none         |       | none                                                         |
+| »»» manual_installation          | string                 | true     | none         |       | none                                                         |
+| »»» qrcode_installation          | string                 | true     | none         |       | none                                                         |
+| »»» installation_guides          | object                 | true     | none         |       | none                                                         |
+| »»»» en                          | string                 | true     | none         |       | none                                                         |
+| »»» status                       | object                 | true     | none         |       | none                                                         |
+| »»»» name                        | string                 | true     | none         |       | none                                                         |
+| »»»» slug                        | string                 | true     | none         |       | none                                                         |
+| »»» user                         | object                 | true     | none         |       | none                                                         |
+| »»»» id                          | integer                | true     | none         |       | none                                                         |
+| »»»» created_at                  | string                 | true     | none         |       | none                                                         |
+| »»»» name                        | string                 | true     | none         |       | none                                                         |
+| »»»» email                       | string                 | true     | none         |       | none                                                         |
+| »»»» mobile                      | null                   | true     | none         |       | none                                                         |
+| »»»» address                     | null                   | true     | none         |       | none                                                         |
+| »»»» state                       | null                   | true     | none         |       | none                                                         |
+| »»»» city                        | null                   | true     | none         |       | none                                                         |
+| »»»» postal_code                 | null                   | true     | none         |       | none                                                         |
+| »»»» country_id                  | null                   | true     | none         |       | none                                                         |
+| »»»» company                     | string                 | true     | none         |       | none                                                         |
+| »»» sharing                      | object                 | true     | none         |       | none                                                         |
+| »»»» link                        | string                 | true     | none         |       | none                                                         |
+| »»»» access_code                 | string                 | true     | none         |       | none                                                         |
+| » meta                           | object                 | true     | none         |       | none                                                         |
+| »» message                       | string                 | true     | none         |       | none                                                         |
 
 # REST API/Endpoints/Monitor usage
 
@@ -3118,22 +3098,23 @@ This endpoint enables you to retrieve the total data, voice & text usage for a s
 The access token, obtained from the "Request Access Token" endpoint, should be included in the request.
 
 **Response atttributes units explained:**
+
 - `total` : Response value is total megabytes on package
-- `remaining` :  Response value is in total megabytes **remaining**
+- `remaining` : Response value is in total megabytes **remaining**
 
-- `total_text` :  Response value is the initial total text messages on package
-- `remaining_text` :  Response value is in total number of text messages **remaining**
+- `total_text` : Response value is the initial total text messages on package
+- `remaining_text` : Response value is in total number of text messages **remaining**
 
-- `total_voice` :  Response value is the initial total voice minutes on package
-- `remaining_voice` :  Response value is in total minutes **remaining**
+- `total_voice` : Response value is the initial total voice minutes on package
+- `remaining_voice` : Response value is in total minutes **remaining**
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|sim_iccid|path|string| yes |The ICCID of the eSIM for which you want to retrieve the data usage details.|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description                                                                  |
+| ------------- | -------- | ------ | -------- | ---------------------------------------------------------------------------- |
+| sim_iccid     | path     | string | yes      | The ICCID of the eSIM for which you want to retrieve the data usage details. |
+| Accept        | header   | string | yes      | none                                                                         |
+| Authorization | header   | string | yes      | none                                                                         |
 
 > Response Examples
 
@@ -3164,52 +3145,52 @@ The access token, obtained from the "Request Access Token" endpoint, should be i
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|404|[Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)|none|Inline|
-|429|[Too Many Requests](https://tools.ietf.org/html/rfc6585#section-4)|none|Inline|
+| HTTP Status Code | Meaning                                                            | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)            | none        | Inline      |
+| 404              | [Not Found](https://tools.ietf.org/html/rfc7231#section-6.5.4)     | none        | Inline      |
+| 429              | [Too Many Requests](https://tools.ietf.org/html/rfc6585#section-4) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» remaining|integer|true|none||none|
-|»» total|integer|true|none||none|
-|»» expired_at|string|true|none||none|
-|»» is_unlimited|boolean|true|none||none|
-|»» status|string|true|none||All Cases: [ NOT_ACTIVE, ACTIVE, FINISHED, UNKNOWN, EXPIRED ]|
-|»» remaining_voice|integer|true|none||none|
-|»» remaining_text|integer|true|none||none|
-|»» total_voice|integer|true|none||none|
-|»» total_text|integer|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name               | Type    | Required | Restrictions | Title | description                                                   |
+| ------------------ | ------- | -------- | ------------ | ----- | ------------------------------------------------------------- |
+| » data             | object  | true     | none         |       | none                                                          |
+| »» remaining       | integer | true     | none         |       | none                                                          |
+| »» total           | integer | true     | none         |       | none                                                          |
+| »» expired_at      | string  | true     | none         |       | none                                                          |
+| »» is_unlimited    | boolean | true     | none         |       | none                                                          |
+| »» status          | string  | true     | none         |       | All Cases: [ NOT_ACTIVE, ACTIVE, FINISHED, UNKNOWN, EXPIRED ] |
+| »» remaining_voice | integer | true     | none         |       | none                                                          |
+| »» remaining_text  | integer | true     | none         |       | none                                                          |
+| »» total_voice     | integer | true     | none         |       | none                                                          |
+| »» total_text      | integer | true     | none         |       | none                                                          |
+| » meta             | object  | true     | none         |       | none                                                          |
+| »» message         | string  | true     | none         |       | none                                                          |
 
 HTTP Status Code **404**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[any]|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name       | Type   | Required | Restrictions | Title | description |
+| ---------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data     | [any]  | true     | none         |       | none        |
+| » meta     | object | true     | none         |       | none        |
+| »» message | string | true     | none         |       | none        |
 
 HTTP Status Code **429**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» message|string|true|none||none|
+| Name      | Type   | Required | Restrictions | Title | description |
+| --------- | ------ | -------- | ------------ | ----- | ----------- |
+| » message | string | true     | none         |       | none        |
 
 # REST API/Endpoints/Place top up order
 
-## GET Get  top-up package list
+## GET Get top-up package list
 
 GET /v2/sims/{iccid}/topups
 
-**Endpoint do support new type of packages - "Voice and Text"**  
+**Endpoint do support new type of packages - "Voice and Text"**
 **To get the list of available packages for an eSIM:**
 
 Make a GET request to the endpoint URL [https://partners-api.airalo.com/v1/sims/:iccid/topups](https://partners-api.airalo.com/v1/sims/:iccid/topups), replace :iccid with the ICCID of the eSIM for which you want to purchase a top-up.
@@ -3220,11 +3201,11 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|iccid|path|string| yes |eSIM ICCID, used to query a list of available top-up packages.|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description                                                    |
+| ------------- | -------- | ------ | -------- | -------------------------------------------------------------- |
+| iccid         | path     | string | yes      | eSIM ICCID, used to query a list of available top-up packages. |
+| Accept        | header   | string | yes      | none                                                           |
+| Authorization | header   | string | yes      | none                                                           |
 
 #### Description
 
@@ -3292,36 +3273,36 @@ Required. Can be obtained by execuring GET to the "eSIMs List" endpoint
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» id|string|true|none||none|
-|»» type|string|true|none||none|
-|»» price|integer|true|none||none|
-|»» amount|integer|true|none||none|
-|»» day|integer|true|none||none|
-|»» is_unlimited|boolean|true|none||none|
-|»» title|string|true|none||none|
-|»» data|string|true|none||none|
-|»» short_info|string|true|none||none|
-|»» voice|integer|true|none||none|
-|»» text|integer|true|none||none|
+| Name            | Type     | Required | Restrictions | Title | description |
+| --------------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data          | [object] | true     | none         |       | none        |
+| »» id           | string   | true     | none         |       | none        |
+| »» type         | string   | true     | none         |       | none        |
+| »» price        | integer  | true     | none         |       | none        |
+| »» amount       | integer  | true     | none         |       | none        |
+| »» day          | integer  | true     | none         |       | none        |
+| »» is_unlimited | boolean  | true     | none         |       | none        |
+| »» title        | string   | true     | none         |       | none        |
+| »» data         | string   | true     | none         |       | none        |
+| »» short_info   | string   | true     | none         |       | none        |
+| »» voice        | integer  | true     | none         |       | none        |
+| »» text         | integer  | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» code|integer|true|none||none|
-|» reason|string|true|none||none|
+| Name     | Type    | Required | Restrictions | Title | description |
+| -------- | ------- | -------- | ------------ | ----- | ----------- |
+| » code   | integer | true     | none         |       | none        |
+| » reason | string  | true     | none         |       | none        |
 
 ## POST Submit top-up order
 
@@ -3333,9 +3314,9 @@ Make a POST request to the endpoint URL {{url}}/{{version}}/orders/topups
 
 Include a request body in the form of a FormData object, which contains the following required fields:
 
-1) package_id: The ID of the top-up package you want to purchase
+1. package_id: The ID of the top-up package you want to purchase
 
-2) iccid: The ICCID of the eSIM for which you want to purchase the top-up package.
+2. iccid: The ICCID of the eSIM for which you want to purchase the top-up package.
 
 You can also include an optional description field to provide additional information about the order.
 
@@ -3343,10 +3324,10 @@ The API will respond with a JSON object containing the details of the order, inc
 
 **The complete workflow for buying a top-up package:**
 
-1) GET {{url}}/{{version}}/sims to see the list of purchased eSIMs  
-2) GET {{url}}/{{version}}/sims/:iccid/topups to see the list of available top-ups for the eSIMs  
-3) POST {{url}}/{{version}}/orders/topups with the proper "iccid" and "package_id" values to purchase a top-up  
-4) GET {{url}}/{{version}}/sims/:iccid/packages to see the list of all packages for the eSIM, including the original package and top-ups
+1. GET {{url}}/{{version}}/sims to see the list of purchased eSIMs
+2. GET {{url}}/{{version}}/sims/:iccid/topups to see the list of available top-ups for the eSIMs
+3. POST {{url}}/{{version}}/orders/topups with the proper "iccid" and "package_id" values to purchase a top-up
+4. GET {{url}}/{{version}}/sims/:iccid/packages to see the list of all packages for the eSIM, including the original package and top-ups
 
 For more informations, best practices visit our FAQ page: [https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ](https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ)
 
@@ -3356,19 +3337,18 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 package_id: bonbon-mobile-30days-3gb-topup
 iccid: "89340000000000872"
 description: Example description to identify the order
-
 ```
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» package_id|body|string| yes |Required. A Topup Package ID, can be obtainer by executing a GET request to the "eSIM: List available top-up packages" endpoint|
-|» iccid|body|string| yes |Required. eSIM ICCID, that identifies the eSIM for the top-up package.|
-|» description|body|string| yes |Optional. Order description to identify the order.|
+| Name          | Location | Type   | Required | Description                                                                                                                     |
+| ------------- | -------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Accept        | header   | string | yes      | none                                                                                                                            |
+| Authorization | header   | string | yes      | none                                                                                                                            |
+| body          | body     | object | no       | none                                                                                                                            |
+| » package_id  | body     | string | yes      | Required. A Topup Package ID, can be obtainer by executing a GET request to the "eSIM: List available top-up packages" endpoint |
+| » iccid       | body     | string | yes      | Required. eSIM ICCID, that identifies the eSIM for the top-up package.                                                          |
+| » description | body     | string | yes      | Optional. Order description to identify the order.                                                                              |
 
 #### Description
 
@@ -3422,46 +3402,46 @@ Can be obtained by execuring GET to the "eSIMs List" endpoint
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» package_id|string|true|none||none|
-|»» quantity|string|true|none||none|
-|»» type|string|true|none||none|
-|»» description|string|true|none||none|
-|»» esim_type|string|true|none||none|
-|»» validity|integer|true|none||none|
-|»» package|string|true|none||none|
-|»» data|string|true|none||none|
-|»» price|integer|true|none||none|
-|»» created_at|string|true|none||none|
-|»» id|integer|true|none||none|
-|»» code|string|true|none||none|
-|»» currency|string|true|none||none|
-|»» manual_installation|string|true|none||none|
-|»» qrcode_installation|string|true|none||none|
-|»» installation_guides|object|true|none||none|
-|»»» en|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                   | Type    | Required | Restrictions | Title | description |
+| ---------------------- | ------- | -------- | ------------ | ----- | ----------- |
+| » data                 | object  | true     | none         |       | none        |
+| »» package_id          | string  | true     | none         |       | none        |
+| »» quantity            | string  | true     | none         |       | none        |
+| »» type                | string  | true     | none         |       | none        |
+| »» description         | string  | true     | none         |       | none        |
+| »» esim_type           | string  | true     | none         |       | none        |
+| »» validity            | integer | true     | none         |       | none        |
+| »» package             | string  | true     | none         |       | none        |
+| »» data                | string  | true     | none         |       | none        |
+| »» price               | integer | true     | none         |       | none        |
+| »» created_at          | string  | true     | none         |       | none        |
+| »» id                  | integer | true     | none         |       | none        |
+| »» code                | string  | true     | none         |       | none        |
+| »» currency            | string  | true     | none         |       | none        |
+| »» manual_installation | string  | true     | none         |       | none        |
+| »» qrcode_installation | string  | true     | none         |       | none        |
+| »» installation_guides | object  | true     | none         |       | none        |
+| »»» en                 | string  | true     | none         |       | none        |
+| » meta                 | object  | true     | none         |       | none        |
+| »» message             | string  | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» package_id|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name          | Type   | Required | Restrictions | Title | description |
+| ------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data        | object | true     | none         |       | none        |
+| »» package_id | string | true     | none         |       | none        |
+| » meta        | object | true     | none         |       | none        |
+| »» message    | string | true     | none         |       | none        |
 
 # REST API/Endpoints/Manage orders
 
@@ -3477,24 +3457,23 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ```yaml
 {}
-
 ```
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|include|query|string| no |Optional. A comma-separated string to include related data in the response. Possible values are "sims", "user", and "status".|
-|filter[created_at]|query|string| no |Optional. A string to filter orders by their creation date. Specify the date range using a dash (-) as a delimiter for correct parsing.|
-|filter[code]|query|string| no |Optional. Filter orders by their order code. This performs a like search using the format '%ORDER_CODE%'.|
-|filter[order_status]|query|string| no |Optional. A string to filter orders by their status. Possible values: "completed", "failed", "partially_refunded", and "refunded".|
-|filter[iccid]|query|string| no |Optional. Filter orders by the sim's ICCID. This performs a like search using the format '%SIM_ICCID%'.|
-|filter[description]|query|string| no |Optional. A string to filter orders by their description. This performs a like search using the format '%DESCRIPTION%'.|
-|limit|query|string| no |Optional. An integer specifying how many orders will be returned on each page.|
-|page|query|string| no |Optional. An integer specifying the pagination's current page.|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
+| Name                 | Location | Type   | Required | Description                                                                                                                             |
+| -------------------- | -------- | ------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| include              | query    | string | no       | Optional. A comma-separated string to include related data in the response. Possible values are "sims", "user", and "status".           |
+| filter[created_at]   | query    | string | no       | Optional. A string to filter orders by their creation date. Specify the date range using a dash (-) as a delimiter for correct parsing. |
+| filter[code]         | query    | string | no       | Optional. Filter orders by their order code. This performs a like search using the format '%ORDER_CODE%'.                               |
+| filter[order_status] | query    | string | no       | Optional. A string to filter orders by their status. Possible values: "completed", "failed", "partially_refunded", and "refunded".      |
+| filter[iccid]        | query    | string | no       | Optional. Filter orders by the sim's ICCID. This performs a like search using the format '%SIM_ICCID%'.                                 |
+| filter[description]  | query    | string | no       | Optional. A string to filter orders by their description. This performs a like search using the format '%DESCRIPTION%'.                 |
+| limit                | query    | string | no       | Optional. An integer specifying how many orders will be returned on each page.                                                          |
+| page                 | query    | string | no       | Optional. An integer specifying the pagination's current page.                                                                          |
+| Accept               | header   | string | yes      | none                                                                                                                                    |
+| Authorization        | header   | string | yes      | none                                                                                                                                    |
+| body                 | body     | object | no       | none                                                                                                                                    |
 
 > Response Examples
 
@@ -3793,88 +3772,88 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» id|integer|true|none||none|
-|»» created_at|string|true|none||none|
-|»» code|string|true|none||none|
-|»» description|string¦null|true|none||none|
-|»» type|string|true|none||none|
-|»» package_id|string|true|none||none|
-|»» quantity|integer|true|none||none|
-|»» package|string|true|none||none|
-|»» esim_type|string|true|none||none|
-|»» validity|string|true|none||none|
-|»» price|string|true|none||none|
-|»» data|string|true|none||none|
-|»» currency|string|true|none||none|
-|»» manual_installation|string|true|none||none|
-|»» qrcode_installation|string|true|none||none|
-|»» installation_guides|object|true|none||none|
-|»»» en|string|true|none||none|
-|»» sims|[object]|true|none||none|
-|»»» id|integer|true|none||none|
-|»»» created_at|string|true|none||none|
-|»»» iccid|string|true|none||none|
-|»»» lpa|string|true|none||none|
-|»»» imsis|null|true|none||none|
-|»»» matching_id|string|true|none||none|
-|»»» qrcode|string|true|none||none|
-|»»» qrcode_url|string|true|none||none|
-|»»» airalo_code|null|true|none||none|
-|»»» apn_type|string|true|none||none|
-|»»» apn_value|string¦null|true|none||none|
-|»»» is_roaming|boolean|true|none||none|
-|»»» confirmation_code|null|true|none||none|
-|»» user|object|true|none||none|
-|»»» id|integer|true|none||none|
-|»»» created_at|string|true|none||none|
-|»»» name|string|true|none||none|
-|»»» email|string|true|none||none|
-|»»» mobile|null|true|none||none|
-|»»» address|null|true|none||none|
-|»»» state|null|true|none||none|
-|»»» city|null|true|none||none|
-|»»» postal_code|null|true|none||none|
-|»»» country_id|null|true|none||none|
-|»»» company|string|true|none||none|
-|»» status|object|true|none||none|
-|»»» name|string|true|none||none|
-|»»» slug|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
-|»» current_page|integer|true|none||none|
-|»» from|integer|true|none||none|
-|»» last_page|integer|true|none||none|
-|»» path|string|true|none||none|
-|»» per_page|string|true|none||none|
-|»» to|integer|true|none||none|
-|»» total|integer|true|none||none|
-|» links|object|true|none||none|
-|»» first|string|true|none||none|
-|»» last|string|true|none||none|
-|»» prev|null|true|none||none|
-|»» next|string|true|none||none|
+| Name                   | Type        | Required | Restrictions | Title | description |
+| ---------------------- | ----------- | -------- | ------------ | ----- | ----------- |
+| » data                 | [object]    | true     | none         |       | none        |
+| »» id                  | integer     | true     | none         |       | none        |
+| »» created_at          | string      | true     | none         |       | none        |
+| »» code                | string      | true     | none         |       | none        |
+| »» description         | string¦null | true     | none         |       | none        |
+| »» type                | string      | true     | none         |       | none        |
+| »» package_id          | string      | true     | none         |       | none        |
+| »» quantity            | integer     | true     | none         |       | none        |
+| »» package             | string      | true     | none         |       | none        |
+| »» esim_type           | string      | true     | none         |       | none        |
+| »» validity            | string      | true     | none         |       | none        |
+| »» price               | string      | true     | none         |       | none        |
+| »» data                | string      | true     | none         |       | none        |
+| »» currency            | string      | true     | none         |       | none        |
+| »» manual_installation | string      | true     | none         |       | none        |
+| »» qrcode_installation | string      | true     | none         |       | none        |
+| »» installation_guides | object      | true     | none         |       | none        |
+| »»» en                 | string      | true     | none         |       | none        |
+| »» sims                | [object]    | true     | none         |       | none        |
+| »»» id                 | integer     | true     | none         |       | none        |
+| »»» created_at         | string      | true     | none         |       | none        |
+| »»» iccid              | string      | true     | none         |       | none        |
+| »»» lpa                | string      | true     | none         |       | none        |
+| »»» imsis              | null        | true     | none         |       | none        |
+| »»» matching_id        | string      | true     | none         |       | none        |
+| »»» qrcode             | string      | true     | none         |       | none        |
+| »»» qrcode_url         | string      | true     | none         |       | none        |
+| »»» airalo_code        | null        | true     | none         |       | none        |
+| »»» apn_type           | string      | true     | none         |       | none        |
+| »»» apn_value          | string¦null | true     | none         |       | none        |
+| »»» is_roaming         | boolean     | true     | none         |       | none        |
+| »»» confirmation_code  | null        | true     | none         |       | none        |
+| »» user                | object      | true     | none         |       | none        |
+| »»» id                 | integer     | true     | none         |       | none        |
+| »»» created_at         | string      | true     | none         |       | none        |
+| »»» name               | string      | true     | none         |       | none        |
+| »»» email              | string      | true     | none         |       | none        |
+| »»» mobile             | null        | true     | none         |       | none        |
+| »»» address            | null        | true     | none         |       | none        |
+| »»» state              | null        | true     | none         |       | none        |
+| »»» city               | null        | true     | none         |       | none        |
+| »»» postal_code        | null        | true     | none         |       | none        |
+| »»» country_id         | null        | true     | none         |       | none        |
+| »»» company            | string      | true     | none         |       | none        |
+| »» status              | object      | true     | none         |       | none        |
+| »»» name               | string      | true     | none         |       | none        |
+| »»» slug               | string      | true     | none         |       | none        |
+| » meta                 | object      | true     | none         |       | none        |
+| »» message             | string      | true     | none         |       | none        |
+| »» current_page        | integer     | true     | none         |       | none        |
+| »» from                | integer     | true     | none         |       | none        |
+| »» last_page           | integer     | true     | none         |       | none        |
+| »» path                | string      | true     | none         |       | none        |
+| »» per_page            | string      | true     | none         |       | none        |
+| »» to                  | integer     | true     | none         |       | none        |
+| »» total               | integer     | true     | none         |       | none        |
+| » links                | object      | true     | none         |       | none        |
+| »» first               | string      | true     | none         |       | none        |
+| »» last                | string      | true     | none         |       | none        |
+| »» prev                | null        | true     | none         |       | none        |
+| »» next                | string      | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» limit|string|true|none||none|
-|»» page|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name       | Type   | Required | Restrictions | Title | description |
+| ---------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data     | object | true     | none         |       | none        |
+| »» limit   | string | true     | none         |       | none        |
+| »» page    | string | true     | none         |       | none        |
+| » meta     | object | true     | none         |       | none        |
+| »» message | string | true     | none         |       | none        |
 
 ## GET Future Orders
 
@@ -3883,21 +3862,21 @@ GET /v2/future-orders
 This endpoint allows you to get all your submitted future orders that are in pending, failed or retry status
 The following filter parameters are available:
 
- - status (optional) -  Defaults to pending. Other possible statuses are: failed and retry
- - limit (optional) - Defaults to 25. Limit the returned results
- - from_due_date - Datetime field in the format: Y-m-d H:i. Filters data starting from this date forward. Example: 2025-02-27 10:00
- - to_due_date - Datetime field in the format: Y-m-d H:i. Filters data starting from this date backward. Example: 2025-02-27 10:00
+- status (optional) - Defaults to pending. Other possible statuses are: failed and retry
+- limit (optional) - Defaults to 25. Limit the returned results
+- from_due_date - Datetime field in the format: Y-m-d H:i. Filters data starting from this date forward. Example: 2025-02-27 10:00
+- to_due_date - Datetime field in the format: Y-m-d H:i. Filters data starting from this date backward. Example: 2025-02-27 10:00
 
 NOTE: that processed orders will not be displayed here.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|status|query|string| no |Defaults to pending. Other possible status options: failed, retry|
-|limit|query|string| no |Limit the returned results|
-|from_due_date|query|string| no |Date in format: 2025-02-27 10:00|
-|to_due_date|query|string| no |Date in format: 2025-02-27 10:00|
+| Name          | Location | Type   | Required | Description                                                       |
+| ------------- | -------- | ------ | -------- | ----------------------------------------------------------------- |
+| status        | query    | string | no       | Defaults to pending. Other possible status options: failed, retry |
+| limit         | query    | string | no       | Limit the returned results                                        |
+| from_due_date | query    | string | no       | Date in format: 2025-02-27 10:00                                  |
+| to_due_date   | query    | string | no       | Date in format: 2025-02-27 10:00                                  |
 
 > Response Examples
 
@@ -3968,48 +3947,48 @@ NOTE: that processed orders will not be displayed here.
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» request_id|string|true|none||none|
-|»» quantity|integer|true|none||none|
-|»» description|string|true|none||none|
-|»» status|string|true|none||none|
-|»» package_id|string|true|none||none|
-|»» due_date|string|true|none||none|
-|»» latest_cancellation_date|string|true|none||none|
-|» links|object|true|none||none|
-|»» first|string|true|none||none|
-|»» last|string|true|none||none|
-|»» prev|null|true|none||none|
-|»» next|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
-|»» current_page|integer|true|none||none|
-|»» from|integer|true|none||none|
-|»» last_page|integer|true|none||none|
-|»» path|string|true|none||none|
-|»» per_page|string|true|none||none|
-|»» to|integer|true|none||none|
-|»» total|integer|true|none||none|
+| Name                        | Type     | Required | Restrictions | Title | description |
+| --------------------------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data                      | [object] | true     | none         |       | none        |
+| »» request_id               | string   | true     | none         |       | none        |
+| »» quantity                 | integer  | true     | none         |       | none        |
+| »» description              | string   | true     | none         |       | none        |
+| »» status                   | string   | true     | none         |       | none        |
+| »» package_id               | string   | true     | none         |       | none        |
+| »» due_date                 | string   | true     | none         |       | none        |
+| »» latest_cancellation_date | string   | true     | none         |       | none        |
+| » links                     | object   | true     | none         |       | none        |
+| »» first                    | string   | true     | none         |       | none        |
+| »» last                     | string   | true     | none         |       | none        |
+| »» prev                     | null     | true     | none         |       | none        |
+| »» next                     | string   | true     | none         |       | none        |
+| » meta                      | object   | true     | none         |       | none        |
+| »» message                  | string   | true     | none         |       | none        |
+| »» current_page             | integer  | true     | none         |       | none        |
+| »» from                     | integer  | true     | none         |       | none        |
+| »» last_page                | integer  | true     | none         |       | none        |
+| »» path                     | string   | true     | none         |       | none        |
+| »» per_page                 | string   | true     | none         |       | none        |
+| »» to                       | integer  | true     | none         |       | none        |
+| »» total                    | integer  | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» from_due_date|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name             | Type   | Required | Restrictions | Title | description |
+| ---------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data           | object | true     | none         |       | none        |
+| »» from_due_date | string | true     | none         |       | none        |
+| » meta           | object | true     | none         |       | none        |
+| »» message       | string | true     | none         |       | none        |
 
 ## GET Get order
 
@@ -4021,12 +4000,12 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|order_id|path|string| yes |The order ID for which you want to retrieve the details.|
-|include|query|string| no |Optional. A comma-separated string to include related data in the response. Possible values are "sims", "user", and "status".|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description                                                                                                                   |
+| ------------- | -------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| order_id      | path     | string | yes      | The order ID for which you want to retrieve the details.                                                                      |
+| include       | query    | string | no       | Optional. A comma-separated string to include related data in the response. Possible values are "sims", "user", and "status". |
+| Accept        | header   | string | yes      | none                                                                                                                          |
+| Authorization | header   | string | yes      | none                                                                                                                          |
 
 > Response Examples
 
@@ -4108,75 +4087,75 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|401|[Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                         | Description | Data schema |
+| ---------------- | --------------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)         | none        | Inline      |
+| 401              | [Unauthorized](https://tools.ietf.org/html/rfc7235#section-3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» id|integer|true|none||none|
-|»» created_at|string|true|none||none|
-|»» code|string|true|none||none|
-|»» description|null|true|none||none|
-|»» type|string|true|none||none|
-|»» package_id|string|true|none||none|
-|»» quantity|integer|true|none||none|
-|»» package|string|true|none||none|
-|»» esim_type|string|true|none||none|
-|»» validity|string|true|none||none|
-|»» price|string|true|none||none|
-|»» data|string|true|none||none|
-|»» currency|string|true|none||none|
-|»» manual_installation|string|true|none||none|
-|»» qrcode_installation|string|true|none||none|
-|»» installation_guides|object|true|none||none|
-|»»» en|string|true|none||none|
-|»» sims|[object]|true|none||none|
-|»»» id|integer|false|none||none|
-|»»» created_at|string|false|none||none|
-|»»» iccid|string|false|none||none|
-|»»» lpa|string|false|none||none|
-|»»» imsis|null|false|none||none|
-|»»» matching_id|string|false|none||none|
-|»»» qrcode|string|false|none||none|
-|»»» qrcode_url|string|false|none||none|
-|»»» voucher_code|null|false|none||none|
-|»»» airalo_code|null|false|none||none|
-|»»» apn_type|string|false|none||none|
-|»»» apn_value|string|false|none||none|
-|»»» is_roaming|boolean|false|none||none|
-|»»» confirmation_code|null|false|none||none|
-|»» user|object|true|none||none|
-|»»» id|integer|true|none||none|
-|»»» created_at|string|true|none||none|
-|»»» name|string|true|none||none|
-|»»» email|string|true|none||none|
-|»»» mobile|null|true|none||none|
-|»»» address|null|true|none||none|
-|»»» state|null|true|none||none|
-|»»» city|null|true|none||none|
-|»»» postal_code|null|true|none||none|
-|»»» country_id|null|true|none||none|
-|»»» company|string|true|none||none|
-|»» status|object|true|none||none|
-|»»» name|string|true|none||none|
-|»»» slug|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                   | Type     | Required | Restrictions | Title | description |
+| ---------------------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data                 | object   | true     | none         |       | none        |
+| »» id                  | integer  | true     | none         |       | none        |
+| »» created_at          | string   | true     | none         |       | none        |
+| »» code                | string   | true     | none         |       | none        |
+| »» description         | null     | true     | none         |       | none        |
+| »» type                | string   | true     | none         |       | none        |
+| »» package_id          | string   | true     | none         |       | none        |
+| »» quantity            | integer  | true     | none         |       | none        |
+| »» package             | string   | true     | none         |       | none        |
+| »» esim_type           | string   | true     | none         |       | none        |
+| »» validity            | string   | true     | none         |       | none        |
+| »» price               | string   | true     | none         |       | none        |
+| »» data                | string   | true     | none         |       | none        |
+| »» currency            | string   | true     | none         |       | none        |
+| »» manual_installation | string   | true     | none         |       | none        |
+| »» qrcode_installation | string   | true     | none         |       | none        |
+| »» installation_guides | object   | true     | none         |       | none        |
+| »»» en                 | string   | true     | none         |       | none        |
+| »» sims                | [object] | true     | none         |       | none        |
+| »»» id                 | integer  | false    | none         |       | none        |
+| »»» created_at         | string   | false    | none         |       | none        |
+| »»» iccid              | string   | false    | none         |       | none        |
+| »»» lpa                | string   | false    | none         |       | none        |
+| »»» imsis              | null     | false    | none         |       | none        |
+| »»» matching_id        | string   | false    | none         |       | none        |
+| »»» qrcode             | string   | false    | none         |       | none        |
+| »»» qrcode_url         | string   | false    | none         |       | none        |
+| »»» voucher_code       | null     | false    | none         |       | none        |
+| »»» airalo_code        | null     | false    | none         |       | none        |
+| »»» apn_type           | string   | false    | none         |       | none        |
+| »»» apn_value          | string   | false    | none         |       | none        |
+| »»» is_roaming         | boolean  | false    | none         |       | none        |
+| »»» confirmation_code  | null     | false    | none         |       | none        |
+| »» user                | object   | true     | none         |       | none        |
+| »»» id                 | integer  | true     | none         |       | none        |
+| »»» created_at         | string   | true     | none         |       | none        |
+| »»» name               | string   | true     | none         |       | none        |
+| »»» email              | string   | true     | none         |       | none        |
+| »»» mobile             | null     | true     | none         |       | none        |
+| »»» address            | null     | true     | none         |       | none        |
+| »»» state              | null     | true     | none         |       | none        |
+| »»» city               | null     | true     | none         |       | none        |
+| »»» postal_code        | null     | true     | none         |       | none        |
+| »»» country_id         | null     | true     | none         |       | none        |
+| »»» company            | string   | true     | none         |       | none        |
+| »» status              | object   | true     | none         |       | none        |
+| »»» name               | string   | true     | none         |       | none        |
+| »»» slug               | string   | true     | none         |       | none        |
+| » meta                 | object   | true     | none         |       | none        |
+| »» message             | string   | true     | none         |       | none        |
 
 HTTP Status Code **401**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[any]|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name       | Type   | Required | Restrictions | Title | description |
+| ---------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data     | [any]  | true     | none         |       | none        |
+| » meta     | object | true     | none         |       | none        |
+| »» message | string | true     | none         |       | none        |
 
 ## POST Cancel future orders
 
@@ -4187,6 +4166,7 @@ This endpoint allows you to submit future order cancellation requests via the Ai
 To proceed, provide an array of request_id strings from the "Create Future Order" endpoint response.
 
 Please note:
+
 - Future orders can be canceled up to 24 hours before the due date.
 - You can include up to 10 future orders in a single request.
 - An access token from the "Request Access Token" endpoint is required.
@@ -4207,12 +4187,12 @@ For more details and best practices, visit our [FAQ page](https://airalopartners
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» request_ids|body|[string]| yes |none|
+| Name          | Location | Type     | Required | Description |
+| ------------- | -------- | -------- | -------- | ----------- |
+| Accept        | header   | string   | yes      | none        |
+| Authorization | header   | string   | yes      | none        |
+| body          | body     | object   | no       | none        |
+| » request_ids | body     | [string] | yes      | none        |
 
 > Response Examples
 
@@ -4242,29 +4222,29 @@ For more details and best practices, visit our [FAQ page](https://airalopartners
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[string]|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name       | Type     | Required | Restrictions | Title | description |
+| ---------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data     | [string] | true     | none         |       | none        |
+| » meta     | object   | true     | none         |       | none        |
+| »» message | string   | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||The data object provides specific error messags for each of the provided request_ids, starting from index 0 which represents the first of the provided request_ids in the array.. In this case "request_ids.1" represents the sercond request ID in the array.|
-|»» request_ids.1|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name             | Type   | Required | Restrictions | Title | description                                                                                                                                                                                                                                                    |
+| ---------------- | ------ | -------- | ------------ | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| » data           | object | true     | none         |       | The data object provides specific error messags for each of the provided request_ids, starting from index 0 which represents the first of the provided request_ids in the array.. In this case "request_ids.1" represents the sercond request ID in the array. |
+| »» request_ids.1 | string | true     | none         |       | none                                                                                                                                                                                                                                                           |
+| » meta           | object | true     | none         |       | none                                                                                                                                                                                                                                                           |
+| »» message       | string | true     | none         |       | none                                                                                                                                                                                                                                                           |
 
 # REST API/Endpoints/Manage eSIMs
 
@@ -4274,28 +4254,25 @@ PUT /v2/sims/{sim_iccid}/brand
 
 This endpoint allows you to update assigned brand settings name of a specific eSIM from the Airalo Partners API using the eSIM's ICCID. This brand is used to apply branding on sharing link or share e-mails.If brand is set as null value, eSIM will be shared with unbranded visual.
 
-  
 The access token, obtained from the "Request Access Token" endpoint, should be included in the request.
 
-  
 For more informations, best practices visit our FAQ page: [https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ](https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ)
 
 > Body Parameters
 
 ```yaml
 brand_settings_name: our perfect brand
-
 ```
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|sim_iccid|path|string| yes |The ICCID of the eSIM for which you want to update the brand.|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» brand_settings_name|body|string| yes |Nullable. The definition under what brand the eSIM should be shared. Null for unbranded.|
+| Name                  | Location | Type   | Required | Description                                                                              |
+| --------------------- | -------- | ------ | -------- | ---------------------------------------------------------------------------------------- |
+| sim_iccid             | path     | string | yes      | The ICCID of the eSIM for which you want to update the brand.                            |
+| Accept                | header   | string | yes      | none                                                                                     |
+| Authorization         | header   | string | yes      | none                                                                                     |
+| body                  | body     | object | no       | none                                                                                     |
+| » brand_settings_name | body     | string | yes      | Nullable. The definition under what brand the eSIM should be shared. Null for unbranded. |
 
 > Response Examples
 
@@ -4314,30 +4291,30 @@ brand_settings_name: our perfect brand
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» brand_settings_name|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                   | Type   | Required | Restrictions | Title | description |
+| ---------------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data                 | object | true     | none         |       | none        |
+| »» brand_settings_name | string | true     | none         |       | none        |
+| » meta                 | object | true     | none         |       | none        |
+| »» message             | string | true     | none         |       | none        |
 
 ## GET Get eSIMs list
 
 GET /v2/sims
 
 :::highlight blue 💡
-**GDPR and Data Storage** 
+**GDPR and Data Storage**
 For compliance with GDPR and global privacy regulations, Airalo does not store any of your end-users' personally identifiable information (PII). You are solely responsible for handling and storing all customer data on your end.
 
-**Associating eSIMs with Customers** 
+**Associating eSIMs with Customers**
 To retrieve or manage all eSIMs associated with a specific customer, you must store and map the customer's data to the ICCID within your own system. The ICCID is the primary identifier for managing an eSIM post-purchase.
 :::
 
@@ -4349,15 +4326,15 @@ The access token, obtained from the "Request Access Token" endpoint, should be i
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|include|query|string| no |Optional. A comma-separated string to include related data in the response. Possible values are "order", "order.status", "order.user" and "share".|
-|filter[created_at]|query|string| no |Optional. A string to filter eSIMs by their creation date. Specify the date range using a dash (-) as a delimiter for correct parsing.|
-|filter[iccid]|query|string| no |Optional. A string to filter eSIMs by their ICCID. This performs a like search using the format '%SIM_ICCID%'.|
-|limit|query|string| no |Optional. An integer specifying how many sims will be returned on each page.|
-|page|query|string| no |Optional. An integer specifying the pagination's current page.|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name               | Location | Type   | Required | Description                                                                                                                                        |
+| ------------------ | -------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| include            | query    | string | no       | Optional. A comma-separated string to include related data in the response. Possible values are "order", "order.status", "order.user" and "share". |
+| filter[created_at] | query    | string | no       | Optional. A string to filter eSIMs by their creation date. Specify the date range using a dash (-) as a delimiter for correct parsing.             |
+| filter[iccid]      | query    | string | no       | Optional. A string to filter eSIMs by their ICCID. This performs a like search using the format '%SIM_ICCID%'.                                     |
+| limit              | query    | string | no       | Optional. An integer specifying how many sims will be returned on each page.                                                                       |
+| page               | query    | string | no       | Optional. An integer specifying the pagination's current page.                                                                                     |
+| Accept             | header   | string | yes      | none                                                                                                                                               |
+| Authorization      | header   | string | yes      | none                                                                                                                                               |
 
 > Response Examples
 
@@ -4703,106 +4680,106 @@ The access token, obtained from the "Request Access Token" endpoint, should be i
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)                  | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» id|integer|true|none||none|
-|»» created_at|string|true|none||none|
-|»» iccid|string|true|none||none|
-|»» lpa|string|true|none||none|
-|»» imsis|null|true|none||none|
-|»» matching_id|string|true|none||none|
-|»» qrcode|string|true|none||none|
-|»» qrcode_url|string|true|none||none|
-|»» direct_apple_installation_url|string|true|none||none|
-|»» voucher_code|null|true|none||none|
-|»» airalo_code|null|true|none||none|
-|»» apn_type|string|true|none||none|
-|»» apn_value|string¦null|true|none||none|
-|»» is_roaming|boolean|true|none||none|
-|»» confirmation_code|null|true|none||none|
-|»» order|null|true|none||none|
-|»» brand_settings_name|string¦null|true|none||none|
-|»» recycled|boolean|true|none||true - if sim is recycled. - false - otherwise|
-|»» recycled_at|string(date-time)¦null|true|none||Timestamp of when the sim was recycled in format Y-m-d H:i:s|
-|»» simable|object|true|none||none|
-|»»» id|integer|true|none||none|
-|»»» created_at|string|true|none||none|
-|»»» code|string|true|none||none|
-|»»» description|string¦null|true|none||none|
-|»»» type|string|true|none||none|
-|»»» package_id|string|true|none||none|
-|»»» quantity|integer|true|none||none|
-|»»» package|string|true|none||none|
-|»»» esim_type|string|true|none||none|
-|»»» validity|string|true|none||none|
-|»»» price|string|true|none||none|
-|»»» data|string|true|none||none|
-|»»» currency|string|true|none||none|
-|»»» manual_installation|string|true|none||none|
-|»»» qrcode_installation|string|true|none||none|
-|»»» installation_guides|object|true|none||none|
-|»»»» en|string|true|none||none|
-|»»» status|object|true|none||none|
-|»»»» name|string|true|none||none|
-|»»»» slug|string|true|none||none|
-|»»» user|object|true|none||none|
-|»»»» id|integer|true|none||none|
-|»»»» created_at|string|true|none||none|
-|»»»» name|string|true|none||none|
-|»»»» email|string|true|none||none|
-|»»»» mobile|null|true|none||none|
-|»»»» address|null|true|none||none|
-|»»»» state|null|true|none||none|
-|»»»» city|null|true|none||none|
-|»»»» postal_code|null|true|none||none|
-|»»»» country_id|null|true|none||none|
-|»»»» company|string|true|none||none|
-|»»» sharing|object|true|none||none|
-|»»»» link|string|true|none||none|
-|»»»» access_code|string|true|none||none|
-|» links|object|true|none||none|
-|»» first|string|true|none||none|
-|»» last|string|true|none||none|
-|»» prev|null|true|none||none|
-|»» next|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
-|»» current_page|integer|true|none||none|
-|»» from|integer|true|none||none|
-|»» last_page|integer|true|none||none|
-|»» path|string|true|none||none|
-|»» per_page|string|true|none||none|
-|»» to|integer|true|none||none|
-|»» total|integer|true|none||none|
+| Name                             | Type                   | Required | Restrictions | Title | description                                                  |
+| -------------------------------- | ---------------------- | -------- | ------------ | ----- | ------------------------------------------------------------ |
+| » data                           | [object]               | true     | none         |       | none                                                         |
+| »» id                            | integer                | true     | none         |       | none                                                         |
+| »» created_at                    | string                 | true     | none         |       | none                                                         |
+| »» iccid                         | string                 | true     | none         |       | none                                                         |
+| »» lpa                           | string                 | true     | none         |       | none                                                         |
+| »» imsis                         | null                   | true     | none         |       | none                                                         |
+| »» matching_id                   | string                 | true     | none         |       | none                                                         |
+| »» qrcode                        | string                 | true     | none         |       | none                                                         |
+| »» qrcode_url                    | string                 | true     | none         |       | none                                                         |
+| »» direct_apple_installation_url | string                 | true     | none         |       | none                                                         |
+| »» voucher_code                  | null                   | true     | none         |       | none                                                         |
+| »» airalo_code                   | null                   | true     | none         |       | none                                                         |
+| »» apn_type                      | string                 | true     | none         |       | none                                                         |
+| »» apn_value                     | string¦null            | true     | none         |       | none                                                         |
+| »» is_roaming                    | boolean                | true     | none         |       | none                                                         |
+| »» confirmation_code             | null                   | true     | none         |       | none                                                         |
+| »» order                         | null                   | true     | none         |       | none                                                         |
+| »» brand_settings_name           | string¦null            | true     | none         |       | none                                                         |
+| »» recycled                      | boolean                | true     | none         |       | true - if sim is recycled. - false - otherwise               |
+| »» recycled_at                   | string(date-time)¦null | true     | none         |       | Timestamp of when the sim was recycled in format Y-m-d H:i:s |
+| »» simable                       | object                 | true     | none         |       | none                                                         |
+| »»» id                           | integer                | true     | none         |       | none                                                         |
+| »»» created_at                   | string                 | true     | none         |       | none                                                         |
+| »»» code                         | string                 | true     | none         |       | none                                                         |
+| »»» description                  | string¦null            | true     | none         |       | none                                                         |
+| »»» type                         | string                 | true     | none         |       | none                                                         |
+| »»» package_id                   | string                 | true     | none         |       | none                                                         |
+| »»» quantity                     | integer                | true     | none         |       | none                                                         |
+| »»» package                      | string                 | true     | none         |       | none                                                         |
+| »»» esim_type                    | string                 | true     | none         |       | none                                                         |
+| »»» validity                     | string                 | true     | none         |       | none                                                         |
+| »»» price                        | string                 | true     | none         |       | none                                                         |
+| »»» data                         | string                 | true     | none         |       | none                                                         |
+| »»» currency                     | string                 | true     | none         |       | none                                                         |
+| »»» manual_installation          | string                 | true     | none         |       | none                                                         |
+| »»» qrcode_installation          | string                 | true     | none         |       | none                                                         |
+| »»» installation_guides          | object                 | true     | none         |       | none                                                         |
+| »»»» en                          | string                 | true     | none         |       | none                                                         |
+| »»» status                       | object                 | true     | none         |       | none                                                         |
+| »»»» name                        | string                 | true     | none         |       | none                                                         |
+| »»»» slug                        | string                 | true     | none         |       | none                                                         |
+| »»» user                         | object                 | true     | none         |       | none                                                         |
+| »»»» id                          | integer                | true     | none         |       | none                                                         |
+| »»»» created_at                  | string                 | true     | none         |       | none                                                         |
+| »»»» name                        | string                 | true     | none         |       | none                                                         |
+| »»»» email                       | string                 | true     | none         |       | none                                                         |
+| »»»» mobile                      | null                   | true     | none         |       | none                                                         |
+| »»»» address                     | null                   | true     | none         |       | none                                                         |
+| »»»» state                       | null                   | true     | none         |       | none                                                         |
+| »»»» city                        | null                   | true     | none         |       | none                                                         |
+| »»»» postal_code                 | null                   | true     | none         |       | none                                                         |
+| »»»» country_id                  | null                   | true     | none         |       | none                                                         |
+| »»»» company                     | string                 | true     | none         |       | none                                                         |
+| »»» sharing                      | object                 | true     | none         |       | none                                                         |
+| »»»» link                        | string                 | true     | none         |       | none                                                         |
+| »»»» access_code                 | string                 | true     | none         |       | none                                                         |
+| » links                          | object                 | true     | none         |       | none                                                         |
+| »» first                         | string                 | true     | none         |       | none                                                         |
+| »» last                          | string                 | true     | none         |       | none                                                         |
+| »» prev                          | null                   | true     | none         |       | none                                                         |
+| »» next                          | string                 | true     | none         |       | none                                                         |
+| » meta                           | object                 | true     | none         |       | none                                                         |
+| »» message                       | string                 | true     | none         |       | none                                                         |
+| »» current_page                  | integer                | true     | none         |       | none                                                         |
+| »» from                          | integer                | true     | none         |       | none                                                         |
+| »» last_page                     | integer                | true     | none         |       | none                                                         |
+| »» path                          | string                 | true     | none         |       | none                                                         |
+| »» per_page                      | string                 | true     | none         |       | none                                                         |
+| »» to                            | integer                | true     | none         |       | none                                                         |
+| »» total                         | integer                | true     | none         |       | none                                                         |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» limit|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name       | Type   | Required | Restrictions | Title | description |
+| ---------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data     | object | true     | none         |       | none        |
+| »» limit   | string | true     | none         |       | none        |
+| » meta     | object | true     | none         |       | none        |
+| »» message | string | true     | none         |       | none        |
 
-## GET Get  eSIM package history
+## GET Get eSIM package history
 
 GET /v2/sims/{iccid}/packages
 
 :::highlight blue 💡
-**GDPR and Data Storage** 
+**GDPR and Data Storage**
 For compliance with GDPR and global privacy regulations, Airalo does not store any of your end-users' personally identifiable information (PII). You are solely responsible for handling and storing all customer data on your end.
 
-**Associating eSIMs with Customers** 
+**Associating eSIMs with Customers**
 To retrieve or manage all eSIMs associated with a specific customer, you must store and map the customer's data to the ICCID within your own system. The ICCID is the primary identifier for managing an eSIM post-purchase.
 :::
 
@@ -4820,11 +4797,11 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|iccid|path|string| yes |eSIM ICCID, used to query a list of purchased packages, including top-ups. Required. Can be obtained by execuring GET to the "eSIMs List" endpoint|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description                                                                                                                                        |
+| ------------- | -------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| iccid         | path     | string | yes      | eSIM ICCID, used to query a list of purchased packages, including top-ups. Required. Can be obtained by execuring GET to the "eSIMs List" endpoint |
+| Accept        | header   | string | yes      | none                                                                                                                                               |
+| Authorization | header   | string | yes      | none                                                                                                                                               |
 
 #### Description
 
@@ -4891,41 +4868,41 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
-|429|[Too Many Requests](https://tools.ietf.org/html/rfc6585#section-4)|none|Inline|
+| HTTP Status Code | Meaning                                                            | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------ | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)            | none        | Inline      |
+| 429              | [Too Many Requests](https://tools.ietf.org/html/rfc6585#section-4) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» id|integer|true|none||none|
-|»» status|string|true|none||none|
-|»» remaining|integer|true|none||none|
-|»» activated_at|string|true|none||none|
-|»» expired_at|string|true|none||none|
-|»» finished_at|null|true|none||none|
-|»» package|object|true|none||none|
-|»»» id|string|true|none||none|
-|»»» type|string|true|none||none|
-|»»» price|integer|true|none||none|
-|»»» net_price|integer|true|none||none|
-|»»» amount|integer|true|none||none|
-|»»» day|integer|true|none||none|
-|»»» is_unlimited|boolean|true|none||none|
-|»»» title|string|true|none||none|
-|»»» data|string|true|none||none|
-|»»» short_info|null|true|none||none|
+| Name             | Type     | Required | Restrictions | Title | description |
+| ---------------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data           | [object] | true     | none         |       | none        |
+| »» id            | integer  | true     | none         |       | none        |
+| »» status        | string   | true     | none         |       | none        |
+| »» remaining     | integer  | true     | none         |       | none        |
+| »» activated_at  | string   | true     | none         |       | none        |
+| »» expired_at    | string   | true     | none         |       | none        |
+| »» finished_at   | null     | true     | none         |       | none        |
+| »» package       | object   | true     | none         |       | none        |
+| »»» id           | string   | true     | none         |       | none        |
+| »»» type         | string   | true     | none         |       | none        |
+| »»» price        | integer  | true     | none         |       | none        |
+| »»» net_price    | integer  | true     | none         |       | none        |
+| »»» amount       | integer  | true     | none         |       | none        |
+| »»» day          | integer  | true     | none         |       | none        |
+| »»» is_unlimited | boolean  | true     | none         |       | none        |
+| »»» title        | string   | true     | none         |       | none        |
+| »»» data         | string   | true     | none         |       | none        |
+| »»» short_info   | null     | true     | none         |       | none        |
 
 HTTP Status Code **429**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» message|string|true|none||none|
+| Name      | Type   | Required | Restrictions | Title | description |
+| --------- | ------ | -------- | ------------ | ----- | ----------- |
+| » message | string | true     | none         |       | none        |
 
 # REST API/Endpoints/Compatible devices
 
@@ -4934,23 +4911,24 @@ HTTP Status Code **429**
 GET /v2/compatible-devices
 
 :::warning
-This endpoint is deprecated and will be eventually removed.  
+This endpoint is deprecated and will be eventually removed.
 Please use `/v2/compatible-devices-lite` instead.
 :::
 
-This endpoint provides a comprehensive list of devices that are compatible with eSIMs. Use this information to ensure that your customers have devices that support eSIM functionality.  
+This endpoint provides a comprehensive list of devices that are compatible with eSIMs. Use this information to ensure that your customers have devices that support eSIM functionality.
 
-#### Important Notes  
-- Include the access token, obtained from the **Request Access Token** endpoint, in the request headers to authenticate your API call.  
-- The returned list is regularly updated to include the latest compatible devices, ensuring accurate and reliable information for your integration.  
-- Use this endpoint to validate device compatibility before processing eSIM orders.  
+#### Important Notes
+
+- Include the access token, obtained from the **Request Access Token** endpoint, in the request headers to authenticate your API call.
+- The returned list is regularly updated to include the latest compatible devices, ensuring accurate and reliable information for your integration.
+- Use this endpoint to validate device compatibility before processing eSIM orders.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Accept        | header   | string | yes      | none        |
+| Authorization | header   | string | yes      | none        |
 
 > Response Examples
 
@@ -5547,39 +5525,40 @@ This endpoint provides a comprehensive list of devices that are compatible with 
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» model|string|true|none||none|
-|»» os|string|true|none||none|
-|»» brand|string|true|none||none|
-|»» name|string|true|none||none|
+| Name     | Type     | Required | Restrictions | Title | description |
+| -------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data   | [object] | true     | none         |       | none        |
+| »» model | string   | true     | none         |       | none        |
+| »» os    | string   | true     | none         |       | none        |
+| »» brand | string   | true     | none         |       | none        |
+| »» name  | string   | true     | none         |       | none        |
 
 ## GET Get compatible device lite list
 
 GET /v2/compatible-devices-lite
 
-This endpoint provides a comprehensive list of devices that are compatible with eSIMs. Use this information to ensure that your customers have devices that support eSIM functionality.  
+This endpoint provides a comprehensive list of devices that are compatible with eSIMs. Use this information to ensure that your customers have devices that support eSIM functionality.
 
-#### Important Notes  
-- Include the access token, obtained from the **Request Access Token** endpoint, in the request headers to authenticate your API call.  
-- The returned list is regularly updated to include the latest compatible devices, ensuring accurate and reliable information for your integration.  
-- Use this endpoint to validate device compatibility before processing eSIM orders.  
+#### Important Notes
+
+- Include the access token, obtained from the **Request Access Token** endpoint, in the request headers to authenticate your API call.
+- The returned list is regularly updated to include the latest compatible devices, ensuring accurate and reliable information for your integration.
+- Use this endpoint to validate device compatibility before processing eSIM orders.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Accept        | header   | string | yes      | none        |
+| Authorization | header   | string | yes      | none        |
 
 > Response Examples
 
@@ -6079,20 +6058,20 @@ This endpoint provides a comprehensive list of devices that are compatible with 
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[object]|true|none||none|
-|»» os|string|true|none||none|
-|»» brand|string|true|none||none|
-|»» name|string|true|none||none|
+| Name     | Type     | Required | Restrictions | Title | description |
+| -------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data   | [object] | true     | none         |       | none        |
+| »» os    | string   | true     | none         |       | none        |
+| »» brand | string   | true     | none         |       | none        |
+| »» name  | string   | true     | none         |       | none        |
 
 # REST API/Endpoints/Notifications
 
@@ -6105,11 +6084,8 @@ With this endpoint, you can trigger a `Low data notification` webhook event with
 Parameters
 
 - "event" - string **required**
-    
 - "type" - string **required**
-    
 - "iccid" - string **optional**
-    
 
 For more informations, best practices visit our FAQ page: [https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ](https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ)
 
@@ -6125,13 +6101,13 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» event|body|string| yes |none|
-|» type|body|string| yes |none|
-|» iccid|body|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Authorization | header   | string | yes      | none        |
+| body          | body     | object | no       | none        |
+| » event       | body     | string | yes      | none        |
+| » type        | body     | string | yes      | none        |
+| » iccid       | body     | string | yes      | none        |
 
 > Response Examples
 
@@ -6143,17 +6119,17 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» success|string|true|none||none|
+| Name      | Type   | Required | Restrictions | Title | description |
+| --------- | ------ | -------- | ------------ | ----- | ----------- |
+| » success | string | true     | none         |       | none        |
 
 # REST API/Endpoints/Notifications/Notification: Async orders
 
@@ -6170,13 +6146,11 @@ This feature allows you to subscribe to `Async orders` notifications. You will r
 **Parameters**
 
 - `type`: "async_orders"
-    
-- `webhook_url`: "[https://example.com"](https://example.com) - in case of notification to be  
-    delivered via your webhook implementation, provide your webhook  
-    implementation url
-    
+- `webhook_url`: "[https://example.com"](https://example.com) - in case of notification to be
+  delivered via your webhook implementation, provide your webhook
+  implementation url
 
-The response will include the `contact_point` field, which reflects webhook URL you provided when opting in to the webhook. 
+The response will include the `contact_point` field, which reflects webhook URL you provided when opting in to the webhook.
 
 > Body Parameters
 
@@ -6189,13 +6163,13 @@ The response will include the `contact_point` field, which reflects webhook URL 
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» type|body|string| yes |none|
-|» webhook_url|body|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Accept        | header   | string | yes      | none        |
+| Authorization | header   | string | yes      | none        |
+| body          | body     | object | no       | none        |
+| » type        | body     | string | yes      | none        |
+| » webhook_url | body     | string | yes      | none        |
 
 > Response Examples
 
@@ -6207,22 +6181,22 @@ The response will include the `contact_point` field, which reflects webhook URL 
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» notification|object|true|none||none|
-|»»» type|string|true|none||none|
-|»»» contact_point|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name              | Type   | Required | Restrictions | Title | description |
+| ----------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data            | object | true     | none         |       | none        |
+| »» notification   | object | true     | none         |       | none        |
+| »»» type          | string | true     | none         |       | none        |
+| »»» contact_point | string | true     | none         |       | none        |
+| » meta            | object | true     | none         |       | none        |
+| »» message        | string | true     | none         |       | none        |
 
 ## GET Get notification details
 
@@ -6234,10 +6208,10 @@ The access token, obtained from the [Request Access Token endpoint](https://deve
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Accept        | header   | string | yes      | none        |
+| Authorization | header   | string | yes      | none        |
 
 > Response Examples
 
@@ -6249,22 +6223,22 @@ The access token, obtained from the [Request Access Token endpoint](https://deve
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» notification|object|true|none||none|
-|»»» type|string|true|none||none|
-|»»» contact_point|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name              | Type   | Required | Restrictions | Title | description |
+| ----------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data            | object | true     | none         |       | none        |
+| »» notification   | object | true     | none         |       | none        |
+| »»» type          | string | true     | none         |       | none        |
+| »»» contact_point | string | true     | none         |       | none        |
+| » meta            | object | true     | none         |       | none        |
+| »» message        | string | true     | none         |       | none        |
 
 ## POST Opt out
 
@@ -6282,12 +6256,12 @@ This endpoint allows you to opt out of notifications regarding async orders.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| yes |none|
-|Authorization|header|string| yes |none|
-|body|body|object| no |none|
-|» type|body|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Accept        | header   | string | yes      | none        |
+| Authorization | header   | string | yes      | none        |
+| body          | body     | object | no       | none        |
+| » type        | body     | string | yes      | none        |
 
 > Response Examples
 
@@ -6299,9 +6273,9 @@ This endpoint allows you to opt out of notifications regarding async orders.
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|204|[No Content](https://tools.ietf.org/html/rfc7231#section-6.3.5)|none|Inline|
+| HTTP Status Code | Meaning                                                         | Description | Data schema |
+| ---------------- | --------------------------------------------------------------- | ----------- | ----------- |
+| 204              | [No Content](https://tools.ietf.org/html/rfc7231#section-6.3.5) | none        | Inline      |
 
 ### Responses Data Schema
 
@@ -6317,9 +6291,9 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Authorization|header|string| yes |none|
+| Name          | Location | Type   | Required | Description |
+| ------------- | -------- | ------ | -------- | ----------- |
+| Authorization | header   | string | yes      | none        |
 
 > Response Examples
 
@@ -6331,24 +6305,24 @@ For more informations, best practices visit our FAQ page: [https://airalopartner
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|200|[OK](https://tools.ietf.org/html/rfc7231#section-6.3.1)|none|Inline|
+| HTTP Status Code | Meaning                                                 | Description | Data schema |
+| ---------------- | ------------------------------------------------------- | ----------- | ----------- |
+| 200              | [OK](https://tools.ietf.org/html/rfc7231#section-6.3.1) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **200**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» balances|object|true|none||none|
-|»»» name|string|true|none||none|
-|»»» availableBalance|object|true|none||none|
-|»»»» amount|integer|true|none||none|
-|»»»» currency|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name                 | Type    | Required | Restrictions | Title | description |
+| -------------------- | ------- | -------- | ------------ | ----- | ----------- |
+| » data               | object  | true     | none         |       | none        |
+| »» balances          | object  | true     | none         |       | none        |
+| »»» name             | string  | true     | none         |       | none        |
+| »»» availableBalance | object  | true     | none         |       | none        |
+| »»»» amount          | integer | true     | none         |       | none        |
+| »»»» currency        | string  | true     | none         |       | none        |
+| » meta               | object  | true     | none         |       | none        |
+| »» message           | string  | true     | none         |       | none        |
 
 # REST API/Endpoints/Request refund
 
@@ -6362,11 +6336,10 @@ The Airalo Refund API makes it simple to request refunds for eSIMs. This guide w
 
 ## ⚠️ Important Disclaimer
 
-> **The Refund API helps streamline the refund request process by reducing manual effort. However, submitting a request through this API does *not* guarantee approval.**  
->  
-> Each refund request is **individually** reviewed based on Airalo's Refund Policy to ensure it meets all terms and conditions. Refund approvals remain subject to Airalo’s internal policies and decisions.  
->  If your request meets the contract terms, the refund will be credited to your account as Airalo credits, ready to use for future transactions.
+> **The Refund API helps streamline the refund request process by reducing manual effort. However, submitting a request through this API does _not_ guarantee approval.**
 >
+> Each refund request is **individually** reviewed based on Airalo's Refund Policy to ensure it meets all terms and conditions. Refund approvals remain subject to Airalo’s internal policies and decisions.
+> If your request meets the contract terms, the refund will be credited to your account as Airalo credits, ready to use for future transactions.
 
 > Body Parameters
 
@@ -6381,11 +6354,11 @@ notes: Connection issues in the region.
 
 ### Params
 
-|Name|Location|Type|Required|Description|
-|---|---|---|---|---|
-|Accept|header|string| no |Indicates the expected response format.|
-|Authorization|header|string| no |Bearer token for authenticating the request|
-|body|body|string| no |none|
+| Name          | Location | Type   | Required | Description                                 |
+| ------------- | -------- | ------ | -------- | ------------------------------------------- |
+| Accept        | header   | string | no       | Indicates the expected response format.     |
+| Authorization | header   | string | no       | Bearer token for authenticating the request |
+| body          | body     | string | no       | none                                        |
 
 > Response Examples
 
@@ -6416,30 +6389,30 @@ notes: Connection issues in the region.
 
 ### Responses
 
-|HTTP Status Code |Meaning|Description|Data schema|
-|---|---|---|---|
-|202|[Accepted](https://tools.ietf.org/html/rfc7231#section-6.3.3)|none|Inline|
-|422|[Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3)|none|Inline|
+| HTTP Status Code | Meaning                                                                  | Description | Data schema |
+| ---------------- | ------------------------------------------------------------------------ | ----------- | ----------- |
+| 202              | [Accepted](https://tools.ietf.org/html/rfc7231#section-6.3.3)            | none        | Inline      |
+| 422              | [Unprocessable Entity](https://tools.ietf.org/html/rfc2518#section-10.3) | none        | Inline      |
 
 ### Responses Data Schema
 
 HTTP Status Code **202**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|object|true|none||none|
-|»» refund_id|string|true|none||none|
-|»» created_at|string|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name          | Type   | Required | Restrictions | Title | description |
+| ------------- | ------ | -------- | ------------ | ----- | ----------- |
+| » data        | object | true     | none         |       | none        |
+| »» refund_id  | string | true     | none         |       | none        |
+| »» created_at | string | true     | none         |       | none        |
+| » meta        | object | true     | none         |       | none        |
+| »» message    | string | true     | none         |       | none        |
 
 HTTP Status Code **422**
 
-|Name|Type|Required|Restrictions|Title|description|
-|---|---|---|---|---|---|
-|» data|[string]|true|none||none|
-|» meta|object|true|none||none|
-|»» message|string|true|none||none|
+| Name       | Type     | Required | Restrictions | Title | description |
+| ---------- | -------- | -------- | ------------ | ----- | ----------- |
+| » data     | [string] | true     | none         |       | none        |
+| » meta     | object   | true     | none         |       | none        |
+| »» message | string   | true     | none         |       | none        |
 
 # Data Schema
 
@@ -6458,9 +6431,7 @@ HTTP Status Code **422**
     "name": "string"
   },
   "name": "doggie",
-  "photoUrls": [
-    "string"
-  ],
+  "photoUrls": ["string"],
   "tags": [
     {
       "id": 1,
@@ -6469,27 +6440,26 @@ HTTP Status Code **422**
   ],
   "status": "available"
 }
-
 ```
 
 ### Attribute
 
-|Name|Type|Required|Restrictions|Title|Description|
-|---|---|---|---|---|---|
-|id|integer(int64)|true|none||Pet ID|
-|category|[Category](#schemacategory)|true|none||group|
-|name|string|true|none||name|
-|photoUrls|[string]|true|none||image URL|
-|tags|[[Tag](#schematag)]|true|none||tag|
-|status|string|true|none||Pet Sales Status|
+| Name      | Type                        | Required | Restrictions | Title | Description      |
+| --------- | --------------------------- | -------- | ------------ | ----- | ---------------- |
+| id        | integer(int64)              | true     | none         |       | Pet ID           |
+| category  | [Category](#schemacategory) | true     | none         |       | group            |
+| name      | string                      | true     | none         |       | name             |
+| photoUrls | [string]                    | true     | none         |       | image URL        |
+| tags      | [[Tag](#schematag)]         | true     | none         |       | tag              |
+| status    | string                      | true     | none         |       | Pet Sales Status |
 
 #### Enum
 
-|Name|Value|
-|---|---|
-|status|available|
-|status|pending|
-|status|sold|
+| Name   | Value     |
+| ------ | --------- |
+| status | available |
+| status | pending   |
+| status | sold      |
 
 <h2 id="tocS_Category">Category</h2>
 
@@ -6503,15 +6473,14 @@ HTTP Status Code **422**
   "id": 1,
   "name": "string"
 }
-
 ```
 
 ### Attribute
 
-|Name|Type|Required|Restrictions|Title|Description|
-|---|---|---|---|---|---|
-|id|integer(int64)|false|none||Category ID|
-|name|string|false|none||Category Name|
+| Name | Type           | Required | Restrictions | Title | Description   |
+| ---- | -------------- | -------- | ------------ | ----- | ------------- |
+| id   | integer(int64) | false    | none         |       | Category ID   |
+| name | string         | false    | none         |       | Category Name |
 
 <h2 id="tocS_Tag">Tag</h2>
 
@@ -6525,13 +6494,11 @@ HTTP Status Code **422**
   "id": 1,
   "name": "string"
 }
-
 ```
 
 ### Attribute
 
-|Name|Type|Required|Restrictions|Title|Description|
-|---|---|---|---|---|---|
-|id|integer(int64)|false|none||Tag ID|
-|name|string|false|none||Tag Name|
-
+| Name | Type           | Required | Restrictions | Title | Description |
+| ---- | -------------- | -------- | ------------ | ----- | ----------- |
+| id   | integer(int64) | false    | none         |       | Tag ID      |
+| name | string         | false    | none         |       | Tag Name    |
