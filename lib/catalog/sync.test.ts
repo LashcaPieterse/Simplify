@@ -127,7 +127,7 @@ class InMemoryCatalogPrisma {
   private operatorSequence = 0;
   private packageSequence = 0;
 
-  constructor() {
+  constructor(private readonly options: { missingRawPayloadColumn?: boolean } = {}) {
     const now = new Date("2024-01-01T00:00:00.000Z");
     const stalePackage: PackageRecord = {
       id: "package-stale",
@@ -174,6 +174,13 @@ class InMemoryCatalogPrisma {
       create: Record<string, unknown>;
       update: Record<string, unknown>;
     }) => {
+      if (
+        this.options.missingRawPayloadColumn &&
+        ("rawPayloadJson" in args.create || "rawPayloadJson" in args.update)
+      ) {
+        throw { code: "P2022", meta: { column: "raw_payload_json" } };
+      }
+
       const existingIndex = this.packagePages.findIndex(
         (entry) =>
           entry.runId === args.where.runId_page.runId &&
@@ -602,4 +609,77 @@ test("syncAiraloCatalog follows Airalo pagination metadata and stores documented
   const stalePackage = prisma.packages.get("stale-package");
   assert.equal(stalePackage?.state?.isActive, false);
   assert.equal(stalePackage?.state?.deactivatedAt, now);
+});
+
+test("syncAiraloCatalog continues when raw package snapshot column is not migrated yet", async () => {
+  const now = new Date("2026-05-08T12:30:00.000Z");
+  const warnings: string[] = [];
+  const country = {
+    country_code: "UG",
+    slug: "uganda",
+    title: "Uganda",
+    operators: [
+      {
+        id: 4400,
+        type: "local",
+        title: "UgandaTel",
+        packages: [
+          {
+            id: "ug-1gb",
+            type: "sim",
+            price: 7,
+            amount: 1024,
+            day: 7,
+            is_unlimited: false,
+            title: "Uganda 1GB",
+            short_info: "1 GB",
+            qr_installation: "<p>QR</p>",
+            manual_installation: "<p>Manual</p>",
+            is_fair_usage_policy: false,
+            fair_usage_policy: null,
+            data: "1 GB",
+            voice: null,
+            text: null,
+            net_price: 4,
+            prices: {
+              net_price: { USD: 4 },
+              recommended_retail_price: { USD: 7 },
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const rawResponse = {
+    data: [country],
+    links: { next: null },
+    meta: { current_page: 1, last_page: 1, per_page: 100, total: 1 },
+    pricing: { model: "default" },
+  };
+  const client = new MockPackageTreeClient({
+    1: { rawResponse, countries: [country] },
+  });
+  const prisma = new InMemoryCatalogPrisma({ missingRawPayloadColumn: true });
+
+  const result = await syncAiraloCatalog({
+    prisma: prisma as unknown as PrismaClient,
+    client: client as unknown as AiraloClient,
+    logger: {
+      ...NOOP_LOGGER,
+      warn: (message) => warnings.push(message),
+    },
+    packagesOptions: { includeTopUp: true, limit: 100 },
+    syncRunId: "sync-run-missing-raw-column",
+    now,
+  });
+
+  assert.equal(result.packagesCreated, 1);
+  assert.equal(result.packagesDeactivated, 1);
+  assert.equal(prisma.packagePages.length, 1);
+  assert.equal(prisma.packagePages[0]?.rawPayloadJson, undefined);
+  assert.equal(prisma.packages.has("ug-1gb"), true);
+  assert.equal(
+    warnings.some((message) => message.includes("raw_payload_json is missing")),
+    true,
+  );
 });

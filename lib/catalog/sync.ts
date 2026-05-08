@@ -78,6 +78,10 @@ type ResolvedPrice = {
   currency: string;
 };
 
+const PACKAGE_SYNC_PAGE_SELECT = {
+  id: true,
+} as const;
+
 function toPrismaJson(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
   if (value === null || value === undefined) {
     return Prisma.JsonNull;
@@ -208,6 +212,15 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isMissingColumnError(error: unknown, column: string): boolean {
+  if (!isObject(error)) {
+    return false;
+  }
+
+  const meta = isObject(error.meta) ? error.meta : null;
+  return error.code === "P2022" && meta?.column === column;
+}
+
 function extractEnvelope(raw: unknown): {
   links: unknown;
   meta: unknown;
@@ -264,6 +277,59 @@ function resolveNextCatalogPage(envelope: { links: unknown; meta: unknown }, cur
   }
 
   return null;
+}
+
+async function upsertPackageSyncPage({
+  db,
+  runId,
+  page,
+  limit,
+  envelope,
+  rawResponse,
+  countryCount,
+  capturedAt,
+  includeRawPayload,
+}: {
+  db: PrismaClient;
+  runId: string;
+  page: number;
+  limit: number;
+  envelope: { links: unknown; meta: unknown; pricing: unknown };
+  rawResponse: unknown;
+  countryCount: number;
+  capturedAt: Date;
+  includeRawPayload: boolean;
+}): Promise<void> {
+  const create: Prisma.PackageSyncPageUncheckedCreateInput = {
+    runId,
+    page,
+    limit,
+    linksJson: toPrismaJson(envelope.links),
+    metaJson: toPrismaJson(envelope.meta),
+    pricingJson: toPrismaJson(envelope.pricing),
+    countryCount,
+    capturedAt,
+  };
+  const update: Prisma.PackageSyncPageUncheckedUpdateInput = {
+    limit,
+    linksJson: toPrismaJson(envelope.links),
+    metaJson: toPrismaJson(envelope.meta),
+    pricingJson: toPrismaJson(envelope.pricing),
+    countryCount,
+    capturedAt,
+  };
+
+  if (includeRawPayload) {
+    create.rawPayloadJson = toPrismaJson(rawResponse);
+    update.rawPayloadJson = toPrismaJson(rawResponse);
+  }
+
+  await db.packageSyncPage.upsert({
+    where: { runId_page: { runId, page } },
+    create,
+    update,
+    select: PACKAGE_SYNC_PAGE_SELECT,
+  });
 }
 
 function normalizePackageData(pkg: AiraloPackageNode, operatorId: string) {
@@ -450,6 +516,7 @@ export async function syncAiraloCatalog(
   };
   const limit = baseOptions.limit ?? 100;
   let page = baseOptions.page ?? 1;
+  let rawPayloadSnapshotsEnabled = true;
 
   try {
     while (true) {
@@ -463,29 +530,39 @@ export async function syncAiraloCatalog(
       const countriesPage = pageResult.countries ?? [];
       const envelope = extractEnvelope(pageResult.rawResponse);
 
-      await db.packageSyncPage.upsert({
-        where: { runId_page: { runId, page } },
-        create: {
+      try {
+        await upsertPackageSyncPage({
+          db,
           runId,
           page,
           limit,
-          linksJson: toPrismaJson(envelope.links),
-          metaJson: toPrismaJson(envelope.meta),
-          pricingJson: toPrismaJson(envelope.pricing),
-          rawPayloadJson: toPrismaJson(pageResult.rawResponse),
+          envelope,
+          rawResponse: pageResult.rawResponse,
           countryCount: countriesPage.length,
           capturedAt: now,
-        },
-        update: {
+          includeRawPayload: rawPayloadSnapshotsEnabled,
+        });
+      } catch (error) {
+        if (!rawPayloadSnapshotsEnabled || !isMissingColumnError(error, "raw_payload_json")) {
+          throw error;
+        }
+
+        rawPayloadSnapshotsEnabled = false;
+        logger.warn(
+          "[airalo-sync] package_sync_pages.raw_payload_json is missing; continuing sync without raw page snapshots until the database migration is applied.",
+        );
+        await upsertPackageSyncPage({
+          db,
+          runId,
+          page,
           limit,
-          linksJson: toPrismaJson(envelope.links),
-          metaJson: toPrismaJson(envelope.meta),
-          pricingJson: toPrismaJson(envelope.pricing),
-          rawPayloadJson: toPrismaJson(pageResult.rawResponse),
+          envelope,
+          rawResponse: pageResult.rawResponse,
           countryCount: countriesPage.length,
           capturedAt: now,
-        },
-      });
+          includeRawPayload: false,
+        });
+      }
 
       for (const country of countriesPage) {
         const providedCountryCode = normalizeString(country.country_code, "");

@@ -106,6 +106,8 @@ Sync package requests default to:
 
 Airalo supports a single full-catalog response when no `limit` is provided, but Simplify intentionally uses paginated syncs. Paging keeps Vercel function memory predictable, preserves each raw response page for audit/debug replay, and handles Airalo's documented page 2+ indexed-country response shape. Pagination follows Airalo `links.next` / `meta.current_page` / `meta.last_page` values instead of inferring completion from country counts.
 
+Deploy pending Prisma migrations with `npx prisma migrate deploy` before or during production releases. If `package_sync_pages.raw_payload_json` is not present yet, the sync job will continue without raw page snapshots and log a warning until the migration is applied.
+
 If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
 
 > Recommended cadence: execute the script every 60 minutes via cron or a background worker. The Airalo package endpoint is documented at 80 requests/minute per token; Simplify sync paces itself at 40 requests/minute as a conservative unattended-job limit.
