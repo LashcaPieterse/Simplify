@@ -210,6 +210,7 @@ test("createOrder sends /orders-async webhook_url and persists request_id with r
     "https://example.com/api/airalo/webhooks",
   );
   assert.equal(airalo.asyncPayloads[0]?.quantity, "2");
+  assert.equal(airalo.asyncPayloads[0]?.brand_settings_name, "Simplify");
   assert.equal(airalo.asyncPayloads[0]?.to_email, "customer@example.com");
   assert.deepEqual(airalo.asyncPayloads[0]?.["sharing_option[]"], ["link"]);
   assert.equal(db.orders[0]?.requestId, "req_123");
@@ -257,6 +258,7 @@ test("createOrder stores rich /orders response data, APN, and raw snapshot", asy
   );
 
   assert.equal(result.orderNumber, "A-ORDER-1");
+  assert.equal(airalo.syncPayloads[0]?.brand_settings_name, "Simplify");
   assert.equal(result.requestId, "REF-1");
   assert.equal(result.installation?.apn, "globaldata");
   assert.equal(db.profiles[0]?.iccid, "8900000000000000001");

@@ -222,6 +222,7 @@ export interface CreateOrderOptions {
 
 const DEFAULT_QUANTITY = 1;
 const MAX_QUANTITY = 10;
+const AIRALO_BRAND_SETTINGS_NAME = "Simplify";
 const ORDER_RATE_LIMIT_RETRY = { attempts: 3, baseDelayMs: 500 };
 
 let cachedAiraloClient: AiraloClient | null = null;
@@ -922,6 +923,7 @@ export async function createOrder(
     quantity: String(normalisedQuantity),
     type: "sim",
     description,
+    brand_settings_name: AIRALO_BRAND_SETTINGS_NAME,
   };
 
   if (customerEmail) {
