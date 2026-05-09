@@ -287,6 +287,48 @@ test("createOrder stores rich /orders response data, APN, and raw snapshot", asy
   );
 });
 
+test("createOrder stores the documented Airalo order id before the display code", async () => {
+  const db = new FakeOrderDb();
+  const syncResponse = OrderResponseSchema.parse({
+    status: true,
+    data: {
+      id: 583747,
+      code: "20250415-583747",
+      status: "completed",
+      package_id: "uki-mobile-15days-2gb",
+      quantity: 1,
+      type: "sim",
+      sims: [
+        {
+          iccid: "8944465400003573253",
+          qrcode: "LPA:1$RSP-3088.IDEMIA.IO$YVTGM-5LZC6-PIC56-KFEZJ",
+          direct_apple_installation_url:
+            "https://example.com/apple-install",
+        },
+      ],
+    },
+  });
+  const airalo = new FakeAiraloClient({ syncResponse });
+
+  const result = await createTestOrder(
+    { quantity: 1 },
+    {
+      db,
+      airalo,
+      submissionMode: "sync",
+    },
+  );
+
+  assert.equal(result.orderNumber, "583747");
+  assert.equal(db.orders[0]?.orderNumber, "583747");
+  assert.equal(db.snapshots[0]?.orderNumber, "583747");
+
+  const installationPayload = JSON.parse(
+    String(db.installationPayloads[0]?.payload),
+  ) as Record<string, unknown>;
+  assert.equal(installationPayload.orderId, "583747");
+});
+
 test("createOrder maps documented Airalo 422 validation responses", async (t) => {
   const cases: Array<{
     name: string;

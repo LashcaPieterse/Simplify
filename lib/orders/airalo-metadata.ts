@@ -102,7 +102,7 @@ export function resolveAiraloOrderApn(
 
 export function createInstallationPayload(order: AiraloOrder): string {
   const firstSim = Array.isArray(order.sims) ? order.sims[0] : undefined;
-  const resolvedOrderId = order.order_id ?? order.code ?? order.id ?? null;
+  const resolvedOrderId = order.order_id ?? order.id ?? order.code ?? null;
   const payload = {
     orderId: resolvedOrderId,
     orderReference: order.order_reference ?? null,

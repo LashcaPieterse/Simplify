@@ -78,6 +78,7 @@ export async function POST(request: Request) {
       orderId: result.orderId,
       orderNumber: result.orderNumber,
       requestId: result.requestId,
+      ...(result.installation ? { installation: result.installation } : {}),
     });
   } catch (error: unknown) {
     console.error("Failed to create order", error);

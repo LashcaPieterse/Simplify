@@ -167,7 +167,7 @@ function resolveAiraloOrderId(
     return null;
   }
 
-  return order.order_id ?? order.code ?? order.id ?? null;
+  return order.order_id ?? order.id ?? order.code ?? null;
 }
 
 function resolveAiraloPrimarySim(order: AiraloOrder | null | undefined) {

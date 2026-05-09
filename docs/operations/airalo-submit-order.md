@@ -1,13 +1,13 @@
 # Airalo Submit Order contract
 
-This document evaluates the upstream "Submit order async" OpenAPI contract (`POST /v2/orders-async`) and captures the expectations Simplify must meet to stay compliant with the Airalo Partner API.
+This document evaluates the upstream "Submit order" (`POST /v2/orders`) and "Submit order async" (`POST /v2/orders-async`) OpenAPI contracts and captures the expectations Simplify must meet to stay compliant with the Airalo Partner API.
 
 ## Endpoint summary
 
 | Property             | Requirement                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Method               | `POST`                                                                                                        |
-| Path                 | `/v2/orders-async`                                                                                            |
+| Paths                | `/v2/orders`, `/v2/orders-async`                                                                              |
 | Protocol             | HTTPS only                                                                                                    |
 | Headers              | `Accept: application/json`, `Authorization: Bearer <token>`                                                   |
 | Request body         | `multipart/form-data`                                                                                         |
@@ -31,7 +31,17 @@ Airalo treats the payload as multipart form fields, so every value (even numeric
 
 > Implementation detail: keep our schema flexible enough to append new optional fields without breaking form encoding. Upstream occasionally adds eSIM-sharing knobs via additional form keys.
 
-## Response model (`202`)
+## Response models
+
+### Synchronous `POST /v2/orders` (`200`)
+
+The synchronous endpoint returns the full order payload immediately, including `data.id`, `data.code`, package metadata, installation HTML, and the `sims[]` array with ICCID, QR, APN, and `direct_apple_installation_url` fields.
+
+Simplify stores the provider order identifier from `data.order_id` when present, otherwise `data.id`, in `EsimOrder.orderNumber`. Do not store `data.code` as the primary provider identifier; Airalo documents `GET /v2/orders/{order_id}` against the order ID, while `code` is a display/search value.
+
+The protected direct order API (`app/api/orders/route.ts`) forces `submissionMode: "sync"` and returns the local order identifiers plus the installation payload that the service persists.
+
+### Asynchronous `POST /v2/orders-async` (`202`)
 
 `/v2/orders-async` immediately responds with an acknowledgement envelope rather than the full SIM payload:
 
@@ -39,7 +49,7 @@ Airalo treats the payload as multipart form fields, so every value (even numeric
 - `data.accepted_at`: Timestamp string showing when Airalo queued the request.
 - `meta.message`: Usually `"success"`, useful for observability dashboards.
 
-No SIM metadata is returned at submission time. Simplify stores the complete async acknowledgement envelope in `airalo_order_snapshots` with source `orders-async`. Once Airalo finishes provisioning, it sends a webhook that includes both `order_id` (the value we previously stored in `orderNumber`) and the original `request_id` reference. At that point Simplify must:
+No SIM metadata is returned at submission time. Simplify stores the complete async acknowledgement envelope in `airalo_order_snapshots` with source `orders-async` and keeps the `request_id` in `EsimOrder.requestId` while `EsimOrder.orderNumber` remains empty. Once Airalo finishes provisioning, it sends a webhook that includes the provider order ID plus the original `request_id` reference. At that point Simplify must:
 
 1. Match the webhook via `reference -> requestId` to update the pending order status.
 2. Persist the newly revealed `order_id` so that follow-up operations (`GET /v2/orders/{id}` or `/usage`) work.
