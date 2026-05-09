@@ -93,6 +93,13 @@ type QueryParamValue = string | number | boolean | null | undefined;
 export type PackageTypeFilter = "local" | "global";
 const PACKAGE_INCLUDE_TOPUP = "topup" as const;
 export type PackageInclude = typeof PACKAGE_INCLUDE_TOPUP;
+const GET_SIM_INCLUDE_VALUES = [
+  "order",
+  "order.status",
+  "order.user",
+  "share",
+] as const;
+export type GetSimInclude = (typeof GET_SIM_INCLUDE_VALUES)[number];
 
 export interface GetPackagesFilters {
   type?: PackageTypeFilter;
@@ -417,7 +424,7 @@ export interface GetUsageOptions {
 }
 
 export interface GetSimOptions {
-  include?: string | string[];
+  include?: GetSimInclude | GetSimInclude[];
 }
 
 interface AiraloRequestOptions<T> {
@@ -757,8 +764,8 @@ export class AiraloClient {
     };
   }
 
-  private formatIncludeParam(
-    include?: string | string[] | null,
+  private formatSimIncludeParam(
+    include?: GetSimOptions["include"] | null,
   ): string | null {
     if (!include) {
       return null;
@@ -769,6 +776,15 @@ export class AiraloClient {
       const normalized = value?.trim();
       if (!normalized) {
         return;
+      }
+
+      if (!GET_SIM_INCLUDE_VALUES.includes(normalized as GetSimInclude)) {
+        const allowedValues = GET_SIM_INCLUDE_VALUES.map(
+          (value) => `"${value}"`,
+        ).join(", ");
+        throw new Error(
+          `Invalid include value "${normalized}" for /sims/{iccid}. Allowed values are ${allowedValues}.`,
+        );
       }
 
       if (!includes.includes(normalized)) {
@@ -1223,7 +1239,7 @@ export class AiraloClient {
     }
 
     const searchParams = new URLSearchParams();
-    const includeParam = this.formatIncludeParam(options.include);
+    const includeParam = this.formatSimIncludeParam(options.include);
     if (includeParam) {
       searchParams.set("include", includeParam);
     }

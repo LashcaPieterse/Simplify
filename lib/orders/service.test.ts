@@ -9,14 +9,17 @@ import {
 import {
   OrderResponseSchema,
   type OrderResponse,
+  type SimResponse,
   type SubmitOrderAsyncResponse,
 } from "../airalo/schemas";
 import {
   OrderValidationError,
   createOrder,
+  ensureOrderInstallation,
   type CreateOrderInput,
   type CreateOrderOptions,
 } from "./service";
+import { createInstallationPayload } from "./airalo-metadata";
 
 const TEST_PACKAGE_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -62,16 +65,68 @@ class FakeOrderDb {
       this.orders.push(record);
       return record;
     },
+    findFirst: async ({
+      where,
+    }: {
+      where: { OR?: Array<Record<string, unknown>> };
+    }) => {
+      const clauses = where.OR ?? [];
+      const order = this.orders.find((candidate) =>
+        clauses.some((clause) =>
+          Object.entries(clause).some(
+            ([key, value]) => candidate[key] === value,
+          ),
+        ),
+      );
+
+      if (!order) {
+        return null;
+      }
+
+      return {
+        ...order,
+        profiles: this.profiles.filter(
+          (profile) => profile.orderId === order.id,
+        ),
+        installation:
+          this.installationPayloads.find(
+            (payload) => payload.orderId === order.id,
+          ) ?? null,
+        payment: null,
+      };
+    },
+    update: async ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }) => {
+      const record = this.orders.find((order) => order.id === where.id);
+      assert.ok(record, `order ${where.id} should exist`);
+      Object.assign(record, data);
+      return record;
+    },
   };
 
   readonly esimProfile = {
     upsert: async ({
+      where,
       create,
       update,
     }: {
+      where: { iccid: string };
       create: Record<string, unknown>;
       update: Record<string, unknown>;
     }) => {
+      const existing = this.profiles.find(
+        (profile) => profile.iccid === where.iccid,
+      );
+      if (existing) {
+        Object.assign(existing, update);
+        return existing;
+      }
+
       const record = {
         id: `profile-${this.profiles.length + 1}`,
         ...create,
@@ -84,12 +139,22 @@ class FakeOrderDb {
 
   readonly esimInstallationPayload = {
     upsert: async ({
+      where,
       create,
       update,
     }: {
+      where: { orderId: string };
       create: Record<string, unknown>;
       update: Record<string, unknown>;
     }) => {
+      const existing = this.installationPayloads.find(
+        (payload) => payload.orderId === where.orderId,
+      );
+      if (existing) {
+        Object.assign(existing, update);
+        return existing;
+      }
+
       const record = {
         id: `installation-${this.installationPayloads.length + 1}`,
         ...create,
@@ -118,13 +183,19 @@ class FakeOrderDb {
 class FakeAiraloClient {
   readonly asyncPayloads: CreateOrderPayload[] = [];
   readonly syncPayloads: CreateOrderPayload[] = [];
+  readonly simLookups: Array<{ iccid: string; include?: unknown }> = [];
+  readonly orderLookups: string[] = [];
 
   constructor(
     private readonly options: {
       asyncResponse?: SubmitOrderAsyncResponse;
       syncResponse?: OrderResponse;
+      orderResponse?: OrderResponse;
+      simResponse?: SimResponse;
       syncError?: Error;
       asyncError?: Error;
+      orderError?: Error;
+      simError?: Error;
     },
   ) {}
 
@@ -152,6 +223,31 @@ class FakeAiraloClient {
 
     assert.ok(this.options.syncResponse, "sync response must be configured");
     return this.options.syncResponse;
+  }
+
+  async getOrderResponseById(orderId: string): Promise<OrderResponse> {
+    this.orderLookups.push(orderId);
+
+    if (this.options.orderError) {
+      throw this.options.orderError;
+    }
+
+    assert.ok(this.options.orderResponse, "order response must be configured");
+    return this.options.orderResponse;
+  }
+
+  async getSimResponse(
+    iccid: string,
+    options: { include?: unknown } = {},
+  ): Promise<SimResponse> {
+    this.simLookups.push({ iccid, include: options.include });
+
+    if (this.options.simError) {
+      throw this.options.simError;
+    }
+
+    assert.ok(this.options.simResponse, "SIM response must be configured");
+    return this.options.simResponse;
   }
 }
 
@@ -323,12 +419,142 @@ test("createOrder stores the documented Airalo order id before the display code"
 
   assert.equal(result.orderNumber, "583747");
   assert.equal(db.orders[0]?.orderNumber, "583747");
+  assert.equal(db.profiles[0]?.activationCode, "YVTGM-5LZC6-PIC56-KFEZJ");
   assert.equal(db.snapshots[0]?.orderNumber, "583747");
 
   const installationPayload = JSON.parse(
     String(db.installationPayloads[0]?.payload),
   ) as Record<string, unknown>;
+  assert.equal(installationPayload.source, "order");
   assert.equal(installationPayload.orderId, "583747");
+  assert.equal(installationPayload.qrCodeData, "LPA:1$RSP-3088.IDEMIA.IO$YVTGM-5LZC6-PIC56-KFEZJ");
+  assert.equal(installationPayload.matchingId, "YVTGM-5LZC6-PIC56-KFEZJ");
+});
+
+test("createInstallationPayload maps Get eSIM response fields", () => {
+  const payload = JSON.parse(
+    createInstallationPayload(null, {
+      id: 11028,
+      created_at: "2023-02-27 08:30:14",
+      iccid: "8944465400000267221",
+      lpa: "lpa.airalo.com",
+      matching_id: "TEST",
+      qrcode: "LPA:1$lpa.airalo.com$TEST",
+      qrcode_url: "https://sandbox.airalo.com/qr?id=13282",
+      direct_apple_installation_url:
+        "https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=LPA:1$lpa.airalo.com$TEST",
+      apn_type: "automatic",
+      apn_value: "globaldata",
+      is_roaming: true,
+      confirmation_code: "5751",
+      brand_settings_name: "Simplify",
+      recycled: true,
+      recycled_at: "2025-05-05 10:52:39",
+      simable: {
+        id: 9647,
+        package_id: "kallur-digital-7days-1gb",
+        package: "Kallur Digital-1 GB - 7 Days",
+        data: "1 GB",
+        validity: "7",
+        status: { name: "Completed", slug: "completed" },
+        sharing: {
+          link: "https://esims.cloud/simplify/a4g5ht",
+          access_code: "4812",
+        },
+      },
+    }),
+  ) as Record<string, unknown>;
+
+  assert.equal(payload.iccid, "8944465400000267221");
+  assert.equal(payload.source, "sim");
+  assert.equal(payload.activationCode, "TEST");
+  assert.equal(payload.qrCodeData, "LPA:1$lpa.airalo.com$TEST");
+  assert.equal(payload.qrCodeUrl, "https://sandbox.airalo.com/qr?id=13282");
+  assert.equal(payload.directAppleUrl?.toString().startsWith("https://esimsetup.apple.com"), true);
+  assert.equal(payload.apn, "globaldata");
+  assert.equal(payload.apnType, "automatic");
+  assert.equal(payload.isRoaming, true);
+  assert.equal(payload.recycled, true);
+  assert.deepEqual(payload.share, {
+    link: "https://esims.cloud/simplify/a4g5ht",
+    accessCode: "4812",
+  });
+});
+
+test("ensureOrderInstallation hydrates an existing ICCID through Get eSIM", async () => {
+  const db = new FakeOrderDb();
+  db.orders.push({
+    id: "order-1",
+    orderNumber: null,
+    requestId: "req_123",
+    packageId: TEST_PACKAGE_ID,
+    status: "pending",
+    customerEmail: "customer@example.com",
+    quantity: 1,
+    totalCents: 1250,
+    currency: "USD",
+  });
+  db.profiles.push({
+    id: "profile-1",
+    iccid: "8944465400000267221",
+    status: "pending",
+    activationCode: null,
+    orderId: "order-1",
+  });
+
+  const simResponse: SimResponse = {
+    data: {
+      id: 11028,
+      created_at: "2023-02-27 08:30:14",
+      iccid: "8944465400000267221",
+      lpa: "lpa.airalo.com",
+      matching_id: "TEST",
+      qrcode: "LPA:1$lpa.airalo.com$TEST",
+      qrcode_url: "https://sandbox.airalo.com/qr?id=13282",
+      direct_apple_installation_url:
+        "https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=LPA:1$lpa.airalo.com$TEST",
+      apn_type: "automatic",
+      apn_value: "globaldata",
+      is_roaming: true,
+      recycled: false,
+      recycled_at: null,
+      simable: {
+        id: 9647,
+        status: { name: "Completed", slug: "completed" },
+        sharing: {
+          link: "https://esims.cloud/simplify/a4g5ht",
+          access_code: "4812",
+        },
+      },
+    },
+    meta: { message: "success" },
+  };
+  const airalo = new FakeAiraloClient({ simResponse });
+
+  const order = await ensureOrderInstallation("order-1", {
+    prisma: db as unknown as CreateOrderOptions["prisma"],
+    airaloClient: airalo as unknown as AiraloClient,
+  });
+
+  assert.equal(airalo.orderLookups.length, 0);
+  assert.deepEqual(airalo.simLookups, [
+    {
+      iccid: "8944465400000267221",
+      include: ["order", "order.status", "share"],
+    },
+  ]);
+  assert.equal(db.orders[0]?.status, "completed");
+  assert.equal(db.profiles[0]?.activationCode, "TEST");
+  assert.equal(db.snapshots[0]?.source, "sim");
+
+  const payload = JSON.parse(
+    String(order?.installation?.payload),
+  ) as Record<string, unknown>;
+  assert.equal(payload.source, "sim");
+  assert.equal(payload.qrCodeUrl, "https://sandbox.airalo.com/qr?id=13282");
+  assert.equal(payload.directAppleUrl?.toString().startsWith("https://esimsetup.apple.com"), true);
+  assert.equal(payload.apn, "globaldata");
+  assert.equal(payload.recycled, false);
 });
 
 test("createOrder maps documented Airalo 422 validation responses", async (t) => {

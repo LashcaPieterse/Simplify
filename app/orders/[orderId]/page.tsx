@@ -93,6 +93,26 @@ function parseInstallationPayload(payload: string | null): Record<string, unknow
   }
 }
 
+function readPayloadString(
+  payload: Record<string, unknown> | null,
+  key: string,
+): string | null {
+  const value = payload?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function resolveQrCodeUrl(
+  payload: Record<string, unknown> | null,
+): string | null {
+  const qrCodeUrl = readPayloadString(payload, "qrCodeUrl");
+  if (qrCodeUrl) {
+    return qrCodeUrl;
+  }
+
+  const legacyQrCode = readPayloadString(payload, "qrCode");
+  return legacyQrCode?.startsWith("http") ? legacyQrCode : null;
+}
+
 export const metadata: Metadata = {
   title: "Order dashboard",
 };
@@ -114,6 +134,8 @@ export default async function OrderPage({ params }: OrderPageParams) {
   const usageResult = profile ? await pollUsageForProfile(order.id, profile) : null;
   const topUpPackages = profile?.iccid ? await getTopUpPackages(profile.iccid) : [];
   const installationPayload = parseInstallationPayload(order.installation?.payload ?? null);
+  const qrCodeUrl = resolveQrCodeUrl(installationPayload);
+  const qrCodeData = readPayloadString(installationPayload, "qrCodeData");
 
   const purchaseAction = purchaseTopUp.bind(
     null,
@@ -193,17 +215,23 @@ export default async function OrderPage({ params }: OrderPageParams) {
                 <dd className="font-medium text-brand-900">{profile.activationCode}</dd>
               </div>
             ) : null}
-            {installationPayload && typeof installationPayload.qrCode === "string" ? (
+            {qrCodeUrl ? (
               <div className="sm:col-span-2">
                 <dt className="text-sm text-sand-500">QR code URL</dt>
                 <dd>
                   <a
-                    href={installationPayload.qrCode as string}
+                    href={qrCodeUrl}
                     className="text-teal-600 underline-offset-2 hover:underline"
                   >
                     View QR code
                   </a>
                 </dd>
+              </div>
+            ) : null}
+            {qrCodeData ? (
+              <div className="sm:col-span-2">
+                <dt className="text-sm text-sand-500">QR code data</dt>
+                <dd className="break-all font-mono text-sm text-brand-900">{qrCodeData}</dd>
               </div>
             ) : null}
           </dl>

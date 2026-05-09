@@ -15,6 +15,8 @@ import {
 import type {
   Order as AiraloOrder,
   OrderResponse,
+  Sim,
+  SimResponse,
   SubmitOrderAsyncResponse,
 } from "../airalo/schemas";
 import { resolveSharedTokenCache } from "../airalo/token-cache";
@@ -32,6 +34,9 @@ import {
 import {
   createInstallationPayload,
   resolveAiraloOrderApn,
+  resolveAiraloOrderActivationCode as resolveAiraloInstallActivationCode,
+  resolveAiraloSimActivationCode,
+  resolveAiraloSimStatus,
 } from "./airalo-metadata";
 
 const createOrderInputSchema = z.object({
@@ -196,12 +201,7 @@ function resolveAiraloIccid(
 function resolveAiraloActivationCode(
   order: AiraloOrder | null | undefined,
 ): string | null {
-  if (!order) {
-    return null;
-  }
-
-  const primarySim = resolveAiraloPrimarySim(order);
-  return order.activation_code ?? primarySim?.activation_code ?? null;
+  return resolveAiraloInstallActivationCode(order);
 }
 
 function resolveAiraloStatus(order: AiraloOrder | null | undefined): string {
@@ -259,6 +259,76 @@ function normaliseQuantity(quantity?: number): number {
   return Math.min(Math.max(quantity, DEFAULT_QUANTITY), MAX_QUANTITY);
 }
 
+function parseInstallationPayloadJson(
+  payload: string | null | undefined,
+): Record<string, unknown> | null {
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasGetSimHydratedInstallationPayload(
+  payload: string | null | undefined,
+): boolean {
+  const parsed = parseInstallationPayloadJson(payload);
+  if (!parsed) {
+    return false;
+  }
+
+  return (
+    parsed.source === "sim" &&
+    "qrCodeData" in parsed &&
+    "qrCodeUrl" in parsed &&
+    "directAppleUrl" in parsed &&
+    "matchingId" in parsed &&
+    "recycled" in parsed
+  );
+}
+
+function resolveStringFromPayload(
+  payload: Record<string, unknown> | null,
+  key: string,
+): string | null {
+  const value = payload?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function resolveExistingOrderIccid(order: OrderWithDetails): string | null {
+  const profileIccid = order.profiles[0]?.iccid;
+  if (profileIccid) {
+    return profileIccid;
+  }
+
+  return resolveStringFromPayload(
+    parseInstallationPayloadJson(order.installation?.payload),
+    "iccid",
+  );
+}
+
+function resolveHydratedStatus(
+  order: AiraloOrder | null,
+  sim: Sim | null,
+  fallback: string,
+): string {
+  const orderStatus = order ? resolveAiraloStatus(order) : null;
+  const simStatus = resolveAiraloSimStatus(sim);
+
+  if (orderStatus && orderStatus !== "pending") {
+    return orderStatus;
+  }
+
+  return simStatus ?? orderStatus ?? fallback;
+}
+
 const ORDER_DETAILS_INCLUDE = {
   profiles: {
     include: {
@@ -314,45 +384,84 @@ export async function ensureOrderInstallation(
 
   const hasInstallation = Boolean(existing.installation?.payload);
   const hasProfile = existing.profiles.length > 0;
+  const hasHydratedInstallation = hasGetSimHydratedInstallationPayload(
+    existing.installation?.payload,
+  );
 
-  if (hasInstallation && hasProfile) {
+  if (hasInstallation && hasProfile && hasHydratedInstallation) {
     return existing;
   }
 
-  if (!existing.orderNumber) {
+  const existingIccid = resolveExistingOrderIccid(existing);
+  if (!existing.orderNumber && !existingIccid) {
     return existing;
   }
 
   const airalo = options.airaloClient ?? resolveAiraloClient();
-  const airaloOrder = await airalo.getOrderById(existing.orderNumber);
-  const payload = createInstallationPayload(airaloOrder);
+  let airaloOrderResponse: OrderResponse | null = null;
+  let airaloOrder: AiraloOrder | null = null;
+  let orderFetchError: unknown;
 
-  const resolvedIccid = resolveAiraloIccid(airaloOrder);
-  const resolvedStatus = resolveAiraloStatus(airaloOrder);
-  // Fetch installation instructions for richer APN/QR/smdp data when possible.
-  let activationCode: string | null = null;
+  if (existing.orderNumber) {
+    try {
+      airaloOrderResponse = await airalo.getOrderResponseById(
+        existing.orderNumber,
+      );
+      airaloOrder = airaloOrderResponse.data;
+    } catch (error) {
+      orderFetchError = error;
+      if (!existingIccid && !hasInstallation && !hasProfile) {
+        throw error;
+      }
+
+      logOrderWarn("order.installation.order_fetch_failed", {
+        orderId: existing.id,
+        orderNumber: existing.orderNumber,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  const resolvedIccid = resolveAiraloIccid(airaloOrder) ?? existingIccid;
+  let simResponse: SimResponse | null = null;
+  let simDetails: Sim | null = null;
+
   try {
     if (resolvedIccid) {
-      const instructions = await airalo.getSimInstallationInstructions(
-        resolvedIccid,
-        {
-          acceptLanguage: "en",
-        },
-      );
-      const platform =
-        instructions.instructions?.ios?.[0] ??
-        instructions.instructions?.android?.[0];
-      activationCode =
-        (platform?.installation_manual?.activation_code as
-          | string
-          | undefined) ??
-        airaloOrder.activation_code ??
-        null;
+      simResponse = await airalo.getSimResponse(resolvedIccid, {
+        include: ["order", "order.status", "share"],
+      });
+      simDetails = simResponse.data;
     }
   } catch (error) {
-    // Swallow instruction fetch errors; keep existing installation data.
-    console.warn("Failed to fetch installation instructions", error);
+    if (!airaloOrder && !hasInstallation && !hasProfile) {
+      throw error;
+    }
+
+    logOrderWarn("order.installation.sim_fetch_failed", {
+      orderId: existing.id,
+      iccid: resolvedIccid,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
   }
+
+  if (!airaloOrder && !simDetails) {
+    if (orderFetchError && !hasInstallation && !hasProfile) {
+      throw orderFetchError;
+    }
+
+    return existing;
+  }
+
+  const payload = createInstallationPayload(airaloOrder, simDetails);
+  const resolvedStatus = resolveHydratedStatus(
+    airaloOrder,
+    simDetails,
+    existing.status,
+  );
+  const activationCode =
+    resolveAiraloInstallActivationCode(airaloOrder, simDetails) ??
+    resolveAiraloSimActivationCode(simDetails);
 
   const performUpdate = async (tx: Prisma.TransactionClient) => {
     await tx.esimOrder.update({
@@ -362,18 +471,44 @@ export async function ensureOrderInstallation(
       },
     });
 
+    if (airaloOrderResponse) {
+      await tx.airaloOrderSnapshot.create({
+        data: {
+          orderId: existing.id,
+          source: "orders",
+          requestId: airaloOrder?.order_reference ?? existing.requestId,
+          orderNumber:
+            resolveAiraloOrderId(airaloOrder) ?? existing.orderNumber,
+          rawPayloadJson: toPrismaJson(airaloOrderResponse),
+        },
+      });
+    }
+
+    if (simResponse) {
+      await tx.airaloOrderSnapshot.create({
+        data: {
+          orderId: existing.id,
+          source: "sim",
+          requestId: existing.requestId,
+          orderNumber:
+            resolveAiraloOrderId(airaloOrder) ?? existing.orderNumber,
+          rawPayloadJson: toPrismaJson(simResponse),
+        },
+      });
+    }
+
     if (resolvedIccid) {
       await tx.esimProfile.upsert({
         where: { iccid: resolvedIccid },
         create: {
           iccid: resolvedIccid,
           status: resolvedStatus,
-          activationCode: airaloOrder.activation_code ?? null,
+          activationCode,
           orderId: existing.id,
         },
         update: {
           status: resolvedStatus,
-          activationCode: airaloOrder.activation_code ?? null,
+          ...(activationCode ? { activationCode } : {}),
           orderId: existing.id,
         },
       });
@@ -387,15 +522,6 @@ export async function ensureOrderInstallation(
         payload,
       },
     });
-
-    if (resolvedIccid) {
-      await tx.esimProfile.update({
-        where: { iccid: resolvedIccid },
-        data: {
-          activationCode,
-        },
-      });
-    }
   };
 
   if (isPrismaClient(db)) {
@@ -1229,20 +1355,32 @@ export async function createOrder(
           : (airaloOrder?.status ?? "completed"),
     });
 
+    const installationPayload = airaloOrder
+      ? parseInstallationPayloadJson(createInstallationPayload(airaloOrder))
+      : null;
+
     return {
       orderId: result.id,
       orderNumber: result.orderNumber ?? null,
       requestId: result.requestId ?? result.orderNumber ?? null,
       installation: airaloOrder
         ? {
-            qrCodeData: airaloOrder.qr_code ?? airaloOrder.esim ?? null,
-            qrCodeUrl: airaloOrder.qr_code ?? null,
-            smdpAddress:
-              (
-                airaloOrder as Record<string, unknown>
-              ).smdp_address?.toString() ?? null,
-            activationCode: airaloOrder.activation_code ?? null,
-            apn: resolveAiraloOrderApn(airaloOrder),
+            qrCodeData: resolveStringFromPayload(
+              installationPayload,
+              "qrCodeData",
+            ),
+            qrCodeUrl: resolveStringFromPayload(
+              installationPayload,
+              "qrCodeUrl",
+            ),
+            smdpAddress: resolveStringFromPayload(installationPayload, "lpa"),
+            activationCode: resolveStringFromPayload(
+              installationPayload,
+              "activationCode",
+            ),
+            apn:
+              resolveStringFromPayload(installationPayload, "apn") ??
+              resolveAiraloOrderApn(airaloOrder),
           }
         : undefined,
     };

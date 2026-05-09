@@ -57,7 +57,7 @@ export async function GET(
     request.headers.get("accept-language"),
   );
 
-  const simDetailsPromise = getSimDetails(iccid, { include: ["simable"] }).catch(
+  const simDetailsPromise = getSimDetails(iccid, { include: ["share"] }).catch(
     (error) => {
       console.error("Failed to load SIM status while fetching instructions", error);
       return null;

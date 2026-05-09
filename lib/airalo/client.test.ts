@@ -1249,6 +1249,103 @@ test("AiraloClient sends /orders-async as multipart form fields", async () => {
   assert.equal(form.get("to_email"), "customer@example.com");
   assert.deepEqual(form.getAll("sharing_option[]"), ["link", "pdf"]);
 });
+
+test("AiraloClient fetches Get eSIM with documented include values", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let requestedUrl: string | null = null;
+  let capturedAuthHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/")) {
+      requestedUrl = target;
+      capturedAuthHeader = authHeader(init);
+      return jsonResponse(
+        {
+          data: {
+            id: 11028,
+            created_at: "2023-02-27 08:30:14",
+            iccid: "8944465400000267221",
+            lpa: "lpa.airalo.com",
+            matching_id: "TEST",
+            qrcode: "LPA:1$lpa.airalo.com$TEST",
+            qrcode_url: "https://sandbox.airalo.com/qr?id=13282",
+            direct_apple_installation_url:
+              "https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=LPA:1$lpa.airalo.com$TEST",
+            simable: {
+              id: 9647,
+              status: { name: "Completed", slug: "completed" },
+              sharing: {
+                link: "https://esims.cloud/brand/share",
+                access_code: "4812",
+              },
+            },
+          },
+          meta: { message: "success" },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const sim = await client.getSim("8944465400000267221", {
+    include: ["order", "order.status", "share"],
+  });
+
+  assert.equal(sim.iccid, "8944465400000267221");
+  assert.equal(capturedAuthHeader, "Bearer cached-token");
+  assert(requestedUrl, "SIM request should have been issued");
+  const url = new URL(requestedUrl!);
+  assert.equal(url.pathname, "/api/sims/8944465400000267221");
+  assert.equal(url.searchParams.get("include"), "order,order.status,share");
+});
+
+test("AiraloClient rejects undocumented Get eSIM include values", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let fetchCalls = 0;
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    fetchCalls += 1;
+    throw new Error(`Unexpected URL ${url.toString()}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await assert.rejects(
+    () =>
+      client.getSim("8944465400000267221", {
+        include: ["simable" as never],
+      }),
+    /Invalid include value "simable"/,
+  );
+  assert.equal(fetchCalls, 0);
+});
+
 const hasLiveAiraloCredentials = Boolean(
   process.env.AIRALO_CLIENT_ID && process.env.AIRALO_CLIENT_SECRET,
 );

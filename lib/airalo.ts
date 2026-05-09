@@ -1,4 +1,4 @@
-import { AiraloClient } from "./airalo/client";
+import { AiraloClient, type GetSimInclude } from "./airalo/client";
 import type { Sim, Simable } from "./airalo/schemas";
 import { resolveSharedTokenCache } from "./airalo/token-cache";
 
@@ -71,7 +71,7 @@ export interface AiraloSimDetails {
 }
 
 export interface GetSimDetailsOptions {
-  include?: string | string[];
+  include?: GetSimInclude | GetSimInclude[];
   airaloClient?: AiraloClient;
 }
 
