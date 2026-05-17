@@ -218,12 +218,30 @@ export interface CreateOrderOptions {
   submissionMode?: "async" | "sync";
   userId?: string;
   asyncWebhookUrl?: string | null;
+  reservedOrder?: ReservedOrderSnapshot;
 }
+
+export type ReservedOrderSnapshot = {
+  orderId: string;
+  packageId: string;
+  airaloPackageId: string;
+  packageTitle: string;
+  quantity: number;
+  totalCents: number;
+  currency: string;
+  customerEmail?: string | null;
+};
 
 const DEFAULT_QUANTITY = 1;
 const MAX_QUANTITY = 10;
 const AIRALO_BRAND_SETTINGS_NAME = "Simplify";
 const ORDER_RATE_LIMIT_RETRY = { attempts: 3, baseDelayMs: 500 };
+const RESERVED_ORDER_SUBMITTING_STATUS = "airalo_submitting";
+const RESERVED_ORDER_FAILED_STATUS = "airalo_failed";
+const RESERVED_ORDER_CLAIMABLE_STATUSES = [
+  "pending",
+  RESERVED_ORDER_FAILED_STATUS,
+];
 
 let cachedAiraloClient: AiraloClient | null = null;
 
@@ -940,6 +958,122 @@ function extractAiraloRequestId(body: unknown): string | null {
   return null;
 }
 
+function createResultFromExistingOrder(order: {
+  id: string;
+  orderNumber?: string | null;
+  requestId?: string | null;
+}): CreateOrderResult {
+  return {
+    orderId: order.id,
+    orderNumber: order.orderNumber ?? null,
+    requestId: order.requestId ?? order.orderNumber ?? order.id,
+  };
+}
+
+function assertValidReservedOrderSnapshot(
+  snapshot: ReservedOrderSnapshot,
+): void {
+  if (
+    !snapshot.orderId ||
+    !snapshot.packageId ||
+    !snapshot.airaloPackageId ||
+    !snapshot.packageTitle ||
+    !Number.isInteger(snapshot.quantity) ||
+    snapshot.quantity < DEFAULT_QUANTITY ||
+    snapshot.quantity > MAX_QUANTITY ||
+    !Number.isInteger(snapshot.totalCents) ||
+    snapshot.totalCents < 0 ||
+    !snapshot.currency
+  ) {
+    throw new OrderServiceError("Checkout order snapshot is invalid.", 500);
+  }
+}
+
+async function claimReservedOrderForSubmission(
+  db: PrismaDbClient,
+  snapshot: ReservedOrderSnapshot,
+): Promise<CreateOrderResult | null> {
+  assertValidReservedOrderSnapshot(snapshot);
+
+  const existing = await db.esimOrder.findUnique({
+    where: { id: snapshot.orderId },
+    select: {
+      id: true,
+      orderNumber: true,
+      requestId: true,
+      status: true,
+    },
+  });
+
+  if (!existing) {
+    throw new OrderServiceError("Reserved checkout order was not found.", 500);
+  }
+
+  if (existing.orderNumber || existing.requestId) {
+    return createResultFromExistingOrder(existing);
+  }
+
+  const claim = await db.esimOrder.updateMany({
+    where: {
+      id: snapshot.orderId,
+      orderNumber: null,
+      requestId: null,
+      status: { in: RESERVED_ORDER_CLAIMABLE_STATUSES },
+    },
+    data: {
+      status: RESERVED_ORDER_SUBMITTING_STATUS,
+    },
+  });
+
+  if (claim.count > 0) {
+    return null;
+  }
+
+  const current = await db.esimOrder.findUnique({
+    where: { id: snapshot.orderId },
+    select: {
+      id: true,
+      orderNumber: true,
+      requestId: true,
+      status: true,
+    },
+  });
+
+  if (!current) {
+    throw new OrderServiceError("Reserved checkout order was not found.", 500);
+  }
+
+  return createResultFromExistingOrder(current);
+}
+
+async function markReservedOrderSubmissionFailed(
+  db: PrismaDbClient,
+  snapshot: ReservedOrderSnapshot | null,
+): Promise<void> {
+  if (!snapshot) {
+    return;
+  }
+
+  try {
+    await db.esimOrder.updateMany({
+      where: {
+        id: snapshot.orderId,
+        orderNumber: null,
+        requestId: null,
+        status: RESERVED_ORDER_SUBMITTING_STATUS,
+      },
+      data: {
+        status: RESERVED_ORDER_FAILED_STATUS,
+      },
+    });
+  } catch (error) {
+    logOrderWarn("order.reserved.mark_failed_failed", {
+      orderId: snapshot.orderId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function createOrder(
   rawInput: unknown,
   options: CreateOrderOptions = {},
@@ -967,83 +1101,117 @@ export async function createOrder(
 
   const { packageId, quantity, customerEmail } = parsedInput.data;
   const db = options.prisma ?? prismaClient;
-  const airalo = options.airaloClient ?? resolveAiraloClient();
+  const reservedOrder = options.reservedOrder ?? null;
   const submissionMode = options.submissionMode ?? "async";
   let resolvedSubmissionMode: "async" | "sync" =
     submissionMode === "sync" ? "sync" : "async";
-  const uuidRegex =
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-  const packageLookup: Prisma.PackageWhereInput = uuidRegex.test(packageId)
-    ? {
-        state: { is: { isActive: true } },
-        OR: [{ id: packageId }, { airaloPackageId: packageId }],
-      }
-    : {
-        state: { is: { isActive: true } },
-        airaloPackageId: packageId,
-      };
 
-  const pkg = await db.package.findFirst({
-    where: packageLookup,
-    include: { state: true },
-  });
-  if (!pkg) {
-    const byId = await db.package.findFirst({
-      where: { id: packageId },
+  const reservedResult = reservedOrder
+    ? await claimReservedOrderForSubmission(db, reservedOrder)
+    : null;
+  if (reservedResult) {
+    return reservedResult;
+  }
+
+  let pkg: { id: string; airaloPackageId: string; title: string };
+  let normalisedQuantity: number;
+  let orderTotalCents: number;
+  let currencyCode: string;
+  const resolvedCustomerEmail = reservedOrder?.customerEmail ?? customerEmail;
+
+  if (reservedOrder) {
+    pkg = {
+      id: reservedOrder.packageId,
+      airaloPackageId: reservedOrder.airaloPackageId,
+      title: reservedOrder.packageTitle,
+    };
+    normalisedQuantity = reservedOrder.quantity;
+    orderTotalCents = reservedOrder.totalCents;
+    currencyCode = reservedOrder.currency;
+  } else {
+    const uuidRegex =
+      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    const packageLookup: Prisma.PackageWhereInput = uuidRegex.test(packageId)
+      ? {
+          state: { is: { isActive: true } },
+          OR: [{ id: packageId }, { airaloPackageId: packageId }],
+        }
+      : {
+          state: { is: { isActive: true } },
+          airaloPackageId: packageId,
+        };
+
+    const resolvedPackage = await db.package.findFirst({
+      where: packageLookup,
       include: { state: true },
     });
-    const byExternalId = await db.package.findFirst({
-      where: { airaloPackageId: packageId },
-      include: { state: true },
-    });
-    console.info("order.package.lookup", {
-      packageId,
-      foundById: Boolean(byId),
-      foundByExternalId: Boolean(byExternalId),
-      isActiveById: byId?.state?.isActive ?? null,
-      isActiveByExternalId: byExternalId?.state?.isActive ?? null,
-    });
+    if (!resolvedPackage) {
+      const byId = await db.package.findFirst({
+        where: { id: packageId },
+        include: { state: true },
+      });
+      const byExternalId = await db.package.findFirst({
+        where: { airaloPackageId: packageId },
+        include: { state: true },
+      });
+      console.info("order.package.lookup", {
+        packageId,
+        foundById: Boolean(byId),
+        foundByExternalId: Boolean(byExternalId),
+        isActiveById: byId?.state?.isActive ?? null,
+        isActiveByExternalId: byExternalId?.state?.isActive ?? null,
+      });
+    }
+
+    if (!resolvedPackage) {
+      logOrderError("order.package.unavailable", {
+        packageId,
+      });
+
+      recordOrderMetrics({
+        result: "error",
+        reason: "validation_failed",
+        durationMs: Date.now() - startedAt,
+        airaloStatus: "validation",
+      });
+
+      throw new OrderValidationError("Selected plan is no longer available.");
+    }
+
+    if (typeof resolvedPackage.state?.sellingPriceCents !== "number") {
+      logOrderError("order.package.missing_price", {
+        packageId: resolvedPackage.id,
+        packageExternalId: resolvedPackage.airaloPackageId,
+      });
+
+      recordOrderMetrics({
+        result: "error",
+        reason: "validation_failed",
+        durationMs: Date.now() - startedAt,
+        airaloStatus: "validation",
+      });
+
+      throw new OrderValidationError("Selected plan is no longer available.");
+    }
+
+    pkg = resolvedPackage;
+    normalisedQuantity = normaliseQuantity(quantity);
+    orderTotalCents =
+      resolvedPackage.state.sellingPriceCents * normalisedQuantity;
+    currencyCode = resolvedPackage.state?.currencyCode ?? "USD";
   }
 
-  if (!pkg) {
-    logOrderError("order.package.unavailable", {
-      packageId,
-    });
-
-    recordOrderMetrics({
-      result: "error",
-      reason: "validation_failed",
-      durationMs: Date.now() - startedAt,
-      airaloStatus: "validation",
-    });
-
-    throw new OrderValidationError("Selected plan is no longer available.");
-  }
-
-  if (typeof pkg.state?.sellingPriceCents !== "number") {
-    logOrderError("order.package.missing_price", {
-      packageId: pkg.id,
-      packageExternalId: pkg.airaloPackageId,
-    });
-
-    recordOrderMetrics({
-      result: "error",
-      reason: "validation_failed",
-      durationMs: Date.now() - startedAt,
-      airaloStatus: "validation",
-    });
-
-    throw new OrderValidationError("Selected plan is no longer available.");
-  }
-
-  const normalisedQuantity = normaliseQuantity(quantity);
   const description = `${normalisedQuantity} x ${pkg.title}`;
-  const sellPriceCents = pkg.state.sellingPriceCents;
-  const currencyCode = pkg.state?.currencyCode ?? "USD";
-  const asyncWebhookUrl =
-    resolvedSubmissionMode === "async"
-      ? resolveRequiredAsyncWebhookUrl(options)
-      : null;
+  let asyncWebhookUrl: string | null = null;
+  try {
+    asyncWebhookUrl =
+      resolvedSubmissionMode === "async"
+        ? resolveRequiredAsyncWebhookUrl(options)
+        : null;
+  } catch (error) {
+    await markReservedOrderSubmissionFailed(db, reservedOrder);
+    throw error;
+  }
   const orderPayload: CreateOrderPayload = {
     package_id: pkg.airaloPackageId,
     quantity: String(normalisedQuantity),
@@ -1052,9 +1220,16 @@ export async function createOrder(
     brand_settings_name: AIRALO_BRAND_SETTINGS_NAME,
   };
 
-  if (customerEmail) {
-    orderPayload.to_email = customerEmail;
+  if (resolvedCustomerEmail) {
+    orderPayload.to_email = resolvedCustomerEmail;
     orderPayload["sharing_option[]"] = ["link"];
+  }
+  let airalo: AiraloClient;
+  try {
+    airalo = options.airaloClient ?? resolveAiraloClient();
+  } catch (error) {
+    await markReservedOrderSubmissionFailed(db, reservedOrder);
+    throw error;
   }
   const airaloCallStartedAt = Date.now();
   let airaloAsyncResponse: SubmitOrderAsyncResponse | null = null;
@@ -1124,6 +1299,7 @@ export async function createOrder(
     }
   } catch (error: unknown) {
     airaloLatencyMs = Date.now() - airaloCallStartedAt;
+    await markReservedOrderSubmissionFailed(db, reservedOrder);
 
     if (error instanceof AiraloError) {
       const requestId = extractAiraloRequestId(error.details.body);
@@ -1259,19 +1435,26 @@ export async function createOrder(
       const syncOrderNumber = resolveAiraloOrderId(airaloOrder);
       const syncRequestId = airaloOrder?.order_reference ?? syncOrderNumber;
 
-      const orderRecord = await tx.esimOrder.create({
-        data: {
-          userId: options.userId ?? null,
-          orderNumber: syncOrderNumber,
-          requestId: airaloAck?.request_id ?? syncRequestId,
-          packageId: pkg.id,
-          status: resolveAiraloStatus(airaloOrder),
-          customerEmail: customerEmail ?? null,
-          quantity: normalisedQuantity,
-          totalCents: sellPriceCents * normalisedQuantity,
-          currency: currencyCode,
-        },
-      });
+      const orderData = {
+        userId: options.userId ?? null,
+        orderNumber: syncOrderNumber,
+        requestId: airaloAck?.request_id ?? syncRequestId,
+        packageId: pkg.id,
+        status: resolveAiraloStatus(airaloOrder),
+        customerEmail: resolvedCustomerEmail ?? null,
+        quantity: normalisedQuantity,
+        totalCents: orderTotalCents,
+        currency: currencyCode,
+      };
+
+      const orderRecord = reservedOrder
+        ? await tx.esimOrder.update({
+            where: { id: reservedOrder.orderId },
+            data: orderData,
+          })
+        : await tx.esimOrder.create({
+            data: orderData,
+          });
 
       if (airaloAsyncResponse) {
         await tx.airaloOrderSnapshot.create({

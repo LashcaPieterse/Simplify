@@ -246,6 +246,7 @@ model EsimOrder {
   installation         EsimInstallationPayload?
   payment              PaymentTransaction?        @relation(fields: [paymentTransactionId], references: [id])
   paymentTransactionId String?
+  checkout             CheckoutSession?
   receiptEmail         String?                    @map("receipt_email")
   receiptSentAt        DateTime?                  @map("receipt_sent_at")
   recoveryAttempts     EsimOrderRecoveryAttempt[]
@@ -343,7 +344,8 @@ model CheckoutSession {
   intent          String               @default("purchase")
   topUpForOrderId String?
   topUpForIccid   String?
-  orderId         String?
+  order            EsimOrder?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?              @unique
   metadata        String?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt

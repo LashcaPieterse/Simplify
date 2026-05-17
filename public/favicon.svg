@@ -1,0 +1,10 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Simplify eSIMs</title>
+  <rect width="64" height="64" rx="16" fill="#2DABAC"/>
+  <path d="M21 16C21 13.7909 22.7909 12 25 12H38.1716C39.2324 12 40.2499 12.4214 41 13.1716L50.8284 23C51.5786 23.7501 52 24.7676 52 25.8284V48C52 50.2091 50.2091 52 48 52H25C22.7909 52 21 50.2091 21 48V16Z" fill="#FFF9F2"/>
+  <path d="M39 13.5V22C39 23.6569 40.3431 25 42 25H50.5" fill="#C2EBEB"/>
+  <rect x="28" y="32" width="13" height="11" rx="2" fill="#2DABAC"/>
+  <path d="M18 35C21.866 31.134 28.134 31.134 32 35" stroke="#F89F3C" stroke-width="4" stroke-linecap="round"/>
+  <path d="M22.5 40C24.433 38.067 27.567 38.067 29.5 40" stroke="#F89F3C" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="26" cy="45" r="2.5" fill="#F89F3C"/>
+</svg>

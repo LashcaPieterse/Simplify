@@ -95,6 +95,62 @@ class FakeOrderDb {
         payment: null,
       };
     },
+    findUnique: async ({ where }: { where: { id: string } }) => {
+      const order = this.orders.find((candidate) => candidate.id === where.id);
+      return order
+        ? {
+            ...order,
+            profiles: this.profiles.filter(
+              (profile) => profile.orderId === order.id,
+            ),
+            installation:
+              this.installationPayloads.find(
+                (payload) => payload.orderId === order.id,
+              ) ?? null,
+            payment: null,
+          }
+        : null;
+    },
+    updateMany: async ({
+      where,
+      data,
+    }: {
+      where: {
+        id?: string;
+        orderNumber?: string | null;
+        requestId?: string | null;
+        status?: { in?: string[] } | string;
+      };
+      data: Record<string, unknown>;
+    }) => {
+      let count = 0;
+      for (const order of this.orders) {
+        if (where.id && order.id !== where.id) {
+          continue;
+        }
+        if ("orderNumber" in where && order.orderNumber !== where.orderNumber) {
+          continue;
+        }
+        if ("requestId" in where && order.requestId !== where.requestId) {
+          continue;
+        }
+        if (typeof where.status === "string" && order.status !== where.status) {
+          continue;
+        }
+        if (
+          typeof where.status === "object" &&
+          where.status?.in &&
+          !where.status.in.includes(String(order.status))
+        ) {
+          continue;
+        }
+
+        Object.assign(order, data);
+        count += 1;
+      }
+
+      return { count };
+    },
     update: async ({
       where,
       data,
@@ -429,6 +485,119 @@ test("createOrder stores the documented Airalo order id before the display code"
   assert.equal(installationPayload.orderId, "583747");
   assert.equal(installationPayload.qrCodeData, "LPA:1$RSP-3088.IDEMIA.IO$YVTGM-5LZC6-PIC56-KFEZJ");
   assert.equal(installationPayload.matchingId, "YVTGM-5LZC6-PIC56-KFEZJ");
+});
+
+test("createOrder hydrates a reserved checkout order using the checkout price snapshot", async () => {
+  const db = new FakeOrderDb();
+  db.orders.push({
+    id: "reserved-order-1",
+    orderNumber: null,
+    requestId: null,
+    packageId: TEST_PACKAGE_ID,
+    status: "pending",
+    customerEmail: "checkout@example.com",
+    quantity: 2,
+    totalCents: 2500,
+    currency: "UGX",
+  });
+  db.packageRecord.state.sellingPriceCents = 9999;
+  db.packageRecord.state.currencyCode = "USD";
+
+  const syncResponse = OrderResponseSchema.parse({
+    status: true,
+    data: {
+      order_id: "A-ORDER-1",
+      order_reference: "REF-1",
+      status: "completed",
+      iccid: "8900000000000000001",
+      activation_code: "LPA:1$example$activation",
+    },
+  });
+  const airalo = new FakeAiraloClient({ syncResponse });
+
+  const result = await createOrder(
+    {
+      packageId: TEST_PACKAGE_ID,
+      quantity: 1,
+      customerEmail: "ignored@example.com",
+    },
+    {
+      prisma: db as unknown as CreateOrderOptions["prisma"],
+      airaloClient: airalo as unknown as AiraloClient,
+      submissionMode: "sync",
+      reservedOrder: {
+        orderId: "reserved-order-1",
+        packageId: TEST_PACKAGE_ID,
+        airaloPackageId: "pkg-test",
+        packageTitle: "Test 1GB",
+        quantity: 2,
+        totalCents: 2500,
+        currency: "UGX",
+        customerEmail: "checkout@example.com",
+      },
+    },
+  );
+
+  assert.equal(result.orderId, "reserved-order-1");
+  assert.equal(airalo.syncPayloads.length, 1);
+  assert.equal(airalo.syncPayloads[0]?.quantity, "2");
+  assert.equal(airalo.syncPayloads[0]?.description, "2 x Test 1GB");
+  assert.equal(airalo.syncPayloads[0]?.to_email, "checkout@example.com");
+  assert.equal(db.orders.length, 1);
+  assert.equal(db.orders[0]?.totalCents, 2500);
+  assert.equal(db.orders[0]?.currency, "UGX");
+  assert.equal(db.orders[0]?.customerEmail, "checkout@example.com");
+});
+
+test("createOrder does not submit Airalo again for an in-flight reserved checkout order", async () => {
+  const db = new FakeOrderDb();
+  db.orders.push({
+    id: "reserved-order-1",
+    orderNumber: null,
+    requestId: null,
+    packageId: TEST_PACKAGE_ID,
+    status: "airalo_submitting",
+    customerEmail: "checkout@example.com",
+    quantity: 1,
+    totalCents: 1250,
+    currency: "USD",
+  });
+  const airalo = new FakeAiraloClient({
+    syncResponse: OrderResponseSchema.parse({
+      status: true,
+      data: {
+        order_id: "A-ORDER-1",
+        status: "completed",
+      },
+    }),
+  });
+
+  const result = await createOrder(
+    {
+      packageId: TEST_PACKAGE_ID,
+      quantity: 1,
+      customerEmail: "checkout@example.com",
+    },
+    {
+      prisma: db as unknown as CreateOrderOptions["prisma"],
+      airaloClient: airalo as unknown as AiraloClient,
+      submissionMode: "sync",
+      reservedOrder: {
+        orderId: "reserved-order-1",
+        packageId: TEST_PACKAGE_ID,
+        airaloPackageId: "pkg-test",
+        packageTitle: "Test 1GB",
+        quantity: 1,
+        totalCents: 1250,
+        currency: "USD",
+        customerEmail: "checkout@example.com",
+      },
+    },
+  );
+
+  assert.equal(result.orderId, "reserved-order-1");
+  assert.equal(airalo.syncPayloads.length, 0);
+  assert.equal(db.orders[0]?.status, "airalo_submitting");
 });
 
 test("createInstallationPayload maps Get eSIM response fields", () => {

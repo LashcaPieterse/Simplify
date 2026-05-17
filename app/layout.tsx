@@ -7,6 +7,10 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "Simplify eSIMs",
   description: "Global eSIM marketplace for instant travel connectivity.",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
+    shortcut: "/favicon.svg"
+  }
 };
 
 export default function RootLayout({

@@ -5,7 +5,11 @@ import prismaClient from "../db/client";
 import { sendOrderReceipt } from "../notifications/receipts";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { createOrder } from "../orders/service";
-import type { CreateOrderOptions, CreateOrderResult } from "../orders/service";
+import type {
+  CreateOrderOptions,
+  CreateOrderResult,
+  ReservedOrderSnapshot,
+} from "../orders/service";
 import { resolveDpoClient } from "./dpo";
 
 const checkoutInputSchema = z.object({
@@ -52,6 +56,7 @@ const STATUS_FAILED = "failed";
 const STATUS_APPROVED = "approved";
 const STATUS_FINALIZING = "finalizing";
 const PROVIDER = "dpo";
+const RESERVED_ORDER_FAILED_STATUS = "airalo_failed";
 
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -370,8 +375,27 @@ export async function verifyCheckoutPayment(
     throw new Error("Checkout has no associated payment token.");
   }
 
-  if (payment.status === STATUS_APPROVED && checkout.orderId) {
-    return { paymentStatus: payment.status, orderId: checkout.orderId };
+  if (payment.status === STATUS_APPROVED) {
+    try {
+      const order = await finaliseOrderFromCheckout(checkout.id, {
+        prisma: db,
+        forceStatus: STATUS_APPROVED,
+      });
+      return { paymentStatus: payment.status, orderId: order.orderId };
+    } catch (error) {
+      logOrderError("payments.checkout.finalize_failed", {
+        checkoutId: checkout.id,
+        paymentId: payment.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const message =
+        error instanceof Error ? error.message : "Failed to create order.";
+      return {
+        paymentStatus: payment.status,
+        orderId: checkout.orderId ?? null,
+        message,
+      };
+    }
   }
 
   const dpoClient = resolveDpoClient();
@@ -429,28 +453,180 @@ export async function verifyCheckoutPayment(
   if (isPaid || normalizedStatus === STATUS_APPROVED) {
     await markCheckoutStatus(checkout.id, STATUS_PAID, { prisma: db });
 
-    if (!orderId) {
-      try {
-        const order = await finaliseOrderFromCheckout(checkout.id, {
-          prisma: db,
-          forceStatus: normalizedStatus,
-        });
-        orderId = order.orderId;
-      } catch (error) {
-        logOrderError("payments.checkout.finalize_failed", {
-          checkoutId: checkout.id,
-          paymentId: payment.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        const message = error instanceof Error ? error.message : "Failed to create order.";
-        return { paymentStatus: updated.status, orderId: null, message };
-      }
+    try {
+      const order = await finaliseOrderFromCheckout(checkout.id, {
+        prisma: db,
+        forceStatus: normalizedStatus,
+      });
+      orderId = order.orderId;
+    } catch (error) {
+      logOrderError("payments.checkout.finalize_failed", {
+        checkoutId: checkout.id,
+        paymentId: payment.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const message =
+        error instanceof Error ? error.message : "Failed to create order.";
+      return {
+        paymentStatus: updated.status,
+        orderId: checkout.orderId ?? null,
+        message,
+      };
     }
   } else if (normalizedStatus === STATUS_FAILED) {
     await markCheckoutStatus(checkout.id, STATUS_FAILED, { prisma: db });
   }
 
   return { paymentStatus: updated.status, orderId, message: verificationMessage };
+}
+
+type FinaliseCheckoutRecord = Prisma.CheckoutSessionGetPayload<{
+  include: {
+    package: true;
+    payments: true;
+  };
+}>;
+
+type CheckoutOrderRecord = {
+  id: string;
+  orderNumber?: string | null;
+  requestId?: string | null;
+  status?: string | null;
+};
+
+function toCreateOrderResult(order: CheckoutOrderRecord): CreateOrderResult {
+  return {
+    orderId: order.id,
+    orderNumber: order.orderNumber ?? null,
+    requestId: order.requestId ?? order.orderNumber ?? order.id,
+  };
+}
+
+function shouldRetryReservedOrder(order: CheckoutOrderRecord): boolean {
+  return (
+    !order.orderNumber &&
+    !order.requestId &&
+    order.status === RESERVED_ORDER_FAILED_STATUS
+  );
+}
+
+function buildReservedOrderSnapshot(
+  checkout: FinaliseCheckoutRecord,
+  orderId: string,
+): ReservedOrderSnapshot {
+  return {
+    orderId,
+    packageId: checkout.packageId,
+    airaloPackageId: checkout.package.airaloPackageId,
+    packageTitle: checkout.package.title,
+    quantity: checkout.quantity,
+    totalCents: checkout.totalCents,
+    currency: checkout.currency,
+    customerEmail: checkout.customerEmail,
+  };
+}
+
+async function reserveCheckoutOrder(
+  db: PrismaClient,
+  checkout: FinaliseCheckoutRecord,
+  payment: FinaliseCheckoutRecord["payments"][number],
+): Promise<{ orderId: string; existing: boolean }> {
+  return db.$transaction(async (tx) => {
+    const lockResult = await tx.checkoutSession.updateMany({
+      where: {
+        id: checkout.id,
+        orderId: null,
+      },
+      data: {
+        status: STATUS_FINALIZING,
+      },
+    });
+
+    if (lockResult.count === 0) {
+      const lockedCheckout = await tx.checkoutSession.findUnique({
+        where: { id: checkout.id },
+        select: { orderId: true },
+      });
+
+      if (lockedCheckout?.orderId) {
+        return { orderId: lockedCheckout.orderId, existing: true };
+      }
+
+      throw new Error("Checkout finalization is already in progress.");
+    }
+
+    const reservedOrder = await tx.esimOrder.create({
+      data: {
+        userId: checkout.userId,
+        packageId: checkout.packageId,
+        status: STATUS_PENDING,
+        customerEmail: checkout.customerEmail,
+        quantity: checkout.quantity,
+        totalCents: checkout.totalCents,
+        currency: checkout.currency,
+        paymentTransactionId: payment.id,
+      },
+    });
+
+    await tx.checkoutSession.update({
+      where: { id: checkout.id },
+      data: {
+        orderId: reservedOrder.id,
+        status: STATUS_FINALIZING,
+      },
+    });
+
+    return { orderId: reservedOrder.id, existing: false };
+  });
+}
+
+async function markCheckoutFinalized({
+  db,
+  checkout,
+  payment,
+  order,
+}: {
+  db: PrismaClient;
+  checkout: FinaliseCheckoutRecord;
+  payment: FinaliseCheckoutRecord["payments"][number];
+  order: CreateOrderResult;
+}): Promise<void> {
+  await db.$transaction(async (tx) => {
+    const currentPayment = await tx.paymentTransaction.findUnique({
+      where: { id: payment.id },
+      select: { statusHistory: true },
+    });
+
+    await tx.checkoutSession.update({
+      where: { id: checkout.id },
+      data: {
+        orderId: order.orderId,
+        status: STATUS_PAID,
+      },
+    });
+
+    await tx.paymentTransaction.update({
+      where: { id: payment.id },
+      data: {
+        status: STATUS_APPROVED,
+        statusHistory: appendStatusHistory(
+          currentPayment?.statusHistory ?? payment.statusHistory,
+          {
+            status: STATUS_APPROVED,
+            at: new Date().toISOString(),
+            source: "finalize",
+          },
+        ),
+      },
+    });
+
+    await tx.esimOrder.update({
+      where: { id: order.orderId },
+      data: {
+        paymentTransactionId: payment.id,
+      },
+    });
+  });
 }
 
 export async function finaliseOrderFromCheckout(
@@ -461,6 +637,7 @@ export async function finaliseOrderFromCheckout(
   const checkout = await db.checkoutSession.findUnique({
     where: { id: checkoutId },
     include: {
+      package: true,
       payments: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -470,22 +647,6 @@ export async function finaliseOrderFromCheckout(
 
   if (!checkout) {
     throw new Error("Checkout not found.");
-  }
-
-  if (checkout.orderId) {
-    const existingOrder = await db.esimOrder.findUnique({
-      where: { id: checkout.orderId },
-    });
-
-    if (!existingOrder) {
-      throw new Error("Checkout references a missing order.");
-    }
-
-    return {
-      orderId: existingOrder.id,
-      orderNumber: existingOrder.orderNumber ?? null,
-      requestId: existingOrder.requestId ?? existingOrder.orderNumber ?? existingOrder.id,
-    };
   }
 
   const payment = checkout.payments[0];
@@ -501,44 +662,44 @@ export async function finaliseOrderFromCheckout(
     throw new Error("Payment has not been approved.");
   }
 
-  const lockResult = await db.checkoutSession.updateMany({
-    where: {
-      id: checkout.id,
-      orderId: null,
-    },
-    data: {
-      status: STATUS_FINALIZING,
-    },
-  });
+  let reservation: { orderId: string; existing: boolean };
 
-  if (lockResult.count === 0) {
-    const lockedCheckout = await db.checkoutSession.findUnique({
-      where: { id: checkout.id },
-      select: { orderId: true },
-    });
+  try {
+    reservation = checkout.orderId
+      ? { orderId: checkout.orderId, existing: true }
+      : await reserveCheckoutOrder(db, checkout, payment);
 
-    if (lockedCheckout?.orderId) {
+    if (reservation.existing) {
       const existingOrder = await db.esimOrder.findUnique({
-        where: { id: lockedCheckout.orderId },
+        where: { id: reservation.orderId },
       });
 
       if (!existingOrder) {
         throw new Error("Checkout references a missing order.");
       }
 
-      return {
-        orderId: existingOrder.id,
-        orderNumber: existingOrder.orderNumber ?? null,
-        requestId: existingOrder.requestId ?? existingOrder.orderNumber ?? existingOrder.id,
-      };
+      if (!shouldRetryReservedOrder(existingOrder)) {
+        const result = toCreateOrderResult(existingOrder);
+        if (checkout.status !== STATUS_PAID || payment.status !== STATUS_APPROVED) {
+          await markCheckoutFinalized({
+            db,
+            checkout,
+            payment,
+            order: result,
+          });
+        }
+        sendOrderReceipt(result.orderId, {
+          prisma: options.prisma ?? prismaClient,
+        }).catch((error) => {
+          logOrderError("payments.receipt.send_failed", {
+            orderId: result.orderId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+        return result;
+      }
     }
 
-    throw new Error("Checkout finalization is already in progress.");
-  }
-
-  let locked = true;
-
-  try {
     const order = await createOrder(
       {
         packageId: checkout.packageId,
@@ -552,93 +713,36 @@ export async function finaliseOrderFromCheckout(
         // even when synchronous Airalo fulfillment is slow or intermittently unavailable.
         submissionMode: options.airaloOptions?.submissionMode ?? "async",
         userId: checkout.userId ?? undefined,
+        reservedOrder: buildReservedOrderSnapshot(checkout, reservation.orderId),
       },
     );
 
-    const result = await db.$transaction(async (tx) => {
-      const currentCheckout = await tx.checkoutSession.findUnique({
-        where: { id: checkout.id },
-        select: { orderId: true },
-      });
-
-      if (!currentCheckout) {
-        throw new Error("Checkout not found.");
-      }
-
-      if (currentCheckout.orderId) {
-        const existingOrder = await tx.esimOrder.findUnique({
-          where: { id: currentCheckout.orderId },
-        });
-
-        if (!existingOrder) {
-          throw new Error("Checkout references a missing order.");
-        }
-
-        return {
-          orderId: existingOrder.id,
-          orderNumber: existingOrder.orderNumber ?? null,
-          requestId: existingOrder.requestId ?? existingOrder.orderNumber ?? existingOrder.id,
-        };
-      }
-
-      const currentPayment = await tx.paymentTransaction.findUnique({
-        where: { id: payment.id },
-        select: { statusHistory: true },
-      });
-
-      await tx.checkoutSession.update({
-        where: { id: checkout.id },
-        data: {
-          orderId: order.orderId,
-          status: STATUS_PAID,
-        },
-      });
-
-      await tx.paymentTransaction.update({
-        where: { id: payment.id },
-        data: {
-          status: STATUS_APPROVED,
-          statusHistory: appendStatusHistory(currentPayment?.statusHistory ?? payment.statusHistory, {
-            status: STATUS_APPROVED,
-            at: new Date().toISOString(),
-            source: "finalize",
-          }),
-        },
-      });
-
-      await tx.esimOrder.update({
-        where: { id: order.orderId },
-        data: {
-          paymentTransactionId: payment.id,
-        },
-      });
-
-      return order;
+    await markCheckoutFinalized({
+      db,
+      checkout,
+      payment,
+      order,
     });
-
-    locked = false;
 
     logOrderInfo("payments.checkout.finalized", {
       checkoutId,
-      orderId: result.orderId,
+      orderId: order.orderId,
       paymentId: payment.id,
     });
 
-    sendOrderReceipt(result.orderId, { prisma: options.prisma ?? prismaClient }).catch((error) => {
+    sendOrderReceipt(order.orderId, { prisma: options.prisma ?? prismaClient }).catch((error) => {
       logOrderError("payments.receipt.send_failed", {
-        orderId: result.orderId,
+        orderId: order.orderId,
         error: error instanceof Error ? error.message : String(error),
       });
     });
 
-    return result;
+    return order;
   } catch (error) {
-    if (locked) {
-      await db.checkoutSession.updateMany({
-        where: { id: checkout.id, orderId: null },
-        data: { status: STATUS_PAID },
-      });
-    }
+    await db.checkoutSession.updateMany({
+      where: { id: checkout.id },
+      data: { status: STATUS_PAID },
+    });
 
     throw error;
   }
