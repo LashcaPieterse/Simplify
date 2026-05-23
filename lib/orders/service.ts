@@ -1,1082 +1,151 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
-import { z } from "zod";
-
-import {
-  AiraloClient,
-  AiraloError,
-  type CreateOrderPayload,
-  type SubmitOrderAsyncAck,
-} from "../airalo/client";
-import {
-  classifyAiraloError,
-  extractAiraloBusinessError,
-  type AiraloBusinessErrorInfo,
-} from "../airalo/errors";
+import type { AiraloClient } from "../airalo/client";
 import {
   findActivePackageByIdentifier,
   getPackagePrice,
   inspectPackageIdentifierLookup,
 } from "../catalog/package-resolver";
-import type {
-  Order as AiraloOrder,
-  OrderResponse,
-  Sim,
-  SimResponse,
-  SubmitOrderAsyncResponse,
-} from "../airalo/schemas";
-import { resolveSharedTokenCache } from "../airalo/token-cache";
 import prismaClient from "../db/client";
+import { logOrderError, logOrderInfo } from "../observability/logging";
+import { recordOrderMetrics } from "../observability/metrics";
 import {
-  logOrderError,
-  logOrderInfo,
-  logOrderWarn,
-} from "../observability/logging";
+  buildAiraloOrderPayload,
+  logAiraloSubmissionSuccess,
+  resolveAiraloClient,
+  resolveRequiredAsyncWebhookUrl,
+  submitAiraloOrder,
+  type AiraloOrderPackage,
+  type OrderSubmissionMode,
+} from "./airalo-ordering";
 import {
-  recordOrderMetrics,
-  recordRateLimit,
-  type RecordOrderMetricsOptions,
-} from "../observability/metrics";
+  OrderValidationError,
+  handleAiraloOrderFailure,
+} from "./errors";
 import {
-  createInstallationPayload,
-  resolveAiraloOrderApn,
-  resolveAiraloOrderActivationCode as resolveAiraloInstallActivationCode,
-  resolveAiraloSimActivationCode,
-  resolveAiraloSimStatus,
-} from "./airalo-metadata";
+  buildCreateOrderInstallationResult,
+} from "./installation";
+import {
+  autoDeactivatePackage,
+  claimReservedOrderForSubmission,
+  handlePersistenceError,
+  markReservedOrderSubmissionFailed,
+  persistOrderRecords,
+  type CreateOrderResult,
+  type PrismaDbClient,
+} from "./persistence";
+import {
+  createOrderInputSchema,
+  normaliseQuantity,
+  type CreateOrderInput,
+  type ReservedOrderSnapshot,
+} from "./validation";
 
-const createOrderInputSchema = z.object({
-  packageId: z.string().min(1, "A package selection is required."),
-  quantity: z
-    .number({ invalid_type_error: "Quantity must be a number." })
-    .int("Quantity must be an integer.")
-    .positive("Quantity must be at least 1.")
-    .max(10, "You can order up to 10 eSIMs per checkout.")
-    .default(1)
-    .optional(),
-  customerEmail: z.string().email("Enter a valid email address.").optional(),
-});
-
-export type CreateOrderInput = z.infer<typeof createOrderInputSchema>;
-
-export type CreateOrderResult = {
-  orderId: string;
-  orderNumber: string | null;
-  requestId: string | null;
-  installation?: {
-    qrCodeData?: string | null;
-    qrCodeUrl?: string | null;
-    smdpAddress?: string | null;
-    activationCode?: string | null;
-    apn?: string | null;
-  };
-};
-
-export class OrderServiceError extends Error {
-  readonly status: number;
-  readonly cause?: unknown;
-
-  constructor(message: string, status = 500, cause?: unknown) {
-    super(message);
-    this.name = "OrderServiceError";
-    this.status = status;
-    this.cause = cause;
-  }
-}
-
-export class OrderValidationError extends OrderServiceError {
-  readonly issues: z.ZodIssue[];
-
-  constructor(message: string, issues: z.ZodIssue[] = []) {
-    super(message, 422);
-    this.name = "OrderValidationError";
-    this.issues = issues;
-  }
-}
-
-export class OrderOutOfStockError extends OrderServiceError {
-  constructor(message = "This plan is currently out of stock.") {
-    super(message, 409);
-    this.name = "OrderOutOfStockError";
-  }
-}
-
-type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
-
-function isPrismaClient(client: PrismaDbClient): client is PrismaClient {
-  return typeof (client as PrismaClient).$transaction === "function";
-}
-
-function toPrismaJson(
-  value: unknown,
-): Prisma.InputJsonValue | typeof Prisma.JsonNull {
-  if (value === null || value === undefined) {
-    return Prisma.JsonNull;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
-function normalizeOptionalString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function envFlagEnabled(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-
-  return ["1", "true", "yes"].includes(value.trim().toLowerCase());
-}
-
-function resolveAsyncWebhookUrl(options: CreateOrderOptions): string | null {
-  const configuredUrl = normalizeOptionalString(
-    options.asyncWebhookUrl ?? process.env.AIRALO_ASYNC_WEBHOOK_URL,
-  );
-
-  if (!configuredUrl) {
-    return null;
-  }
-
-  try {
-    return new URL(configuredUrl).toString();
-  } catch {
-    throw new OrderServiceError(
-      "AIRALO_ASYNC_WEBHOOK_URL must be a valid absolute URL.",
-      500,
-    );
-  }
-}
-
-function hasGlobalAsyncWebhookOptIn(): boolean {
-  return envFlagEnabled(process.env.AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN);
-}
-
-function resolveRequiredAsyncWebhookUrl(
-  options: CreateOrderOptions,
-): string | null {
-  const webhookUrl = resolveAsyncWebhookUrl(options);
-
-  if (webhookUrl) {
-    return webhookUrl;
-  }
-
-  if (hasGlobalAsyncWebhookOptIn()) {
-    return null;
-  }
-
-  throw new OrderServiceError(
-    "AIRALO_ASYNC_WEBHOOK_URL must be configured for async orders unless AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true.",
-    500,
-  );
-}
-
-function resolveAiraloOrderId(
-  order: AiraloOrder | null | undefined,
-): string | null {
-  if (!order) {
-    return null;
-  }
-
-  return order.order_id ?? order.id ?? order.code ?? null;
-}
-
-function resolveAiraloPrimarySim(order: AiraloOrder | null | undefined) {
-  if (!order) {
-    return null;
-  }
-
-  if (Array.isArray(order.sims) && order.sims.length > 0) {
-    return order.sims[0];
-  }
-
-  return null;
-}
-
-function resolveAiraloIccid(
-  order: AiraloOrder | null | undefined,
-): string | null {
-  if (!order) {
-    return null;
-  }
-
-  const primarySim = resolveAiraloPrimarySim(order);
-  return order.iccid ?? primarySim?.iccid ?? null;
-}
-
-function resolveAiraloActivationCode(
-  order: AiraloOrder | null | undefined,
-): string | null {
-  return resolveAiraloInstallActivationCode(order);
-}
-
-function resolveAiraloStatus(order: AiraloOrder | null | undefined): string {
-  if (!order) {
-    return "pending";
-  }
-
-  return order.status ?? "pending";
-}
+export { resolveAiraloClient } from "./airalo-ordering";
+export {
+  OrderOutOfStockError,
+  OrderServiceError,
+  OrderValidationError,
+} from "./errors";
+export {
+  ensureOrderInstallation,
+  getOrderWithDetails,
+  type OrderWithDetails,
+} from "./installation";
+export type { CreateOrderResult, PrismaDbClient } from "./persistence";
+export type { CreateOrderInput, ReservedOrderSnapshot } from "./validation";
 
 export interface CreateOrderOptions {
   prisma?: PrismaDbClient;
   airaloClient?: AiraloClient;
-  submissionMode?: "async" | "sync";
+  submissionMode?: OrderSubmissionMode;
   userId?: string;
   asyncWebhookUrl?: string | null;
   reservedOrder?: ReservedOrderSnapshot;
 }
 
-export type ReservedOrderSnapshot = {
-  orderId: string;
-  packageId: string;
-  airaloPackageId: string;
-  packageTitle: string;
+type ResolvedOrderPackage = {
+  pkg: AiraloOrderPackage;
   quantity: number;
   totalCents: number;
   currency: string;
   customerEmail?: string | null;
 };
 
-const DEFAULT_QUANTITY = 1;
-const MAX_QUANTITY = 10;
-const AIRALO_BRAND_SETTINGS_NAME = "Simplify";
-const ORDER_RATE_LIMIT_RETRY = { attempts: 3, baseDelayMs: 500 };
-const RESERVED_ORDER_SUBMITTING_STATUS = "airalo_submitting";
-const RESERVED_ORDER_FAILED_STATUS = "airalo_failed";
-const RESERVED_ORDER_CLAIMABLE_STATUSES = [
-  "pending",
-  RESERVED_ORDER_FAILED_STATUS,
-];
+async function resolveOrderPackage(
+  input: CreateOrderInput,
+  db: PrismaDbClient,
+  startedAt: number,
+  reservedOrder: ReservedOrderSnapshot | null,
+): Promise<ResolvedOrderPackage> {
+  const resolvedCustomerEmail = reservedOrder?.customerEmail ?? input.customerEmail;
 
-let cachedAiraloClient: AiraloClient | null = null;
-
-export function resolveAiraloClient(): AiraloClient {
-  if (cachedAiraloClient) {
-    return cachedAiraloClient;
-  }
-
-  const clientId = process.env.AIRALO_CLIENT_ID;
-  const clientSecret = process.env.AIRALO_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new OrderServiceError(
-      "AIRALO_CLIENT_ID and AIRALO_CLIENT_SECRET must be configured to create orders.",
-      500,
-    );
-  }
-
-  cachedAiraloClient = new AiraloClient({
-    clientId,
-    clientSecret,
-    tokenCache: resolveSharedTokenCache(),
-  });
-
-  return cachedAiraloClient;
-}
-
-function normaliseQuantity(quantity?: number): number {
-  if (typeof quantity !== "number" || Number.isNaN(quantity)) {
-    return DEFAULT_QUANTITY;
-  }
-
-  return Math.min(Math.max(quantity, DEFAULT_QUANTITY), MAX_QUANTITY);
-}
-
-function parseInstallationPayloadJson(
-  payload: string | null | undefined,
-): Record<string, unknown> | null {
-  if (!payload) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(payload) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function hasGetSimHydratedInstallationPayload(
-  payload: string | null | undefined,
-): boolean {
-  const parsed = parseInstallationPayloadJson(payload);
-  if (!parsed) {
-    return false;
-  }
-
-  return (
-    parsed.source === "sim" &&
-    "qrCodeData" in parsed &&
-    "qrCodeUrl" in parsed &&
-    "directAppleUrl" in parsed &&
-    "matchingId" in parsed &&
-    "recycled" in parsed
-  );
-}
-
-function resolveStringFromPayload(
-  payload: Record<string, unknown> | null,
-  key: string,
-): string | null {
-  const value = payload?.[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function resolveExistingOrderIccid(order: OrderWithDetails): string | null {
-  const profileIccid = order.profiles[0]?.iccid;
-  if (profileIccid) {
-    return profileIccid;
-  }
-
-  return resolveStringFromPayload(
-    parseInstallationPayloadJson(order.installation?.payload),
-    "iccid",
-  );
-}
-
-function resolveHydratedStatus(
-  order: AiraloOrder | null,
-  sim: Sim | null,
-  fallback: string,
-): string {
-  const orderStatus = order ? resolveAiraloStatus(order) : null;
-  const simStatus = resolveAiraloSimStatus(sim);
-
-  if (orderStatus && orderStatus !== "pending") {
-    return orderStatus;
-  }
-
-  return simStatus ?? orderStatus ?? fallback;
-}
-
-const ORDER_DETAILS_INCLUDE = {
-  profiles: {
-    include: {
-      usageSnapshots: {
-        orderBy: { recordedAt: "desc" },
-        take: 1,
+  if (reservedOrder) {
+    return {
+      pkg: {
+        id: reservedOrder.packageId,
+        airaloPackageId: reservedOrder.airaloPackageId,
+        title: reservedOrder.packageTitle,
       },
-    },
-  },
-  installation: true,
-  payment: true,
-} satisfies Prisma.EsimOrderInclude;
+      quantity: reservedOrder.quantity,
+      totalCents: reservedOrder.totalCents,
+      currency: reservedOrder.currency,
+      customerEmail: resolvedCustomerEmail,
+    };
+  }
 
-export type OrderWithDetails = Prisma.EsimOrderGetPayload<{
-  include: typeof ORDER_DETAILS_INCLUDE;
-}>;
+  const resolvedPackage = await findActivePackageByIdentifier(db, input.packageId);
+  if (!resolvedPackage) {
+    const lookupDiagnostics = await inspectPackageIdentifierLookup(
+      db,
+      input.packageId,
+    );
+    console.info("order.package.lookup", {
+      packageId: input.packageId,
+      ...lookupDiagnostics,
+    });
+  }
 
-function buildOrderIdentifierWhere(
-  identifier: string,
-): Prisma.EsimOrderWhereInput {
-  const clauses: Prisma.EsimOrderWhereInput[] = [{ id: identifier }];
+  if (!resolvedPackage) {
+    logOrderError("order.package.unavailable", {
+      packageId: input.packageId,
+    });
 
-  clauses.push({ orderNumber: identifier });
-  clauses.push({ requestId: identifier });
+    recordOrderMetrics({
+      result: "error",
+      reason: "validation_failed",
+      durationMs: Date.now() - startedAt,
+      airaloStatus: "validation",
+    });
+
+    throw new OrderValidationError("Selected plan is no longer available.");
+  }
+
+  const packagePrice = getPackagePrice(resolvedPackage);
+
+  if (!packagePrice) {
+    logOrderError("order.package.missing_price", {
+      packageId: resolvedPackage.id,
+      packageExternalId: resolvedPackage.airaloPackageId,
+    });
+
+    recordOrderMetrics({
+      result: "error",
+      reason: "validation_failed",
+      durationMs: Date.now() - startedAt,
+      airaloStatus: "validation",
+    });
+
+    throw new OrderValidationError("Selected plan is no longer available.");
+  }
+
+  const quantity = normaliseQuantity(input.quantity);
 
   return {
-    OR: clauses,
+    pkg: resolvedPackage,
+    quantity,
+    totalCents: packagePrice.sellingPriceCents * quantity,
+    currency: packagePrice.currencyCode,
+    customerEmail: resolvedCustomerEmail,
   };
-}
-
-export async function getOrderWithDetails(
-  identifier: string,
-  options: { prisma?: PrismaDbClient } = {},
-): Promise<OrderWithDetails | null> {
-  const db: PrismaDbClient = options.prisma ?? prismaClient;
-
-  return db.esimOrder.findFirst({
-    where: buildOrderIdentifierWhere(identifier),
-    include: ORDER_DETAILS_INCLUDE,
-  });
-}
-
-export async function ensureOrderInstallation(
-  identifier: string,
-  options: { prisma?: PrismaDbClient; airaloClient?: AiraloClient } = {},
-): Promise<OrderWithDetails | null> {
-  const db = options.prisma ?? prismaClient;
-  const existing = await getOrderWithDetails(identifier, { prisma: db });
-
-  if (!existing) {
-    return null;
-  }
-
-  const hasInstallation = Boolean(existing.installation?.payload);
-  const hasProfile = existing.profiles.length > 0;
-  const hasHydratedInstallation = hasGetSimHydratedInstallationPayload(
-    existing.installation?.payload,
-  );
-
-  if (hasInstallation && hasProfile && hasHydratedInstallation) {
-    return existing;
-  }
-
-  const existingIccid = resolveExistingOrderIccid(existing);
-  if (!existing.orderNumber && !existingIccid) {
-    return existing;
-  }
-
-  const airalo = options.airaloClient ?? resolveAiraloClient();
-  let airaloOrderResponse: OrderResponse | null = null;
-  let airaloOrder: AiraloOrder | null = null;
-  let orderFetchError: unknown;
-
-  if (existing.orderNumber) {
-    try {
-      airaloOrderResponse = await airalo.getOrderResponseById(
-        existing.orderNumber,
-      );
-      airaloOrder = airaloOrderResponse.data;
-    } catch (error) {
-      orderFetchError = error;
-      if (!existingIccid && !hasInstallation && !hasProfile) {
-        throw error;
-      }
-
-      logOrderWarn("order.installation.order_fetch_failed", {
-        orderId: existing.id,
-        orderNumber: existing.orderNumber,
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-  }
-
-  const resolvedIccid = resolveAiraloIccid(airaloOrder) ?? existingIccid;
-  let simResponse: SimResponse | null = null;
-  let simDetails: Sim | null = null;
-
-  try {
-    if (resolvedIccid) {
-      simResponse = await airalo.getSimResponse(resolvedIccid, {
-        include: ["order", "order.status", "share"],
-      });
-      simDetails = simResponse.data;
-    }
-  } catch (error) {
-    if (!airaloOrder && !hasInstallation && !hasProfile) {
-      throw error;
-    }
-
-    logOrderWarn("order.installation.sim_fetch_failed", {
-      orderId: existing.id,
-      iccid: resolvedIccid,
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-
-  if (!airaloOrder && !simDetails) {
-    if (orderFetchError && !hasInstallation && !hasProfile) {
-      throw orderFetchError;
-    }
-
-    return existing;
-  }
-
-  const payload = createInstallationPayload(airaloOrder, simDetails);
-  const resolvedStatus = resolveHydratedStatus(
-    airaloOrder,
-    simDetails,
-    existing.status,
-  );
-  const activationCode =
-    resolveAiraloInstallActivationCode(airaloOrder, simDetails) ??
-    resolveAiraloSimActivationCode(simDetails);
-
-  const performUpdate = async (tx: Prisma.TransactionClient) => {
-    await tx.esimOrder.update({
-      where: { id: existing.id },
-      data: {
-        status: resolvedStatus,
-      },
-    });
-
-    if (airaloOrderResponse) {
-      await tx.airaloOrderSnapshot.create({
-        data: {
-          orderId: existing.id,
-          source: "orders",
-          requestId: airaloOrder?.order_reference ?? existing.requestId,
-          orderNumber:
-            resolveAiraloOrderId(airaloOrder) ?? existing.orderNumber,
-          rawPayloadJson: toPrismaJson(airaloOrderResponse),
-        },
-      });
-    }
-
-    if (simResponse) {
-      await tx.airaloOrderSnapshot.create({
-        data: {
-          orderId: existing.id,
-          source: "sim",
-          requestId: existing.requestId,
-          orderNumber:
-            resolveAiraloOrderId(airaloOrder) ?? existing.orderNumber,
-          rawPayloadJson: toPrismaJson(simResponse),
-        },
-      });
-    }
-
-    if (resolvedIccid) {
-      await tx.esimProfile.upsert({
-        where: { iccid: resolvedIccid },
-        create: {
-          iccid: resolvedIccid,
-          status: resolvedStatus,
-          activationCode,
-          orderId: existing.id,
-        },
-        update: {
-          status: resolvedStatus,
-          ...(activationCode ? { activationCode } : {}),
-          orderId: existing.id,
-        },
-      });
-    }
-
-    await tx.esimInstallationPayload.upsert({
-      where: { orderId: existing.id },
-      update: { payload },
-      create: {
-        orderId: existing.id,
-        payload,
-      },
-    });
-  };
-
-  if (isPrismaClient(db)) {
-    await db.$transaction(async (tx) => {
-      await performUpdate(tx);
-    });
-  } else {
-    await performUpdate(db);
-  }
-
-  return getOrderWithDetails(identifier, { prisma: db });
-}
-
-type AiraloValidationErrors = Record<string, string[]>;
-
-function extractAiraloValidationErrors(
-  body: unknown,
-): AiraloValidationErrors | null {
-  if (typeof body !== "object" || body === null) {
-    return null;
-  }
-
-  const data = (body as { data?: unknown }).data;
-
-  if (typeof data !== "object" || data === null) {
-    return null;
-  }
-
-  const entries = Object.entries(data as Record<string, unknown>);
-  const validationErrors: AiraloValidationErrors = {};
-
-  for (const [field, value] of entries) {
-    if (typeof value === "string" && value.trim()) {
-      validationErrors[field] = [value];
-      continue;
-    }
-
-    if (Array.isArray(value)) {
-      const messages = value.filter(
-        (item): item is string =>
-          typeof item === "string" && item.trim().length > 0,
-      );
-      if (messages.length > 0) {
-        validationErrors[field] = messages;
-      }
-    }
-  }
-
-  return Object.keys(validationErrors).length > 0 ? validationErrors : null;
-}
-
-const AIRALO_FIELD_PATHS: Record<string, string> = {
-  package_id: "packageId",
-  brand_settings_name: "brandSettingsName",
-};
-
-function firstAiraloFieldMessage(
-  fieldErrors: AiraloValidationErrors | null,
-  field: string,
-): string | null {
-  const message = fieldErrors?.[field]?.find(
-    (candidate) => candidate.trim().length > 0,
-  );
-  return message ?? null;
-}
-
-function firstAiraloValidationMessage(
-  fieldErrors: AiraloValidationErrors | null,
-): string | null {
-  if (!fieldErrors) {
-    return null;
-  }
-
-  for (const field of ["package_id", "quantity", "brand_settings_name"]) {
-    const message = firstAiraloFieldMessage(fieldErrors, field);
-    if (message) {
-      return message;
-    }
-  }
-
-  for (const messages of Object.values(fieldErrors)) {
-    const message = messages.find((candidate) => candidate.trim().length > 0);
-    if (message) {
-      return message;
-    }
-  }
-
-  return null;
-}
-
-function buildAiraloValidationIssues(
-  fieldErrors: AiraloValidationErrors | null,
-): z.ZodIssue[] {
-  if (!fieldErrors) {
-    return [];
-  }
-
-  return Object.entries(fieldErrors).flatMap(([field, messages]) =>
-    messages.map((message) => ({
-      code: z.ZodIssueCode.custom,
-      path: [AIRALO_FIELD_PATHS[field] ?? field],
-      message,
-    })),
-  );
-}
-
-const INSUFFICIENT_CREDIT_ERROR_CODES = new Set<number>([11]);
-const MAINTENANCE_ERROR_CODES = new Set<number>([13]);
-const CHECKSUM_ERROR_CODES = new Set<number>([14]);
-const TOPUP_DISABLED_ERROR_CODES = new Set<number>([23]);
-const OUT_OF_STOCK_ERROR_CODES = new Set<number>([33]);
-const INVALID_PACKAGE_ERROR_CODES = new Set<number>([34]);
-const BAD_REQUEST_ERROR_CODES = new Set<number>([43]);
-const UNEXPECTED_ERROR_CODES = new Set<number>([53]);
-const RECYCLED_SIM_ERROR_CODES = new Set<number>([73]);
-
-const OUT_OF_STOCK_PATTERNS = [/out of stock/i, /insufficient stock/i];
-const MAINTENANCE_PATTERNS = [/maintenance/i];
-const CHECKSUM_PATTERNS = [/checksum/i];
-const RECYCLED_PATTERNS = [/recycled/i];
-
-type MetricsReason = NonNullable<RecordOrderMetricsOptions["reason"]>;
-
-function matchAnyPattern(value: string, patterns: RegExp[]): boolean {
-  return patterns.some((pattern) => pattern.test(value));
-}
-
-function hasPatternMatch(
-  info: AiraloBusinessErrorInfo | null,
-  fallback: string | null,
-  patterns: RegExp[],
-): boolean {
-  const candidates = [info?.reason, info?.message, fallback];
-
-  return candidates.some(
-    (candidate) =>
-      typeof candidate === "string" && matchAnyPattern(candidate, patterns),
-  );
-}
-
-function classifyAiraloBusinessReason(
-  info: AiraloBusinessErrorInfo | null,
-  fallback: string | null,
-  status: number,
-): MetricsReason | null {
-  if (status === 409) {
-    return "airalo_out_of_stock";
-  }
-
-  if (status === 429) {
-    return "rate_limited";
-  }
-
-  if (status >= 500) {
-    return "airalo_unexpected";
-  }
-
-  const code = info?.code ?? null;
-
-  if (code !== null) {
-    if (OUT_OF_STOCK_ERROR_CODES.has(code)) {
-      return "airalo_out_of_stock";
-    }
-
-    if (INSUFFICIENT_CREDIT_ERROR_CODES.has(code)) {
-      return "insufficient_credit";
-    }
-
-    if (MAINTENANCE_ERROR_CODES.has(code)) {
-      return "operator_maintenance";
-    }
-
-    if (CHECKSUM_ERROR_CODES.has(code)) {
-      return "checksum_failed";
-    }
-
-    if (TOPUP_DISABLED_ERROR_CODES.has(code)) {
-      return "topup_disabled";
-    }
-
-    if (BAD_REQUEST_ERROR_CODES.has(code)) {
-      return "airalo_bad_request";
-    }
-
-    if (UNEXPECTED_ERROR_CODES.has(code)) {
-      return "airalo_unexpected";
-    }
-
-    if (RECYCLED_SIM_ERROR_CODES.has(code)) {
-      return "iccid_recycled";
-    }
-  }
-
-  if (hasPatternMatch(info, fallback, OUT_OF_STOCK_PATTERNS)) {
-    return "airalo_out_of_stock";
-  }
-
-  if (hasPatternMatch(info, fallback, MAINTENANCE_PATTERNS)) {
-    return "operator_maintenance";
-  }
-
-  if (hasPatternMatch(info, fallback, RECYCLED_PATTERNS)) {
-    return "iccid_recycled";
-  }
-
-  if (hasPatternMatch(info, fallback, CHECKSUM_PATTERNS)) {
-    return "checksum_failed";
-  }
-
-  return null;
-}
-
-function shouldAutoDeactivatePackage(
-  businessCode: number | null,
-  classification: MetricsReason | null,
-): boolean {
-  if (businessCode !== null && INVALID_PACKAGE_ERROR_CODES.has(businessCode)) {
-    return true;
-  }
-
-  if (businessCode !== null && OUT_OF_STOCK_ERROR_CODES.has(businessCode)) {
-    return true;
-  }
-
-  return classification === "airalo_out_of_stock";
-}
-
-async function autoDeactivatePackage(
-  pkg: { id: string; airaloPackageId: string },
-  options: {
-    reason: string | null;
-    businessCode: number | null;
-    classification: MetricsReason | null;
-    prisma: PrismaDbClient;
-  },
-): Promise<void> {
-  const client = isPrismaClient(options.prisma) ? options.prisma : prismaClient;
-  const result = await client.packageState.updateMany({
-    where: { packageId: pkg.id, isActive: true },
-    data: { isActive: false, deactivatedAt: new Date() },
-  });
-
-  if (result.count > 0) {
-    logOrderWarn("catalog.package.auto_paused", {
-      packageId: pkg.id,
-      packageExternalId: pkg.airaloPackageId,
-      reason: options.reason,
-      airaloErrorCode: options.businessCode,
-      classification: options.classification,
-    });
-  }
-}
-
-function mapAiraloError(
-  error: AiraloError,
-  businessErrorOverride?: AiraloBusinessErrorInfo | null,
-): OrderServiceError {
-  const status = error.details.status;
-  const businessError =
-    businessErrorOverride ?? extractAiraloBusinessError(error.details.body);
-  const detailedMessage =
-    businessError?.reason ?? businessError?.message ?? error.message;
-  const candidateMessage = businessError?.message ?? error.message;
-  const fieldErrors = extractAiraloValidationErrors(error.details.body);
-  const fieldValidationMessage = firstAiraloValidationMessage(fieldErrors);
-  const classified = classifyAiraloError({
-    status,
-    body: error.details.body,
-    fallbackMessage: error.message,
-  });
-
-  const businessCode = businessError?.code ?? null;
-
-  const hasOutOfStockSignal =
-    status === 409 ||
-    (businessCode !== null && OUT_OF_STOCK_ERROR_CODES.has(businessCode)) ||
-    classified.category === "out_of_stock" ||
-    hasPatternMatch(businessError, candidateMessage, OUT_OF_STOCK_PATTERNS);
-
-  if (hasOutOfStockSignal) {
-    return new OrderOutOfStockError(
-      businessError?.reason ?? businessError?.message ?? undefined,
-    );
-  }
-
-  if (
-    businessCode !== null &&
-    INSUFFICIENT_CREDIT_ERROR_CODES.has(businessCode)
-  ) {
-    return new OrderServiceError(
-      businessError?.reason ??
-        "Airalo rejected the order because the partner credit balance is insufficient. Top up the Airalo wallet and retry.",
-      402,
-      error,
-    );
-  }
-
-  if (businessCode !== null && INVALID_PACKAGE_ERROR_CODES.has(businessCode)) {
-    return new OrderValidationError(
-      businessError?.reason ??
-        "Selected plan is no longer valid. Refresh the catalog and try a different plan.",
-    );
-  }
-
-  if (businessCode !== null && TOPUP_DISABLED_ERROR_CODES.has(businessCode)) {
-    return new OrderServiceError(
-      businessError?.reason ??
-        "Airalo reported that the requested top-up is currently disabled by the operator.",
-      409,
-      error,
-    );
-  }
-
-  if (
-    (businessCode !== null && RECYCLED_SIM_ERROR_CODES.has(businessCode)) ||
-    classified.category === "iccid_recycled" ||
-    hasPatternMatch(businessError, candidateMessage, RECYCLED_PATTERNS)
-  ) {
-    return new OrderServiceError(
-      businessError?.reason ??
-        "Airalo indicates the requested SIM has already been recycled and cannot be provisioned or topped up.",
-      410,
-      error,
-    );
-  }
-
-  if (
-    (businessCode !== null && MAINTENANCE_ERROR_CODES.has(businessCode)) ||
-    classified.category === "operator_maintenance" ||
-    hasPatternMatch(businessError, candidateMessage, MAINTENANCE_PATTERNS)
-  ) {
-    return new OrderServiceError(
-      businessError?.reason ??
-        "Airalo reports the operator is undergoing maintenance. Pause sales for this plan and retry later.",
-      503,
-      error,
-    );
-  }
-
-  if (
-    (businessCode !== null && CHECKSUM_ERROR_CODES.has(businessCode)) ||
-    classified.category === "checksum_failed" ||
-    hasPatternMatch(businessError, candidateMessage, CHECKSUM_PATTERNS)
-  ) {
-    return new OrderValidationError(
-      businessError?.reason ??
-        "Airalo rejected the request because of a checksum mismatch in the supplied ICCID or payload.",
-    );
-  }
-
-  if (businessCode !== null && BAD_REQUEST_ERROR_CODES.has(businessCode)) {
-    return new OrderValidationError(
-      businessError?.reason ??
-        "Airalo rejected the request as invalid. Verify the payload fields and try again.",
-    );
-  }
-
-  if (
-    (businessCode !== null && UNEXPECTED_ERROR_CODES.has(businessCode)) ||
-    classified.category === "unexpected"
-  ) {
-    return new OrderServiceError(
-      businessError?.reason ??
-        "Airalo reported an unexpected temporary issue. Please retry shortly.",
-      503,
-      error,
-    );
-  }
-
-  if (status === 422) {
-    return new OrderValidationError(
-      fieldValidationMessage ??
-        detailedMessage ??
-        "Airalo rejected the order request.",
-      buildAiraloValidationIssues(fieldErrors),
-    );
-  }
-
-  return new OrderServiceError(detailedMessage, status, error);
-}
-
-function shouldFallbackAsyncToSync(error: unknown): boolean {
-  if (!(error instanceof AiraloError) || error.details.status !== 422) {
-    return false;
-  }
-
-  const businessError = extractAiraloBusinessError(error.details.body);
-  const signals = [businessError?.reason, businessError?.message, error.message]
-    .filter(
-      (value): value is string =>
-        typeof value === "string" && value.trim().length > 0,
-    )
-    .map((value) => value.toLowerCase());
-
-  return signals.some(
-    (value) =>
-      value.includes("not opted in") ||
-      value.includes("no webhook url provided") ||
-      value.includes("webhook url"),
-  );
-}
-
-function extractAiraloRequestId(body: unknown): string | null {
-  if (typeof body !== "object" || body === null) {
-    return null;
-  }
-
-  const candidate =
-    (body as { request_id?: unknown }).request_id ??
-    (body as { requestId?: unknown }).requestId;
-
-  if (typeof candidate === "string" && candidate.trim()) {
-    return candidate;
-  }
-
-  return null;
-}
-
-function createResultFromExistingOrder(order: {
-  id: string;
-  orderNumber?: string | null;
-  requestId?: string | null;
-}): CreateOrderResult {
-  return {
-    orderId: order.id,
-    orderNumber: order.orderNumber ?? null,
-    requestId: order.requestId ?? order.orderNumber ?? order.id,
-  };
-}
-
-function assertValidReservedOrderSnapshot(
-  snapshot: ReservedOrderSnapshot,
-): void {
-  if (
-    !snapshot.orderId ||
-    !snapshot.packageId ||
-    !snapshot.airaloPackageId ||
-    !snapshot.packageTitle ||
-    !Number.isInteger(snapshot.quantity) ||
-    snapshot.quantity < DEFAULT_QUANTITY ||
-    snapshot.quantity > MAX_QUANTITY ||
-    !Number.isInteger(snapshot.totalCents) ||
-    snapshot.totalCents < 0 ||
-    !snapshot.currency
-  ) {
-    throw new OrderServiceError("Checkout order snapshot is invalid.", 500);
-  }
-}
-
-async function claimReservedOrderForSubmission(
-  db: PrismaDbClient,
-  snapshot: ReservedOrderSnapshot,
-): Promise<CreateOrderResult | null> {
-  assertValidReservedOrderSnapshot(snapshot);
-
-  const existing = await db.esimOrder.findUnique({
-    where: { id: snapshot.orderId },
-    select: {
-      id: true,
-      orderNumber: true,
-      requestId: true,
-      status: true,
-    },
-  });
-
-  if (!existing) {
-    throw new OrderServiceError("Reserved checkout order was not found.", 500);
-  }
-
-  if (existing.orderNumber || existing.requestId) {
-    return createResultFromExistingOrder(existing);
-  }
-
-  const claim = await db.esimOrder.updateMany({
-    where: {
-      id: snapshot.orderId,
-      orderNumber: null,
-      requestId: null,
-      status: { in: RESERVED_ORDER_CLAIMABLE_STATUSES },
-    },
-    data: {
-      status: RESERVED_ORDER_SUBMITTING_STATUS,
-    },
-  });
-
-  if (claim.count > 0) {
-    return null;
-  }
-
-  const current = await db.esimOrder.findUnique({
-    where: { id: snapshot.orderId },
-    select: {
-      id: true,
-      orderNumber: true,
-      requestId: true,
-      status: true,
-    },
-  });
-
-  if (!current) {
-    throw new OrderServiceError("Reserved checkout order was not found.", 500);
-  }
-
-  return createResultFromExistingOrder(current);
-}
-
-async function markReservedOrderSubmissionFailed(
-  db: PrismaDbClient,
-  snapshot: ReservedOrderSnapshot | null,
-): Promise<void> {
-  if (!snapshot) {
-    return;
-  }
-
-  try {
-    await db.esimOrder.updateMany({
-      where: {
-        id: snapshot.orderId,
-        orderNumber: null,
-        requestId: null,
-        status: RESERVED_ORDER_SUBMITTING_STATUS,
-      },
-      data: {
-        status: RESERVED_ORDER_FAILED_STATUS,
-      },
-    });
-  } catch (error) {
-    logOrderWarn("order.reserved.mark_failed_failed", {
-      orderId: snapshot.orderId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
 }
 
 export async function createOrder(
@@ -1104,12 +173,10 @@ export async function createOrder(
     );
   }
 
-  const { packageId, quantity, customerEmail } = parsedInput.data;
   const db = options.prisma ?? prismaClient;
   const reservedOrder = options.reservedOrder ?? null;
-  const submissionMode = options.submissionMode ?? "async";
-  let resolvedSubmissionMode: "async" | "sync" =
-    submissionMode === "sync" ? "sync" : "async";
+  const submissionMode: OrderSubmissionMode =
+    options.submissionMode === "sync" ? "sync" : "async";
 
   const reservedResult = reservedOrder
     ? await claimReservedOrderForSubmission(db, reservedOrder)
@@ -1118,96 +185,28 @@ export async function createOrder(
     return reservedResult;
   }
 
-  let pkg: { id: string; airaloPackageId: string; title: string };
-  let normalisedQuantity: number;
-  let orderTotalCents: number;
-  let currencyCode: string;
-  const resolvedCustomerEmail = reservedOrder?.customerEmail ?? customerEmail;
+  const resolvedPackage = await resolveOrderPackage(
+    parsedInput.data,
+    db,
+    startedAt,
+    reservedOrder,
+  );
 
-  if (reservedOrder) {
-    pkg = {
-      id: reservedOrder.packageId,
-      airaloPackageId: reservedOrder.airaloPackageId,
-      title: reservedOrder.packageTitle,
-    };
-    normalisedQuantity = reservedOrder.quantity;
-    orderTotalCents = reservedOrder.totalCents;
-    currencyCode = reservedOrder.currency;
-  } else {
-    const resolvedPackage = await findActivePackageByIdentifier(db, packageId);
-    if (!resolvedPackage) {
-      const lookupDiagnostics = await inspectPackageIdentifierLookup(
-        db,
-        packageId,
-      );
-      console.info("order.package.lookup", {
-        packageId,
-        ...lookupDiagnostics,
-      });
-    }
-
-    if (!resolvedPackage) {
-      logOrderError("order.package.unavailable", {
-        packageId,
-      });
-
-      recordOrderMetrics({
-        result: "error",
-        reason: "validation_failed",
-        durationMs: Date.now() - startedAt,
-        airaloStatus: "validation",
-      });
-
-      throw new OrderValidationError("Selected plan is no longer available.");
-    }
-
-    const packagePrice = getPackagePrice(resolvedPackage);
-
-    if (!packagePrice) {
-      logOrderError("order.package.missing_price", {
-        packageId: resolvedPackage.id,
-        packageExternalId: resolvedPackage.airaloPackageId,
-      });
-
-      recordOrderMetrics({
-        result: "error",
-        reason: "validation_failed",
-        durationMs: Date.now() - startedAt,
-        airaloStatus: "validation",
-      });
-
-      throw new OrderValidationError("Selected plan is no longer available.");
-    }
-
-    pkg = resolvedPackage;
-    normalisedQuantity = normaliseQuantity(quantity);
-    orderTotalCents = packagePrice.sellingPriceCents * normalisedQuantity;
-    currencyCode = packagePrice.currencyCode;
-  }
-
-  const description = `${normalisedQuantity} x ${pkg.title}`;
   let asyncWebhookUrl: string | null = null;
   try {
     asyncWebhookUrl =
-      resolvedSubmissionMode === "async"
-        ? resolveRequiredAsyncWebhookUrl(options)
-        : null;
+      submissionMode === "async" ? resolveRequiredAsyncWebhookUrl(options) : null;
   } catch (error) {
     await markReservedOrderSubmissionFailed(db, reservedOrder);
     throw error;
   }
-  const orderPayload: CreateOrderPayload = {
-    package_id: pkg.airaloPackageId,
-    quantity: String(normalisedQuantity),
-    type: "sim",
-    description,
-    brand_settings_name: AIRALO_BRAND_SETTINGS_NAME,
-  };
 
-  if (resolvedCustomerEmail) {
-    orderPayload.to_email = resolvedCustomerEmail;
-    orderPayload["sharing_option[]"] = ["link"];
-  }
+  const orderPayload = buildAiraloOrderPayload({
+    pkg: resolvedPackage.pkg,
+    quantity: resolvedPackage.quantity,
+    customerEmail: resolvedPackage.customerEmail,
+  });
+
   let airalo: AiraloClient;
   try {
     airalo = options.airaloClient ?? resolveAiraloClient();
@@ -1215,300 +214,66 @@ export async function createOrder(
     await markReservedOrderSubmissionFailed(db, reservedOrder);
     throw error;
   }
+
   const airaloCallStartedAt = Date.now();
-  let airaloAsyncResponse: SubmitOrderAsyncResponse | null = null;
-  let airaloOrderResponse: OrderResponse | null = null;
-  let airaloAck: SubmitOrderAsyncAck | null = null;
-  let airaloOrder: AiraloOrder | null = null;
-  let airaloLatencyMs = 0;
-
-  const invokeWithBackoff = async <T>(fn: () => Promise<T>): Promise<T> => {
-    let attempt = 0;
-    let lastError: unknown;
-    while (attempt < ORDER_RATE_LIMIT_RETRY.attempts) {
-      try {
-        return await fn();
-      } catch (error) {
-        lastError = error;
-        const isRateLimit =
-          error instanceof AiraloError && error.details.status === 429;
-        if (!isRateLimit) {
-          throw error;
-        }
-        const delayMs =
-          ORDER_RATE_LIMIT_RETRY.baseDelayMs * 2 ** attempt +
-          Math.floor(Math.random() * 150);
-        await new Promise((r) => setTimeout(r, delayMs));
-        attempt += 1;
-      }
-    }
-    throw lastError;
-  };
-
+  let airaloSubmission: Awaited<ReturnType<typeof submitAiraloOrder>>;
   try {
-    if (resolvedSubmissionMode === "async") {
-      try {
-        const asyncOrderPayload: CreateOrderPayload = asyncWebhookUrl
-          ? { ...orderPayload, webhook_url: asyncWebhookUrl }
-          : orderPayload;
-        airaloAsyncResponse = await invokeWithBackoff(() =>
-          airalo.createOrderAsyncResponse(asyncOrderPayload),
-        );
-        airaloAck = airaloAsyncResponse.data;
-      } catch (asyncError: unknown) {
-        if (!shouldFallbackAsyncToSync(asyncError)) {
-          throw asyncError;
-        }
-
-        logOrderWarn("airalo.order.async_fallback_sync", {
-          packageId: pkg.id,
-          packageExternalId: pkg.airaloPackageId,
-          reason:
-            asyncError instanceof Error
-              ? asyncError.message
-              : "Airalo async order endpoint unavailable for this account.",
-        });
-
-        resolvedSubmissionMode = "sync";
-        airaloOrderResponse = await invokeWithBackoff(() =>
-          airalo.createOrderResponse(orderPayload),
-        );
-        airaloOrder = airaloOrderResponse.data;
-      }
-    } else {
-      airaloOrderResponse = await invokeWithBackoff(() =>
-        airalo.createOrderResponse(orderPayload),
-      );
-      airaloOrder = airaloOrderResponse.data;
-    }
+    airaloSubmission = await submitAiraloOrder({
+      airalo,
+      pkg: resolvedPackage.pkg,
+      payload: orderPayload,
+      submissionMode,
+      asyncWebhookUrl,
+    });
   } catch (error: unknown) {
-    airaloLatencyMs = Date.now() - airaloCallStartedAt;
-    await markReservedOrderSubmissionFailed(db, reservedOrder);
-
-    if (error instanceof AiraloError) {
-      const requestId = extractAiraloRequestId(error.details.body);
-      const businessError = extractAiraloBusinessError(error.details.body);
-      const businessMessage =
-        businessError?.reason ?? businessError?.message ?? null;
-      if (error.details.status === 429) {
-        recordRateLimit("orders");
-      }
-
-      const isAiraloValidationError = error.details.status === 422;
-
-      logOrderError("airalo.order.create.failed", {
-        packageId: pkg.id,
-        packageExternalId: pkg.airaloPackageId,
-        airaloStatus: error.details.status,
-        airaloRequestId: requestId,
-        airaloErrorCode: businessError?.code ?? null,
-        airaloErrorReason: businessError?.reason ?? null,
-        latencyMs: airaloLatencyMs,
-        message: error.message,
-      });
-
-      if (isAiraloValidationError) {
-        const fieldErrors = extractAiraloValidationErrors(error.details.body);
-        const validationFields = fieldErrors ? Object.keys(fieldErrors) : null;
-        logOrderError("order.validation.failed", {
-          packageId: pkg.id,
-          packageExternalId: pkg.airaloPackageId,
-          airaloStatus: error.details.status,
-          airaloRequestId: requestId,
-          airaloErrorCode: businessError?.code ?? null,
-          airaloErrorReason: businessError?.reason ?? null,
-          latencyMs: airaloLatencyMs,
-          fieldErrors,
-          validationFields,
-        });
-      }
-
-      const classification = classifyAiraloBusinessReason(
-        businessError,
-        businessMessage ?? error.message,
-        error.details.status,
-      );
-
-      if (
-        shouldAutoDeactivatePackage(businessError?.code ?? null, classification)
-      ) {
-        autoDeactivatePackage(pkg, {
-          reason: businessMessage ?? error.message,
-          businessCode: businessError?.code ?? null,
-          classification,
-          prisma: db,
-        }).catch((deactivationError) => {
-          logOrderWarn("catalog.package.auto_pause_failed", {
-            packageId: pkg.id,
-            packageExternalId: pkg.airaloPackageId,
-            error:
-              deactivationError instanceof Error
-                ? deactivationError.message
-                : String(deactivationError),
-          });
-        });
-      }
-
-      const mapped = mapAiraloError(error, businessError);
-
-      const metricsReason = isAiraloValidationError
-        ? "validation_failed"
-        : (classification ??
-          (error.details.status === 429 ? "rate_limited" : "airalo_error"));
-
-      recordOrderMetrics({
-        result: "error",
-        reason: metricsReason,
-        durationMs: Date.now() - startedAt,
-        airaloStatus: error.details.status,
-      });
-
-      throw mapped;
-    }
-
-    const mapped = new OrderServiceError(
-      "Failed to create order with Airalo.",
-      500,
+    return handleAiraloOrderFailure({
       error,
-    );
-
-    logOrderError("airalo.order.create.failed", {
-      packageId: pkg.id,
-      packageExternalId: pkg.airaloPackageId,
-      latencyMs: airaloLatencyMs,
-      message: mapped.message,
-      error: error instanceof Error ? error.message : String(error),
-    });
-
-    recordOrderMetrics({
-      result: "error",
-      reason: "unexpected",
-      durationMs: Date.now() - startedAt,
-      airaloStatus: "unknown",
-    });
-
-    throw mapped;
-  }
-
-  airaloLatencyMs = Date.now() - airaloCallStartedAt;
-
-  if (resolvedSubmissionMode === "async" && airaloAck) {
-    logOrderInfo("airalo.order.async.accepted", {
-      packageId: pkg.id,
-      packageExternalId: pkg.airaloPackageId,
-      airaloRequestId: airaloAck.request_id,
-      acceptedAt: airaloAck.accepted_at,
-      latencyMs: airaloLatencyMs,
-    });
-  } else if (airaloOrder) {
-    logOrderInfo("airalo.order.sync.completed", {
-      packageId: pkg.id,
-      packageExternalId: pkg.airaloPackageId,
-      airaloOrderId: resolveAiraloOrderId(airaloOrder),
-      airaloRequestId:
-        airaloOrder.order_reference ??
-        resolveAiraloOrderId(airaloOrder) ??
-        null,
-      status: resolveAiraloStatus(airaloOrder),
-      latencyMs: airaloLatencyMs,
+      pkg: resolvedPackage.pkg,
+      startedAt,
+      airaloLatencyMs: Date.now() - airaloCallStartedAt,
+      beforeMapping: () =>
+        markReservedOrderSubmissionFailed(db, reservedOrder),
+      autoDeactivatePackage: (deactivation) =>
+        autoDeactivatePackage(resolvedPackage.pkg, {
+          ...deactivation,
+          prisma: db,
+        }),
     });
   }
+
+  logAiraloSubmissionSuccess({
+    pkg: resolvedPackage.pkg,
+    submission: airaloSubmission,
+  });
 
   try {
-    const createOrderRecords = async (tx: Prisma.TransactionClient) => {
-      const syncOrderNumber = resolveAiraloOrderId(airaloOrder);
-      const syncRequestId = airaloOrder?.order_reference ?? syncOrderNumber;
-
-      const orderData = {
-        userId: options.userId ?? null,
-        orderNumber: syncOrderNumber,
-        requestId: airaloAck?.request_id ?? syncRequestId,
-        packageId: pkg.id,
-        status: resolveAiraloStatus(airaloOrder),
-        customerEmail: resolvedCustomerEmail ?? null,
-        quantity: normalisedQuantity,
-        totalCents: orderTotalCents,
-        currency: currencyCode,
-      };
-
-      const orderRecord = reservedOrder
-        ? await tx.esimOrder.update({
-            where: { id: reservedOrder.orderId },
-            data: orderData,
-          })
-        : await tx.esimOrder.create({
-            data: orderData,
-          });
-
-      if (airaloAsyncResponse) {
-        await tx.airaloOrderSnapshot.create({
-          data: {
-            orderId: orderRecord.id,
-            source: "orders-async",
-            requestId: airaloAsyncResponse.data.request_id,
-            orderNumber: null,
-            rawPayloadJson: toPrismaJson(airaloAsyncResponse),
-          },
-        });
-      }
-
-      if (airaloOrderResponse) {
-        await tx.airaloOrderSnapshot.create({
-          data: {
-            orderId: orderRecord.id,
-            source: "orders",
-            requestId: syncRequestId,
-            orderNumber: syncOrderNumber,
-            rawPayloadJson: toPrismaJson(airaloOrderResponse),
-          },
-        });
-      }
-
-      if (airaloOrder) {
-        const iccid = resolveAiraloIccid(airaloOrder);
-        if (iccid) {
-          await tx.esimProfile.upsert({
-            where: { iccid },
-            create: {
-              iccid,
-              status: resolveAiraloStatus(airaloOrder),
-              activationCode: resolveAiraloActivationCode(airaloOrder),
-              orderId: orderRecord.id,
-            },
-            update: {
-              status: resolveAiraloStatus(airaloOrder),
-              activationCode: resolveAiraloActivationCode(airaloOrder),
-              orderId: orderRecord.id,
-            },
-          });
-        }
-
-        const installationPayload = createInstallationPayload(airaloOrder);
-        await tx.esimInstallationPayload.upsert({
-          where: { orderId: orderRecord.id },
-          create: { orderId: orderRecord.id, payload: installationPayload },
-          update: { payload: installationPayload },
-        });
-      }
-
-      return orderRecord;
-    };
-
-    const result = isPrismaClient(db)
-      ? await db.$transaction(async (tx) => createOrderRecords(tx))
-      : await createOrderRecords(db);
+    const result = await persistOrderRecords(db, {
+      userId: options.userId ?? null,
+      reservedOrder,
+      pkg: resolvedPackage.pkg,
+      customerEmail: resolvedPackage.customerEmail,
+      quantity: resolvedPackage.quantity,
+      totalCents: resolvedPackage.totalCents,
+      currency: resolvedPackage.currency,
+      airaloAsyncResponse: airaloSubmission.airaloAsyncResponse,
+      airaloOrderResponse: airaloSubmission.airaloOrderResponse,
+      airaloAck: airaloSubmission.airaloAck,
+      airaloOrder: airaloSubmission.airaloOrder,
+    });
 
     const totalDuration = Date.now() - startedAt;
 
     logOrderInfo("order.create.completed", {
       orderId: result.id,
       orderNumber: result.orderNumber ?? null,
-      packageId: pkg.id,
+      packageId: resolvedPackage.pkg.id,
       airaloRequestId:
-        airaloAck?.request_id ?? airaloOrder?.order_reference ?? null,
-      airaloAcceptedAt: airaloAck?.accepted_at ?? null,
-      submissionMode: resolvedSubmissionMode,
-      airaloLatencyMs,
+        airaloSubmission.airaloAck?.request_id ??
+        airaloSubmission.airaloOrder?.order_reference ??
+        null,
+      airaloAcceptedAt: airaloSubmission.airaloAck?.accepted_at ?? null,
+      submissionMode: airaloSubmission.resolvedSubmissionMode,
+      airaloLatencyMs: airaloSubmission.airaloLatencyMs,
       totalDurationMs: totalDuration,
     });
 
@@ -1517,78 +282,27 @@ export async function createOrder(
       reason: "ok",
       durationMs: totalDuration,
       airaloStatus:
-        resolvedSubmissionMode === "async"
+        airaloSubmission.resolvedSubmissionMode === "async"
           ? "accepted"
-          : (airaloOrder?.status ?? "completed"),
+          : (airaloSubmission.airaloOrder?.status ?? "completed"),
     });
-
-    const installationPayload = airaloOrder
-      ? parseInstallationPayloadJson(createInstallationPayload(airaloOrder))
-      : null;
 
     return {
       orderId: result.id,
       orderNumber: result.orderNumber ?? null,
       requestId: result.requestId ?? result.orderNumber ?? null,
-      installation: airaloOrder
-        ? {
-            qrCodeData: resolveStringFromPayload(
-              installationPayload,
-              "qrCodeData",
-            ),
-            qrCodeUrl: resolveStringFromPayload(
-              installationPayload,
-              "qrCodeUrl",
-            ),
-            smdpAddress: resolveStringFromPayload(installationPayload, "lpa"),
-            activationCode: resolveStringFromPayload(
-              installationPayload,
-              "activationCode",
-            ),
-            apn:
-              resolveStringFromPayload(installationPayload, "apn") ??
-              resolveAiraloOrderApn(airaloOrder),
-          }
-        : undefined,
+      installation: buildCreateOrderInstallationResult(
+        airaloSubmission.airaloOrder,
+      ),
     };
   } catch (error: unknown) {
-    logOrderError("order.persistence.failed", {
-      packageId: pkg.id,
-      airaloRequestId:
-        airaloAck?.request_id ?? airaloOrder?.order_reference ?? null,
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
-
-    recordOrderMetrics({
-      result: "error",
-      reason: "persistence_failed",
-      durationMs: Date.now() - startedAt,
-      airaloStatus:
-        resolvedSubmissionMode === "async"
-          ? "accepted"
-          : (airaloOrder?.status ?? "completed"),
-    });
-
-    if (error instanceof OrderServiceError) {
-      throw error;
-    }
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2002") {
-        throw new OrderServiceError(
-          "An order with this reference already exists.",
-          409,
-          error,
-        );
-      }
-
-      throw new OrderServiceError("Failed to persist the order.", 500, error);
-    }
-
-    throw new OrderServiceError(
-      "Unexpected error while creating the order.",
-      500,
+    return handlePersistenceError({
       error,
-    );
+      pkg: resolvedPackage.pkg,
+      startedAt,
+      resolvedSubmissionMode: airaloSubmission.resolvedSubmissionMode,
+      airaloAck: airaloSubmission.airaloAck,
+      airaloOrder: airaloSubmission.airaloOrder,
+    });
   }
 }
