@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/simplify
+      ORDER_ACCESS_SECRET: ci-order-access-secret
+      NEXTAUTH_SECRET: ci-nextauth-secret
+      METRICS_BEARER_TOKEN: ci-metrics-token
+      DPO_IPN_SECRET: ci-dpo-ipn-secret
+      NEXT_PUBLIC_SANITY_PROJECT_ID: aaaaaaaa
+      NEXT_PUBLIC_SANITY_DATASET: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run airalo:test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Production dependency audit
+        run: npm run security:audit
+        continue-on-error: true

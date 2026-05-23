@@ -6,7 +6,7 @@ This document describes the operational playbooks for the Airalo integration, in
 
 | Signal | Location | Notes |
 | --- | --- | --- |
-| Prometheus metrics | `GET /api/metrics` | Includes order/webhook counters and histograms. |
+| Prometheus metrics | `GET /api/metrics` | Includes order/webhook counters and histograms. Requires `Authorization: Bearer <METRICS_BEARER_TOKEN>` in production. |
 | OpenTelemetry metrics | `airalo.*` metric namespace | Emitted via the default SDK (no-op when an exporter is not configured). |
 | Structured logs | Application stdout | JSON records with `service: "order-service"`. |
 
@@ -181,6 +181,6 @@ has been retried and the last observed error message.
 ## Maintenance Checklist
 
 - Rotate `AIRALO_WEBHOOK_SECRET` regularly and update both the Airalo dashboard and environment variables.
-- Ensure `/api/metrics` is scraped by Prometheus (or exposed via an agent) and forwarded to your observability stack.
+- Ensure `/api/metrics` is scraped with `METRICS_BEARER_TOKEN` by Prometheus (or exposed via an agent) and forwarded to your observability stack.
 - Keep Prisma migrations in sync with the webhook persistence schema (particularly `WebhookEvent`).
 - Review alert thresholds quarterly based on observed traffic.

@@ -1,7 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
-import { ensureOrderInstallation, OrderServiceError } from "@/lib/orders/service";
+import {
+  ensureOrderInstallation,
+  getOrderWithDetails,
+  OrderServiceError,
+  type OrderWithDetails,
+} from "@/lib/orders/service";
 import prisma from "@/lib/db/client";
 import { pollUsageForProfile } from "@/lib/orders/usage";
 import { getTopUpPackages } from "@/lib/orders/topups";
@@ -11,6 +17,13 @@ import { getServerSession } from "next-auth";
 import InstallationInstructions from "@/components/esim/InstallationInstructions";
 import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 import { formatCurrency } from "@/lib/format";
+import {
+  canAccessOwnerScopedRecord,
+  canIssueScopedAccessTokens,
+  hasScopedAccessFromCookieStore,
+  setScopedAccessCookie,
+  type SessionLike,
+} from "@/lib/orders/access";
 
 type OrderPageParams = {
   params: {
@@ -30,10 +43,16 @@ function formatDataAmount(value: number | null | undefined): string {
   return `${value.toFixed(2)} MB`;
 }
 
+function canAccessOrder(order: OrderWithDetails, session: SessionLike): boolean {
+  return canAccessOwnerScopedRecord(
+    order,
+    session,
+    hasScopedAccessFromCookieStore(cookies(), "order", order.id),
+  );
+}
+
 async function purchaseTopUp(
   orderIdentifier: string,
-  profileIccid: string | null,
-  customerEmail: string | null,
   formData: FormData,
 ): Promise<void> {
   "use server";
@@ -48,18 +67,39 @@ async function purchaseTopUp(
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const session = await getServerSession(authOptions);
+  const order = await getOrderWithDetails(orderIdentifier);
+
+  if (!order) {
+    notFound();
+  }
+
+  if (!canAccessOrder(order, session)) {
+    if (!session?.user?.id) {
+      redirect(
+        `/auth/signin?callbackUrl=${encodeURIComponent(`/orders/${order.id}`)}`,
+      );
+    }
+
+    notFound();
+  }
+
+  const profileIccid = order.profiles[0]?.iccid ?? null;
 
   const checkout = await createCheckout(
     {
       packageId,
       quantity: 1,
-      customerEmail: customerEmail ?? session?.user?.email ?? undefined,
+      customerEmail: order.customerEmail ?? session?.user?.email ?? undefined,
       intent: "top-up",
-      topUpForOrderId: orderIdentifier,
+      topUpForOrderId: order.id,
       topUpForIccid: profileIccid ?? undefined,
     },
     { baseUrl, userId: session?.user?.id },
   );
+
+  if (canIssueScopedAccessTokens()) {
+    setScopedAccessCookie(cookies(), "checkout", checkout.checkoutId);
+  }
 
   redirect(`/checkout/${checkout.checkoutId}`);
 }
@@ -103,11 +143,29 @@ export const metadata: Metadata = {
 
 export default async function OrderPage({ params }: OrderPageParams) {
   const identifier = decodeURIComponent(params.orderId);
-  const order = await ensureOrderInstallation(identifier);
+  const session = await getServerSession(authOptions);
+  const existingOrder = await getOrderWithDetails(identifier);
+
+  if (!existingOrder) {
+    notFound();
+  }
+
+  if (!canAccessOrder(existingOrder, session)) {
+    if (!session?.user?.id) {
+      redirect(
+        `/auth/signin?callbackUrl=${encodeURIComponent(`/orders/${params.orderId}`)}`,
+      );
+    }
+
+    notFound();
+  }
+
+  const order = await ensureOrderInstallation(existingOrder.id);
 
   if (!order) {
     notFound();
   }
+
   const pkg = await findPackageDisplayByIdentifier(prisma, order.packageId);
   const profile = order.profiles[0] ?? null;
 
@@ -120,8 +178,6 @@ export default async function OrderPage({ params }: OrderPageParams) {
   const purchaseAction = purchaseTopUp.bind(
     null,
     order.id,
-    profile?.iccid ?? null,
-    order.customerEmail ?? null,
   );
 
   return (

@@ -5,6 +5,10 @@ import { Prisma } from "@prisma/client";
 
 import { createCheckout } from "@/lib/payments/checkouts";
 import { authOptions } from "@/lib/auth/options";
+import {
+  canIssueScopedAccessTokens,
+  setScopedAccessCookie,
+} from "@/lib/orders/access";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +85,18 @@ export async function POST(request: Request) {
   try {
     const rawBody = await request.json();
     const session = await getServerSession(authOptions);
+    const canIssueGuestAccess = canIssueScopedAccessTokens();
+
+    if (!session?.user?.id && !canIssueGuestAccess) {
+      return NextResponse.json(
+        {
+          message:
+            "Checkout is temporarily unavailable. Guest access token signing is not configured.",
+        },
+        { status: 503 },
+      );
+    }
+
     const payload =
       rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
         ? { ...rawBody }
@@ -100,7 +116,12 @@ export async function POST(request: Request) {
       userId: session?.user?.id,
     });
 
-    return NextResponse.json(result, { status: 201 });
+    const response = NextResponse.json(result, { status: 201 });
+    if (canIssueGuestAccess) {
+      setScopedAccessCookie(response.cookies, "checkout", result.checkoutId);
+    }
+
+    return response;
   } catch (error) {
     const resolved = resolveCheckoutError(error);
     return NextResponse.json(

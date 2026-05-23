@@ -1,7 +1,16 @@
 import { unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 
-import { jsonApiError, jsonBadRequest, jsonServerError } from "@/lib/api/errors";
+import prisma from "@/lib/db/client";
+import {
+  jsonApiError,
+  jsonBadRequest,
+  jsonForbidden,
+  jsonNotFound,
+  jsonServerError,
+} from "@/lib/api/errors";
+import { authOptions } from "@/lib/auth/options";
 import {
   getInstallationInstructions,
   InstallationInstructionsError,
@@ -9,6 +18,10 @@ import {
 import { getSimDetails } from "@/lib/airalo";
 import { isValidIccid, normalizeIccid } from "@/lib/esim/iccid";
 import type { InstallationInstructionsPayload } from "@/lib/esim/instructionsPayload";
+import {
+  canAccessOwnerScopedRecord,
+  hasScopedAccessFromCookieHeader,
+} from "@/lib/orders/access";
 
 const CACHE_TAG: string[] = ["airalo", "sims", "instructions"];
 const CACHE_REVALIDATE_SECONDS = 60 * 30;
@@ -58,6 +71,39 @@ export async function GET(
   const preferredLanguage = extractPreferredLanguage(
     request.headers.get("accept-language"),
   );
+
+  const profile = await prisma.esimProfile.findUnique({
+    where: { iccid },
+    select: {
+      order: {
+        select: {
+          id: true,
+          userId: true,
+        },
+      },
+    },
+  });
+
+  if (!profile?.order) {
+    return jsonNotFound(
+      "sim_not_found",
+      "No eSIM profile was found for this ICCID.",
+    );
+  }
+
+  const session = await getServerSession(authOptions);
+  const hasOrderToken = hasScopedAccessFromCookieHeader(
+    request.headers.get("cookie"),
+    "order",
+    profile.order.id,
+  );
+
+  if (!canAccessOwnerScopedRecord(profile.order, session, hasOrderToken)) {
+    return jsonForbidden(
+      "sim_access_denied",
+      "You do not have access to this eSIM profile.",
+    );
+  }
 
   const simDetailsPromise = getSimDetails(iccid, { include: ["share"] }).catch(
     (error) => {

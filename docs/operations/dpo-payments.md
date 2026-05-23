@@ -8,21 +8,24 @@ Set the following environment variables in production and non-production environ
 
 | Variable | Description |
 | --- | --- |
-| `DPO_MERCHANT_ID` | Merchant identifier issued by DPO. |
 | `DPO_COMPANY_TOKEN` | Company token supplied by DPO for API access. |
-| `DPO_API_KEY` | Secret key used to sign API and IPN requests. |
-| `DPO_SERVICE_URL` | Base URL for the DPO REST API (defaults to `https://secure.3gdirectpay.com/api/v1`). |
+| `DPO_SERVICE_TYPE` | Service type identifier supplied by DPO for the product being sold. |
+| `DPO_SERVICE_URL` | Base URL for the DPO API (defaults to `https://secure.3gdirectpay.com/API/v6`). |
 | `DPO_PAYMENT_URL` | Base URL for hosted payment pages (defaults to `https://secure.3gdirectpay.com`). |
 | `DPO_IPN_SECRET` | Shared secret for validating IPN notifications. |
+| `NEXTAUTH_SECRET` | Secret used by NextAuth sessions. |
+| `ORDER_ACCESS_SECRET` | Secret used to sign scoped checkout/order access cookies for guest checkouts. |
 
 `NEXT_PUBLIC_APP_URL` (or `VERCEL_URL`) must also point to the public HTTPS domain so that checkout creation can construct absolute callback URLs.
 
 ## Checkout lifecycle
 
 1. `/api/checkouts` validates the requested package, persists a `CheckoutSession`, and creates a DPO transaction.
-2. Customers are redirected to DPO's hosted page. On completion DPO sends both a browser redirect to `/checkout/[id]/return` and a server-to-server notification to `/api/payments/dpo/ipn`.
-3. The IPN handler validates the signature, stores the payload in `PaymentTransactionEvent`, updates the payment status, and finalises the order when the status is `approved`.
-4. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` or `/checkout/{id}/failed`.
+2. `/api/checkouts` sets a scoped HTTP-only checkout access cookie. Authenticated users can also access their own checkout by session ownership.
+3. Customers are redirected to DPO's hosted page. On completion DPO sends both a browser redirect to `/checkout/[id]/return` and a server-to-server notification to `/api/payments/dpo/ipn`.
+4. The IPN handler validates the signature, stores the payload in `PaymentTransactionEvent`, updates the payment status, and finalises the order when the status is `approved`.
+5. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` or `/checkout/{id}/failed`.
+6. When finalisation exposes an order ID, the status API sets a scoped HTTP-only order access cookie for guest order-page and eSIM-instruction access.
 
 ## Runbook
 
@@ -37,11 +40,12 @@ Set the following environment variables in production and non-production environ
 
 1. Confirm `DPO_IPN_SECRET` matches the value configured in the DPO dashboard.
 2. Inspect the latest `PaymentTransactionEvent` entries for `eventType=ipn` to review the raw payload.
-3. Temporarily disable strict signature verification by rotating the secret to match the inbound payloads, then coordinate a full rotation with DPO.
+3. Do not unset `DPO_IPN_SECRET` in production. Production fails closed when the secret is missing.
+4. Rotate the secret in both DPO and the platform, redeploy, and replay the affected IPNs if needed.
 
 ### Credential rotation
 
-1. Request new credentials from DPO (merchant ID, company token, API key, IPN secret).
+1. Request new credentials from DPO (company token, service type, IPN secret).
 2. Update platform secrets and redeploy.
 3. Verify health by creating a checkout in the sandbox environment and ensuring it moves to `approved` status.
 

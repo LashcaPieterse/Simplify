@@ -4,6 +4,8 @@ Modern landing page for the Simplify eSIM marketplace. Built with Next.js, TypeS
 
 ## Getting started
 
+Use Node.js 20 or newer. The production and CI workflows assume Node 20.
+
 ```bash
 npm install
 npm run dev
@@ -81,6 +83,33 @@ The handler revalidates the homepage, individual country, plan, bundle, and reso
 - `npm run build` – create a production build.
 - `npm run start` – serve the production build.
 - `npm run lint` – run linting.
+- `npm run typecheck` – run TypeScript without emitting files.
+- `npm run airalo:test` – run Airalo/order/payment unit tests.
+- `npm run security:audit` – report high-severity production dependency advisories.
+
+Dependency advisory triage is tracked in [`docs/operations/dependency-security.md`](docs/operations/dependency-security.md).
+
+## Production access and payment security
+
+Paid order data is protected by authenticated ownership or scoped signed cookies issued during checkout. Configure `NEXTAUTH_SECRET` and `ORDER_ACCESS_SECRET` before accepting guest checkouts. `ORDER_ACCESS_SECRET` can be rotated independently; keep it long and random.
+
+DPO payment IPNs require `DPO_IPN_SECRET` in production. Unsigned IPNs are accepted only outside production for local development. Prometheus metrics at `/api/metrics` require `METRICS_BEARER_TOKEN` in production.
+
+Set these payment and delivery variables before enabling checkout:
+
+```
+NEXT_PUBLIC_APP_URL=https://<your-domain>
+NEXTAUTH_SECRET=<long-random-string>
+ORDER_ACCESS_SECRET=<long-random-string>
+DPO_COMPANY_TOKEN=<dpo-company-token>
+DPO_SERVICE_TYPE=<dpo-service-type>
+DPO_SERVICE_URL=https://secure.3gdirectpay.com/API/v6
+DPO_PAYMENT_URL=https://secure.3gdirectpay.com
+DPO_IPN_SECRET=<long-random-string>
+RESEND_API_KEY=<resend-api-key>
+RECEIPT_EMAIL_FROM=receipts@<your-domain>
+METRICS_BEARER_TOKEN=<long-random-string>
+```
 
 ## Airalo catalog sync
 

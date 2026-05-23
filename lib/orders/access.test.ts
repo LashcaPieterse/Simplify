@@ -1,0 +1,86 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  canAccessOwnerScopedRecord,
+  createScopedAccessToken,
+  hasScopedAccessFromCookieHeader,
+  scopedAccessCookieName,
+  verifyScopedAccessToken,
+} from "./access";
+
+function withAccessSecret<T>(fn: () => T): T {
+  const previous = process.env.ORDER_ACCESS_SECRET;
+  process.env.ORDER_ACCESS_SECRET = "test-order-access-secret";
+  try {
+    return fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ORDER_ACCESS_SECRET;
+    } else {
+      process.env.ORDER_ACCESS_SECRET = previous;
+    }
+  }
+}
+
+test("scoped order access tokens validate scope, id, signature, and expiry", () => {
+  withAccessSecret(() => {
+    const issuedAt = Date.now();
+    const token = createScopedAccessToken("order", "order-1", {
+      issuedAt,
+      ttlSeconds: 60,
+    });
+
+    assert.equal(verifyScopedAccessToken(token, "order", "order-1"), true);
+    assert.equal(verifyScopedAccessToken(token, "checkout", "order-1"), false);
+    assert.equal(verifyScopedAccessToken(token, "order", "order-2"), false);
+    assert.equal(
+      verifyScopedAccessToken(`${token}tampered`, "order", "order-1"),
+      false,
+    );
+    assert.equal(
+      verifyScopedAccessToken(token, "order", "order-1", {
+        now: issuedAt + 61_000,
+      }),
+      false,
+    );
+  });
+});
+
+test("owner-scoped records allow owners and scoped token holders only", () => {
+  assert.equal(
+    canAccessOwnerScopedRecord(
+      { userId: "user-1" },
+      { user: { id: "user-1" } },
+      false,
+    ),
+    true,
+  );
+  assert.equal(
+    canAccessOwnerScopedRecord(
+      { userId: "user-1" },
+      { user: { id: "user-2" } },
+      false,
+    ),
+    false,
+  );
+  assert.equal(canAccessOwnerScopedRecord({ userId: null }, null, true), true);
+});
+
+test("cookie-header helper validates the scoped cookie value", () => {
+  withAccessSecret(() => {
+    const token = createScopedAccessToken("checkout", "checkout-1");
+    const name = scopedAccessCookieName("checkout", "checkout-1");
+    const header = `other=value; ${name}=${encodeURIComponent(token)}`;
+
+    assert.equal(
+      hasScopedAccessFromCookieHeader(header, "checkout", "checkout-1"),
+      true,
+    );
+    assert.equal(
+      hasScopedAccessFromCookieHeader(header, "checkout", "checkout-2"),
+      false,
+    );
+  });
+});
+

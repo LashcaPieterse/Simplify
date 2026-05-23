@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 
-import { jsonBadRequest, jsonNotFound, jsonServerError } from "@/lib/api/errors";
+import prisma from "@/lib/db/client";
+import {
+  jsonBadRequest,
+  jsonForbidden,
+  jsonNotFound,
+  jsonServerError,
+} from "@/lib/api/errors";
+import { authOptions } from "@/lib/auth/options";
+import {
+  canAccessOwnerScopedRecord,
+  canIssueScopedAccessTokens,
+  hasScopedAccessFromCookieHeader,
+  setScopedAccessCookie,
+} from "@/lib/orders/access";
 import { getCheckoutSummary, verifyCheckoutPayment } from "@/lib/payments/checkouts";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +31,30 @@ export async function GET(request: Request, context: { params: Params }) {
   }
 
   try {
+    const session = await getServerSession(authOptions);
+    const checkoutAccess = await prisma.checkoutSession.findUnique({
+      where: { id: checkoutId },
+      select: { id: true, userId: true },
+    });
+
+    if (!checkoutAccess) {
+      return jsonNotFound("checkout_not_found", "Checkout not found.");
+    }
+
+    const hasCheckoutToken = hasScopedAccessFromCookieHeader(
+      request.headers.get("cookie"),
+      "checkout",
+      checkoutId,
+    );
+    if (
+      !canAccessOwnerScopedRecord(checkoutAccess, session, hasCheckoutToken)
+    ) {
+      return jsonForbidden(
+        "checkout_access_denied",
+        "You do not have access to this checkout.",
+      );
+    }
+
     const summary = await getCheckoutSummary(checkoutId);
 
     if (!summary) {
@@ -34,7 +72,7 @@ export async function GET(request: Request, context: { params: Params }) {
       message = verification.message;
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       checkoutId: summary.id,
       status: summary.status,
       paymentStatus,
@@ -42,6 +80,12 @@ export async function GET(request: Request, context: { params: Params }) {
       message,
       paymentUrl: summary.paymentUrl,
     });
+
+    if (orderId && canIssueScopedAccessTokens()) {
+      setScopedAccessCookie(response.cookies, "order", orderId);
+    }
+
+    return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch checkout status.";
     return jsonServerError("checkout_status_failed", message);
