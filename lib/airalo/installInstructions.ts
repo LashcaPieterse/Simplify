@@ -4,7 +4,6 @@ import type {
   InstallationInstructions as RawInstallationInstructions,
   InstallationStepDictionary,
   PlatformInstallationInstructions,
-  SimInstallationInstructionsPayload,
 } from "./schemas";
 import { resolveSharedTokenCache } from "./token-cache";
 
@@ -17,11 +16,6 @@ export interface InstallationInstructionStep {
   order: number;
   text: string;
   emphasis: boolean;
-}
-
-export interface InstallationShareInfo {
-  link: string | null;
-  accessCode: string | null;
 }
 
 export interface InstallationQrInstructions {
@@ -59,7 +53,6 @@ export interface InstallationInstructionsResult {
   isRequestedLanguageAvailable: boolean;
   faqUrl: string;
   platforms: InstallationPlatformInstructions[];
-  share: InstallationShareInfo | null;
 }
 
 export interface InstallationInstructionsOptions {
@@ -264,29 +257,8 @@ function instructionsMatchRequestedLanguage(
   return normalizedInstructions.startsWith(normalizedRequested);
 }
 
-function normalizeShareInfo(
-  share: SimInstallationInstructionsPayload["share"],
-): InstallationShareInfo | null {
-  if (!share) {
-    return null;
-  }
-
-  const link = typeof share.link === "string" ? share.link.trim() : "";
-  const accessCode =
-    typeof share.access_code === "string" ? share.access_code.trim() : "";
-
-  if (!link && !accessCode) {
-    return null;
-  }
-
-  return {
-    link: link || null,
-    accessCode: accessCode || null,
-  };
-}
-
 function normalizeInstructions(
-  payload: SimInstallationInstructionsPayload,
+  payload: { instructions: RawInstallationInstructions },
   requestedLanguage: string | null,
 ): InstallationInstructionsResult {
   const instructions = payload.instructions as RawInstallationInstructions;
@@ -307,7 +279,6 @@ function normalizeInstructions(
     ),
     faqUrl: FAQ_URL,
     platforms: [...iosPlatforms, ...androidPlatforms],
-    share: normalizeShareInfo(payload.share ?? null),
   };
 }
 

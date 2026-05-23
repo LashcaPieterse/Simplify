@@ -1207,8 +1207,7 @@ export class AiraloClient {
         languageHint && languageHint.length > 0 ? languageHint : "en",
     };
 
-    const searchParams = new URLSearchParams({ include: "share" });
-    const path = `/sims/${encodeURIComponent(iccid)}/instructions?${searchParams.toString()}`;
+    const path = `/sims/${encodeURIComponent(iccid)}/instructions`;
 
     return this.request({
       path,

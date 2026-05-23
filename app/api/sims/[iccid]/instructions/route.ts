@@ -121,7 +121,7 @@ export async function GET(
       simStatus: simDetails?.simable?.status ?? null,
       recycled: Boolean(simDetails?.recycled),
       recycledAt: simDetails?.recycledAt ?? null,
-      share: (instructions.share ?? simDetails?.simable?.sharing) ?? null,
+      share: simDetails?.simable?.sharing ?? null,
     };
 
     return NextResponse.json(payload);

@@ -54,14 +54,18 @@ function jsonResponse(body: unknown, init: ResponseInit): Response {
   return new Response(JSON.stringify(body), { ...init, headers });
 }
 
-function authHeader(init?: RequestInit): string | null {
+function requestHeader(init: RequestInit | undefined, name: string): string | null {
   if (!init?.headers) {
     return null;
   }
 
   const headers =
     init.headers instanceof Headers ? init.headers : new Headers(init.headers);
-  return headers.get("Authorization");
+  return headers.get(name);
+}
+
+function authHeader(init?: RequestInit): string | null {
+  return requestHeader(init, "Authorization");
 }
 
 function requireFormData(value: FormData | null): FormData {
@@ -1313,6 +1317,111 @@ test("AiraloClient fetches Get eSIM with documented include values", async () =>
   const url = new URL(requestedUrl!);
   assert.equal(url.pathname, "/api/sims/8944465400000267221");
   assert.equal(url.searchParams.get("include"), "order,order.status,share");
+});
+
+test("AiraloClient fetches installation instructions with the documented default request shape", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let requestedUrl: string | null = null;
+  let capturedAuthHeader: string | null = null;
+  let capturedAcceptHeader: string | null = null;
+  let capturedLanguageHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/") && target.endsWith("/instructions")) {
+      requestedUrl = target;
+      capturedAuthHeader = authHeader(init);
+      capturedAcceptHeader = requestHeader(init, "Accept");
+      capturedLanguageHeader = requestHeader(init, "Accept-Language");
+      return jsonResponse(
+        {
+          data: {
+            instructions: {
+              language: "EN",
+              ios: [],
+              android: [],
+            },
+          },
+          meta: { message: "success" },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const instructions = await client.getSimInstallationInstructions(
+    "8944465400000267221",
+  );
+
+  assert.equal(instructions.instructions.language, "EN");
+  assert.equal(capturedAuthHeader, "Bearer cached-token");
+  assert.equal(capturedAcceptHeader, "application/json");
+  assert.equal(capturedLanguageHeader, "en");
+  assert(requestedUrl, "installation instructions request should have been issued");
+  const url = new URL(requestedUrl!);
+  assert.equal(url.pathname, "/api/sims/8944465400000267221/instructions");
+  assert.equal(url.search, "");
+});
+
+test("AiraloClient sends the requested language for installation instructions", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let capturedLanguageHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/") && target.endsWith("/instructions")) {
+      capturedLanguageHeader = requestHeader(init, "Accept-Language");
+      return jsonResponse(
+        {
+          data: {
+            instructions: {
+              language: "FR",
+              ios: [],
+              android: [],
+            },
+          },
+          meta: { message: "success" },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await client.getSimInstallationInstructions("8944465400000267221", {
+    acceptLanguage: "fr",
+  });
+
+  assert.equal(capturedLanguageHeader, "fr");
 });
 
 test("AiraloClient rejects undocumented Get eSIM include values", async () => {

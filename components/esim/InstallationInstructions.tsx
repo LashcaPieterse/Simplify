@@ -162,7 +162,7 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
   }, []);
 
   const instructions = data?.instructions ?? null;
-  const share = data?.share ?? instructions?.share ?? null;
+  const share = data?.share ?? null;
 
   const hasIos = instructions?.platforms.some((p) => p.platform === "ios") ?? false;
   const hasAndroid = instructions?.platforms.some((p) => p.platform === "android") ?? false;
