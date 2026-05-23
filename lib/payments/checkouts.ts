@@ -12,6 +12,19 @@ import { centsToMajorUnits } from "../format";
 import { sendOrderReceipt } from "../notifications/receipts";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { DEFAULT_QUANTITY, MAX_QUANTITY, normaliseQuantity } from "../orders/quantity";
+import {
+  buildAiraloTopUpOrderPayload,
+  logAiraloTopUpSubmissionSuccess,
+  resolveAiraloClient,
+  submitAiraloTopUpOrder,
+} from "../orders/airalo-ordering";
+import { handleAiraloOrderFailure } from "../orders/errors";
+import {
+  autoDeactivatePackage,
+  handlePersistenceError,
+  markReservedOrderSubmissionFailed,
+  persistOrderRecords,
+} from "../orders/persistence";
 import { createOrder } from "../orders/service";
 import type {
   CreateOrderOptions,
@@ -52,6 +65,7 @@ export type CheckoutSummary = {
   paymentStatus?: string;
   paymentUrl?: string;
   orderId?: string | null;
+  redirectOrderId?: string | null;
 };
 
 export type CreateCheckoutResult = {
@@ -108,6 +122,16 @@ export async function createCheckout(
   const quantity = normaliseQuantity(input.quantity);
   const packageIdIsUuid = isUuid(input.packageId);
   const checkoutUserId = await resolveCheckoutUserId(db, options.userId);
+
+  if (input.intent === "top-up") {
+    if (quantity !== 1) {
+      throw new Error("Top-up checkouts must have a quantity of 1.");
+    }
+
+    if (!input.topUpForOrderId || !input.topUpForIccid) {
+      throw new Error("Top-up checkouts require an original order and ICCID.");
+    }
+  }
 
   logOrderInfo("payments.checkout.package_lookup", {
     requestedPackageId: input.packageId,
@@ -279,6 +303,8 @@ export async function getCheckoutSummary(
     paymentStatus: latestPayment?.status ?? undefined,
     paymentUrl: latestPayment?.redirectUrl ?? undefined,
     orderId: checkout.orderId,
+    redirectOrderId:
+      checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId,
   };
 }
 
@@ -303,7 +329,12 @@ async function markCheckoutStatus(
 export async function verifyCheckoutPayment(
   checkoutId: string,
   options: { prisma?: PrismaClient } = {},
-): Promise<{ paymentStatus: string; orderId?: string | null; message?: string }> {
+): Promise<{
+  paymentStatus: string;
+  orderId?: string | null;
+  redirectOrderId?: string | null;
+  message?: string;
+}> {
   const db = options.prisma ?? prismaClient;
 
   const checkout = await db.checkoutSession.findUnique({
@@ -332,7 +363,11 @@ export async function verifyCheckoutPayment(
         prisma: db,
         forceStatus: STATUS_APPROVED,
       });
-      return { paymentStatus: payment.status, orderId: order.orderId };
+      return {
+        paymentStatus: payment.status,
+        orderId: order.orderId,
+        redirectOrderId: order.redirectOrderId ?? order.orderId,
+      };
     } catch (error) {
       logOrderError("payments.checkout.finalize_failed", {
         checkoutId: checkout.id,
@@ -344,6 +379,8 @@ export async function verifyCheckoutPayment(
       return {
         paymentStatus: payment.status,
         orderId: checkout.orderId ?? null,
+        redirectOrderId:
+          checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId,
         message,
       };
     }
@@ -368,7 +405,13 @@ export async function verifyCheckoutPayment(
       transactionToken: payment.transactionToken,
       error: error instanceof Error ? error.message : String(error),
     });
-    return { paymentStatus: payment.status ?? STATUS_PENDING, orderId: checkout.orderId ?? null, message: "Verification failed." };
+    return {
+      paymentStatus: payment.status ?? STATUS_PENDING,
+      orderId: checkout.orderId ?? null,
+      redirectOrderId:
+        checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId,
+      message: "Verification failed.",
+    };
   }
   const resultCode = verification.resultCode ?? verification.status;
   const isPaid = resultCode === "000";
@@ -400,6 +443,8 @@ export async function verifyCheckoutPayment(
   });
 
   let orderId = checkout.orderId ?? null;
+  let redirectOrderId =
+    checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId;
 
   if (isPaid || normalizedStatus === STATUS_APPROVED) {
     await markCheckoutStatus(checkout.id, STATUS_PAID, { prisma: db });
@@ -410,6 +455,7 @@ export async function verifyCheckoutPayment(
         forceStatus: normalizedStatus,
       });
       orderId = order.orderId;
+      redirectOrderId = order.redirectOrderId ?? order.orderId;
     } catch (error) {
       logOrderError("payments.checkout.finalize_failed", {
         checkoutId: checkout.id,
@@ -421,6 +467,7 @@ export async function verifyCheckoutPayment(
       return {
         paymentStatus: updated.status,
         orderId: checkout.orderId ?? null,
+        redirectOrderId,
         message,
       };
     }
@@ -428,7 +475,7 @@ export async function verifyCheckoutPayment(
     await markCheckoutStatus(checkout.id, STATUS_FAILED, { prisma: db });
   }
 
-  return { paymentStatus: updated.status, orderId, message: verificationMessage };
+  return { paymentStatus: updated.status, orderId, redirectOrderId, message: verificationMessage };
 }
 
 type FinaliseCheckoutRecord = Prisma.CheckoutSessionGetPayload<{
@@ -445,11 +492,15 @@ type CheckoutOrderRecord = {
   status?: string | null;
 };
 
-function toCreateOrderResult(order: CheckoutOrderRecord): CreateOrderResult {
+function toCreateOrderResult(
+  order: CheckoutOrderRecord,
+  options: { redirectOrderId?: string | null } = {},
+): CreateOrderResult {
   return {
     orderId: order.id,
     orderNumber: order.orderNumber ?? null,
     requestId: order.requestId ?? order.orderNumber ?? order.id,
+    redirectOrderId: options.redirectOrderId ?? null,
   };
 }
 
@@ -474,6 +525,45 @@ function buildReservedOrderSnapshot(
     totalCents: checkout.totalCents,
     currency: checkout.currency,
     customerEmail: checkout.customerEmail,
+  };
+}
+
+type TopUpCheckoutContext = {
+  originalOrderId: string;
+  iccid: string;
+};
+
+async function resolveTopUpCheckoutContext(
+  db: PrismaClient,
+  checkout: FinaliseCheckoutRecord,
+): Promise<TopUpCheckoutContext | null> {
+  if (checkout.intent !== "top-up") {
+    return null;
+  }
+
+  if (checkout.quantity !== 1) {
+    throw new Error("Top-up checkouts must have a quantity of 1.");
+  }
+
+  if (!checkout.topUpForOrderId || !checkout.topUpForIccid) {
+    throw new Error("Top-up checkout is missing its original order or ICCID.");
+  }
+
+  const profile = await db.esimProfile.findFirst({
+    where: {
+      orderId: checkout.topUpForOrderId,
+      iccid: checkout.topUpForIccid,
+    },
+    select: { id: true },
+  });
+
+  if (!profile) {
+    throw new Error("Top-up ICCID does not belong to the original order.");
+  }
+
+  return {
+    originalOrderId: checkout.topUpForOrderId,
+    iccid: checkout.topUpForIccid,
   };
 }
 
@@ -531,6 +621,101 @@ async function reserveCheckoutOrder(
   });
 }
 
+async function finaliseTopUpOrderFromCheckout(options: {
+  db: PrismaClient;
+  checkout: FinaliseCheckoutRecord;
+  payment: FinaliseCheckoutRecord["payments"][number];
+  reservation: { orderId: string };
+  topUp: TopUpCheckoutContext;
+  airaloOptions?: CreateOrderOptions;
+  startedAt: number;
+}): Promise<CreateOrderResult> {
+  const reservedOrder = buildReservedOrderSnapshot(
+    options.checkout,
+    options.reservation.orderId,
+  );
+  const pkg = {
+    id: reservedOrder.packageId,
+    airaloPackageId: reservedOrder.airaloPackageId,
+    title: reservedOrder.packageTitle,
+  };
+
+  let airalo: NonNullable<CreateOrderOptions["airaloClient"]>;
+  try {
+    airalo = options.airaloOptions?.airaloClient ?? resolveAiraloClient();
+  } catch (error) {
+    await markReservedOrderSubmissionFailed(options.db, reservedOrder);
+    throw error;
+  }
+
+  const payload = buildAiraloTopUpOrderPayload({
+    pkg,
+    iccid: options.topUp.iccid,
+  });
+
+  const airaloCallStartedAt = Date.now();
+  let submission: Awaited<ReturnType<typeof submitAiraloTopUpOrder>>;
+  try {
+    submission = await submitAiraloTopUpOrder({ airalo, payload });
+  } catch (error: unknown) {
+    return handleAiraloOrderFailure({
+      error,
+      pkg,
+      startedAt: options.startedAt,
+      airaloLatencyMs: Date.now() - airaloCallStartedAt,
+      beforeMapping: () =>
+        markReservedOrderSubmissionFailed(options.db, reservedOrder),
+      autoDeactivatePackage: (deactivation) =>
+        autoDeactivatePackage(pkg, {
+          ...deactivation,
+          prisma: options.db,
+        }),
+    });
+  }
+
+  logAiraloTopUpSubmissionSuccess({
+    pkg,
+    iccid: options.topUp.iccid,
+    submission,
+  });
+
+  try {
+    const orderRecord = await persistOrderRecords(options.db, {
+      userId: options.checkout.userId ?? null,
+      reservedOrder,
+      pkg,
+      customerEmail: options.checkout.customerEmail,
+      quantity: 1,
+      totalCents: options.checkout.totalCents,
+      currency: options.checkout.currency,
+      airaloAsyncResponse: null,
+      airaloOrderResponse: submission.airaloOrderResponse,
+      airaloAck: null,
+      airaloOrder: submission.airaloOrder,
+      airaloOrderSnapshotSource: "orders-topups",
+      persistSimProfile: false,
+      persistInstallation: false,
+      statusFallback: "completed",
+    });
+
+    return {
+      orderId: orderRecord.id,
+      orderNumber: orderRecord.orderNumber,
+      requestId: orderRecord.requestId ?? orderRecord.orderNumber,
+      redirectOrderId: options.topUp.originalOrderId,
+    };
+  } catch (error: unknown) {
+    return handlePersistenceError({
+      error,
+      pkg,
+      startedAt: options.startedAt,
+      resolvedSubmissionMode: "sync",
+      airaloAck: null,
+      airaloOrder: submission.airaloOrder,
+    });
+  }
+}
+
 async function markCheckoutFinalized({
   db,
   checkout,
@@ -584,6 +769,7 @@ export async function finaliseOrderFromCheckout(
   checkoutId: string,
   options: FinaliseOptions = {},
 ): Promise<CreateOrderResult> {
+  const startedAt = Date.now();
   const db = options.prisma ?? prismaClient;
   const checkout = await db.checkoutSession.findUnique({
     where: { id: checkoutId },
@@ -613,6 +799,7 @@ export async function finaliseOrderFromCheckout(
     throw new Error("Payment has not been approved.");
   }
 
+  const topUpContext = await resolveTopUpCheckoutContext(db, checkout);
   let reservation: { orderId: string; existing: boolean };
 
   try {
@@ -630,7 +817,9 @@ export async function finaliseOrderFromCheckout(
       }
 
       if (!shouldRetryReservedOrder(existingOrder)) {
-        const result = toCreateOrderResult(existingOrder);
+        const result = toCreateOrderResult(existingOrder, {
+          redirectOrderId: topUpContext?.originalOrderId ?? null,
+        });
         if (checkout.status !== STATUS_PAID || payment.status !== STATUS_APPROVED) {
           await markCheckoutFinalized({
             db,
@@ -651,22 +840,32 @@ export async function finaliseOrderFromCheckout(
       }
     }
 
-    const order = await createOrder(
-      {
-        packageId: checkout.packageId,
-        quantity: checkout.quantity,
-        customerEmail: checkout.customerEmail ?? undefined,
-      },
-      {
-        ...options.airaloOptions,
-        prisma: db,
-        // Prefer async submission so paid checkouts get an order record immediately
-        // even when synchronous Airalo fulfillment is slow or intermittently unavailable.
-        submissionMode: options.airaloOptions?.submissionMode ?? "async",
-        userId: checkout.userId ?? undefined,
-        reservedOrder: buildReservedOrderSnapshot(checkout, reservation.orderId),
-      },
-    );
+    const order = topUpContext
+      ? await finaliseTopUpOrderFromCheckout({
+          db,
+          checkout,
+          payment,
+          reservation,
+          topUp: topUpContext,
+          airaloOptions: options.airaloOptions,
+          startedAt,
+        })
+      : await createOrder(
+          {
+            packageId: checkout.packageId,
+            quantity: checkout.quantity,
+            customerEmail: checkout.customerEmail ?? undefined,
+          },
+          {
+            ...options.airaloOptions,
+            prisma: db,
+            // Prefer async submission so paid checkouts get an order record immediately
+            // even when synchronous Airalo fulfillment is slow or intermittently unavailable.
+            submissionMode: options.airaloOptions?.submissionMode ?? "async",
+            userId: checkout.userId ?? undefined,
+            reservedOrder: buildReservedOrderSnapshot(checkout, reservation.orderId),
+          },
+        );
 
     await markCheckoutFinalized({
       db,

@@ -1263,6 +1263,258 @@ test("AiraloClient sends /orders-async as multipart form fields", async () => {
   assert.deepEqual(form.getAll("sharing_option[]"), ["link", "pdf"]);
 });
 
+test("AiraloClient sends /orders/topups as documented multipart form fields", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  let requestedUrl: string | null = null;
+  let capturedForm: FormData | null = null;
+  let capturedAuthHeader: string | null = null;
+  let capturedAcceptHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/orders/topups")) {
+      requestedUrl = target;
+      capturedAuthHeader = authHeader(init);
+      capturedAcceptHeader = requestHeader(init, "Accept");
+      assert.ok(init?.body instanceof FormData);
+      capturedForm = init.body;
+      return jsonResponse(
+        {
+          data: {
+            id: 111,
+            code: "20251118-000111",
+            package_id: "change-7days-1gb-topup",
+            currency: "USD",
+            quantity: 1,
+            type: "topup",
+            description: "Topup (873000000000042542)",
+            esim_type: "local",
+            validity: 7,
+            package: "Change-1 GB - 7 Days",
+            data: "1 GB",
+            price: 4.5,
+            pricing_model: "net_pricing",
+            text: null,
+            voice: null,
+            net_price: 3.6,
+            created_at: "2025-11-18 13:37:07",
+            manual_installation: "<p>Manual</p>",
+            qrcode_installation: "<p>QR</p>",
+            installation_guides: {
+              en: "https://www.airalo.com/help/getting-started-with-airalo",
+            },
+          },
+          meta: { message: "success" },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const response = await client.createTopUpOrderResponse({
+    package_id: "change-7days-1gb-topup",
+    iccid: "873000000000042542",
+    description: "Topup (873000000000042542)",
+  });
+
+  assert.equal(response.data.id, "111");
+  assert.equal(response.data.code, "20251118-000111");
+  assert.equal(response.data.package_id, "change-7days-1gb-topup");
+  assert.equal((response.data as Record<string, unknown>).pricing_model, "net_pricing");
+  assert.equal(capturedAuthHeader, "Bearer cached-token");
+  assert.equal(capturedAcceptHeader, "application/json");
+  assert(requestedUrl, "top-up order request should have been issued");
+
+  const url = new URL(requestedUrl!);
+  assert.equal(url.pathname, "/api/orders/topups");
+  const form = requireFormData(capturedForm);
+  assert.deepEqual(Array.from(form.keys()).sort(), [
+    "description",
+    "iccid",
+    "package_id",
+  ]);
+  assert.equal(form.get("package_id"), "change-7days-1gb-topup");
+  assert.equal(form.get("iccid"), "873000000000042542");
+  assert.equal(form.get("description"), "Topup (873000000000042542)");
+});
+
+test("AiraloClient parses discount-pricing top-up order responses", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.endsWith("/orders/topups")) {
+      return jsonResponse(
+        {
+          data: {
+            id: 619,
+            code: "20251118-000619",
+            package_id: "change-7days-1gb-topup",
+            currency: "USD",
+            quantity: 1,
+            type: "topup",
+            description: "Topup (873000000000042534)",
+            esim_type: "Prepaid",
+            validity: 7,
+            package: "Change-1 GB - 7 Days",
+            data: "1 GB",
+            price: 4.5,
+            pricing_model: "discount_pricing",
+            discount_percentage: 10,
+            discount_amount: 0.45,
+            unit_paid_price: 4.05,
+            total_amount_paid: 4.05,
+            text: null,
+            voice: null,
+            net_price: null,
+            created_at: "2025-11-18 13:40:21",
+            manual_installation: "<p>Manual</p>",
+            qrcode_installation: "<p>QR</p>",
+            installation_guides: {
+              en: "https://www.airalo.com/help/getting-started-with-airalo",
+            },
+          },
+          meta: { message: "success" },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const order = await client.createTopUpOrder({
+    package_id: "change-7days-1gb-topup",
+    iccid: "873000000000042534",
+    description: "Topup (873000000000042534)",
+  });
+
+  assert.equal(order.id, "619");
+  assert.equal((order as Record<string, unknown>).pricing_model, "discount_pricing");
+  assert.equal((order as Record<string, unknown>).net_price, null);
+  assert.equal((order as Record<string, unknown>).total_amount_paid, 4.05);
+});
+
+test("AiraloClient preserves documented top-up order 422 responses", async (t) => {
+  const cases: Array<{
+    name: string;
+    body: unknown;
+    expectedCategory: string;
+    expectedCode?: number;
+  }> = [
+    {
+      name: "purchase limit exceeded",
+      body: {
+        data: { package_id: "validation.order_exceed_limit" },
+        meta: { message: "the parameter is invalid" },
+      },
+      expectedCategory: "bad_request",
+    },
+    {
+      name: "required fields missing",
+      body: {
+        data: {
+          iccid: "The iccid field is required.",
+          package_id: "The package id field is required.",
+        },
+        meta: { message: "the parameter is invalid" },
+      },
+      expectedCategory: "bad_request",
+    },
+    {
+      name: "invalid top-up package",
+      body: {
+        data: { package_id: "invalid topup package" },
+        meta: { message: "the parameter is invalid" },
+      },
+      expectedCategory: "bad_request",
+    },
+    {
+      name: "recycled SIM",
+      body: {
+        code: 73,
+        reason:
+          "The eSIM with iccid 89340000000000872 has been recycled. It can no longer be used or topped up.",
+      },
+      expectedCategory: "iccid_recycled",
+      expectedCode: 73,
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      const tokenCache = new MockTokenCache({
+        token: "cached-token",
+        expiresAt: Date.now() + 60_000,
+        tokenType: "Bearer",
+      });
+
+      const fetchImplementation: typeof fetch = async (url) => {
+        const target = typeof url === "string" ? url : url.toString();
+
+        if (target.endsWith("/orders/topups")) {
+          return jsonResponse(item.body, { status: 422 });
+        }
+
+        throw new Error(`Unexpected URL ${target}`);
+      };
+
+      const client = createTestClient({
+        clientId: "client-id",
+        clientSecret: "client-secret",
+        baseUrl: "https://example.com/api/",
+        fetchImplementation,
+        tokenCache,
+      });
+
+      await assert.rejects(
+        () =>
+          client.createTopUpOrderResponse({
+            package_id: "change-7days-1gb-topup",
+            iccid: "873000000000042542",
+            description: "Topup (873000000000042542)",
+          }),
+        (error: unknown) => {
+          assert(error instanceof AiraloError);
+          assert.equal(error.details.status, 422);
+          assert.equal(error.details.category, item.expectedCategory);
+          assert.equal(error.details.code, item.expectedCode ?? null);
+          assert.deepEqual(error.details.body, item.body);
+          return true;
+        },
+      );
+    });
+  }
+});
+
 test("AiraloClient fetches Get eSIM with documented include values", async () => {
   const tokenCache = new MockTokenCache({
     token: "cached-token",

@@ -63,12 +63,14 @@ export async function GET(request: Request, context: { params: Params }) {
 
     let paymentStatus = summary.paymentStatus;
     let orderId = summary.orderId;
+    let redirectOrderId = summary.redirectOrderId ?? null;
     let message: string | undefined;
 
     if (!orderId) {
       const verification = await verifyCheckoutPayment(checkoutId);
       paymentStatus = verification.paymentStatus;
       orderId = verification.orderId ?? null;
+      redirectOrderId = verification.redirectOrderId ?? redirectOrderId;
       message = verification.message;
     }
 
@@ -77,12 +79,20 @@ export async function GET(request: Request, context: { params: Params }) {
       status: summary.status,
       paymentStatus,
       orderId,
+      redirectOrderId,
       message,
       paymentUrl: summary.paymentUrl,
     });
 
     if (orderId && canIssueScopedAccessTokens()) {
       setScopedAccessCookie(response.cookies, "order", orderId);
+    }
+    if (
+      redirectOrderId &&
+      redirectOrderId !== orderId &&
+      canIssueScopedAccessTokens()
+    ) {
+      setScopedAccessCookie(response.cookies, "order", redirectOrderId);
     }
 
     return response;

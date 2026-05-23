@@ -24,8 +24,9 @@ Set the following environment variables in production and non-production environ
 2. `/api/checkouts` sets a scoped HTTP-only checkout access cookie. Authenticated users can also access their own checkout by session ownership.
 3. Customers are redirected to DPO's hosted page. On completion DPO sends both a browser redirect to `/checkout/[id]/return` and a server-to-server notification to `/api/payments/dpo/ipn`.
 4. The IPN handler validates the `x-dpo-signature` HMAC signature, stores accepted payloads in `PaymentTransactionEvent`, updates the payment status, and finalises the order when the status is `approved`.
-5. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` or `/checkout/{id}/failed`.
-6. When finalisation exposes an order ID, the status API sets a scoped HTTP-only order access cookie for guest order-page and eSIM-instruction access.
+5. New-plan checkouts finalise through Airalo `/v2/orders` or `/v2/orders-async`; top-up checkouts finalise through Airalo `/v2/orders/topups` with the original eSIM ICCID.
+6. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` for new plans, `/orders/{originalOrderId}` for top-ups, or `/checkout/{id}/failed`.
+7. When finalisation exposes an order ID, the status API sets scoped HTTP-only order access cookies for guest order-page and eSIM-instruction access.
 
 ## Runbook
 

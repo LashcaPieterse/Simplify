@@ -33,6 +33,7 @@ export type CreateOrderResult = {
   orderId: string;
   orderNumber: string | null;
   requestId: string | null;
+  redirectOrderId?: string | null;
   installation?: {
     qrCodeData?: string | null;
     qrCodeUrl?: string | null;
@@ -63,11 +64,12 @@ export function createResultFromExistingOrder(order: {
   id: string;
   orderNumber?: string | null;
   requestId?: string | null;
-}): CreateOrderResult {
+}, options: { redirectOrderId?: string | null } = {}): CreateOrderResult {
   return {
     orderId: order.id,
     orderNumber: order.orderNumber ?? null,
     requestId: order.requestId ?? order.orderNumber ?? order.id,
+    redirectOrderId: options.redirectOrderId ?? null,
   };
 }
 
@@ -196,19 +198,25 @@ export async function persistOrderRecords(
     airaloOrderResponse: OrderResponse | null;
     airaloAck: SubmitOrderAsyncAck | null;
     airaloOrder: AiraloOrder | null;
+    airaloOrderSnapshotSource?: string;
+    persistSimProfile?: boolean;
+    persistInstallation?: boolean;
+    statusFallback?: string;
   },
 ): Promise<PersistedOrderRecord> {
   const createOrderRecords = async (tx: Prisma.TransactionClient) => {
     const syncOrderNumber = resolveAiraloOrderId(input.airaloOrder);
     const syncRequestId =
       input.airaloOrder?.order_reference ?? syncOrderNumber;
+    const status =
+      input.airaloOrder?.status ?? input.statusFallback ?? resolveAiraloStatus(input.airaloOrder);
 
     const orderData = {
       userId: input.userId ?? null,
       orderNumber: syncOrderNumber,
       requestId: input.airaloAck?.request_id ?? syncRequestId,
       packageId: input.pkg.id,
-      status: resolveAiraloStatus(input.airaloOrder),
+      status,
       customerEmail: input.customerEmail ?? null,
       quantity: input.quantity,
       totalCents: input.totalCents,
@@ -240,7 +248,7 @@ export async function persistOrderRecords(
       await tx.airaloOrderSnapshot.create({
         data: {
           orderId: orderRecord.id,
-          source: "orders",
+          source: input.airaloOrderSnapshotSource ?? "orders",
           requestId: syncRequestId,
           orderNumber: syncOrderNumber,
           rawPayloadJson: toPrismaJson(input.airaloOrderResponse),
@@ -250,7 +258,7 @@ export async function persistOrderRecords(
 
     if (input.airaloOrder) {
       const iccid = resolveAiraloIccid(input.airaloOrder);
-      if (iccid) {
+      if (iccid && input.persistSimProfile !== false) {
         await tx.esimProfile.upsert({
           where: { iccid },
           create: {
@@ -267,12 +275,14 @@ export async function persistOrderRecords(
         });
       }
 
-      const installationPayload = createInstallationPayload(input.airaloOrder);
-      await tx.esimInstallationPayload.upsert({
-        where: { orderId: orderRecord.id },
-        create: { orderId: orderRecord.id, payload: installationPayload },
-        update: { payload: installationPayload },
-      });
+      if (input.persistInstallation !== false) {
+        const installationPayload = createInstallationPayload(input.airaloOrder);
+        await tx.esimInstallationPayload.upsert({
+          where: { orderId: orderRecord.id },
+          create: { orderId: orderRecord.id, payload: installationPayload },
+          update: { payload: installationPayload },
+        });
+      }
     }
 
     return orderRecord;

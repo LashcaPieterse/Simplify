@@ -90,6 +90,12 @@ export interface CreateOrderPayload extends AdditionalOrderFields {
   "copy_address[]"?: FormValue[];
 }
 
+export interface CreateTopUpOrderPayload extends AdditionalOrderFields {
+  package_id: string;
+  iccid: string;
+  description: string;
+}
+
 type QueryParamValue = string | number | boolean | null | undefined;
 
 export type PackageTypeFilter = "local" | "global";
@@ -935,6 +941,26 @@ export class AiraloClient {
     return response.data;
   }
 
+  async createTopUpOrderResponse(
+    payload: CreateTopUpOrderPayload,
+  ): Promise<OrderResponse> {
+    const body = this.buildMultipartPayload(payload);
+
+    return this.request({
+      path: "/orders/topups",
+      schema: OrderResponseSchema,
+      init: {
+        method: "POST",
+        body,
+      },
+    });
+  }
+
+  async createTopUpOrder(payload: CreateTopUpOrderPayload): Promise<Order> {
+    const response = await this.createTopUpOrderResponse(payload);
+    return response.data;
+  }
+
   async createOrderAsyncResponse(
     payload: CreateOrderPayload,
   ): Promise<SubmitOrderAsyncResponse> {
@@ -1249,7 +1275,7 @@ export class AiraloClient {
     return WebhookPayloadSchema.parse(payload);
   }
 
-  private buildMultipartPayload(payload: CreateOrderPayload): FormData {
+  private buildMultipartPayload(payload: AdditionalOrderFields): FormData {
     const form = new FormData();
 
     Object.entries(payload).forEach(([key, value]) => {

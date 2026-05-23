@@ -6,13 +6,14 @@ Canonical Airalo exports:
 
 - [`../Airalo API/PlaceOrders/SubmitOrder.md`](<../Airalo API/PlaceOrders/SubmitOrder.md>)
 - [`../Airalo API/PlaceOrders/SubmitOrderAsync.md`](<../Airalo API/PlaceOrders/SubmitOrderAsync.md>)
+- [`../Airalo API/TopUpEsim/submitTopUpOrder.md`](<../Airalo API/TopUpEsim/submitTopUpOrder.md>)
 
 ## Endpoint summary
 
 | Property             | Requirement                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Method               | `POST`                                                                                                        |
-| Paths                | `/v2/orders`, `/v2/orders-async`                                                                              |
+| Paths                | `/v2/orders`, `/v2/orders-async`, `/v2/orders/topups`                                                         |
 | Protocol             | HTTPS only                                                                                                    |
 | Headers              | `Accept: application/json`, `Authorization: Bearer <token>`                                                   |
 | Request body         | `multipart/form-data`                                                                                         |
@@ -63,6 +64,12 @@ No SIM metadata is returned at submission time. Simplify stores the complete asy
 
 Voice & data plans still include optional `text`, `voice`, `net_price`, and per-platform APN hints when retrieved via the follow-up `GET /v2/orders/{id}` call—keep serializers flexible to store everything the webhook/lookup provides.
 
+### Top-up `POST /v2/orders/topups` (`200`)
+
+Top-up fulfillment is a separate Airalo endpoint. Paid top-up checkouts must submit multipart form fields `package_id`, `iccid`, and `description` only. Do not send new-SIM fields such as `quantity`, `type`, `brand_settings_name`, `webhook_url`, `to_email`, or `sharing_option[]`.
+
+Simplify stores successful top-ups as separate local `EsimOrder` records with an `airalo_order_snapshots` source of `orders-topups`. The original eSIM order remains the canonical owner of the ICCID, installation payload, and usage display, so checkout completion redirects the customer back to the original order page.
+
 ## Error responses (`422`)
 
 Airalo surfaces validation errors through the `data` object with field-specific messages plus `meta.message` ("the parameter is invalid"). Common scenarios we must map:
@@ -70,6 +77,9 @@ Airalo surfaces validation errors through the `data` object with field-specific 
 | Scenario              | Field                 | Message sample                                            | Local mitigation                                                                                    |
 | --------------------- | --------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Invalid package       | `package_id`          | "The selected package is invalid."                        | Resync catalog; block checkout until resolved.                                                      |
+| Invalid top-up        | `package_id`          | "invalid topup package"                                   | Refresh top-up package availability for the ICCID and block stale options.                          |
+| Missing top-up ICCID  | `iccid`               | "The iccid field is required."                            | Treat the checkout as invalid; top-ups must originate from an order with an assigned ICCID.          |
+| Top-up limit exceeded | `package_id`          | "validation.order_exceed_limit"                           | Surface the Airalo limit to support and prevent retrying the same top-up.                           |
 | Quantity > available  | `quantity`            | "SIM quantity is not available. Available quantity: {n}." | Surface remaining quantity to the user and refresh availability cache.                              |
 | Quantity > 50         | `quantity`            | "The quantity may not be greater than 50."                | Airalo's upstream maximum is 50, but Simplify blocks local requests above 10 before calling Airalo. |
 | Missing brand profile | `brand_settings_name` | "Brand settings name doesn't exist."                      | Offer a fallback unbranded share or force the user to pick a valid brand.                           |

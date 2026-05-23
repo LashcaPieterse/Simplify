@@ -2,6 +2,7 @@ import {
   AiraloClient,
   AiraloError,
   type CreateOrderPayload,
+  type CreateTopUpOrderPayload,
   type SubmitOrderAsyncAck,
 } from "../airalo/client";
 import { extractAiraloBusinessError } from "../airalo/errors";
@@ -34,6 +35,12 @@ export type AiraloOrderSubmissionResult = {
   airaloOrderResponse: OrderResponse | null;
   airaloAck: SubmitOrderAsyncAck | null;
   airaloOrder: AiraloOrder | null;
+  airaloLatencyMs: number;
+};
+
+export type AiraloTopUpOrderSubmissionResult = {
+  airaloOrderResponse: OrderResponse;
+  airaloOrder: AiraloOrder;
   airaloLatencyMs: number;
 };
 
@@ -187,6 +194,17 @@ export function buildAiraloOrderPayload(options: {
   return payload;
 }
 
+export function buildAiraloTopUpOrderPayload(options: {
+  pkg: AiraloOrderPackage;
+  iccid: string;
+}): CreateTopUpOrderPayload {
+  return {
+    package_id: options.pkg.airaloPackageId,
+    iccid: options.iccid,
+    description: `Topup (${options.iccid})`,
+  };
+}
+
 function shouldFallbackAsyncToSync(error: unknown): boolean {
   if (!(error instanceof AiraloError) || error.details.status !== 422) {
     return false;
@@ -291,6 +309,22 @@ export async function submitAiraloOrder(options: {
   };
 }
 
+export async function submitAiraloTopUpOrder(options: {
+  airalo: AiraloClient;
+  payload: CreateTopUpOrderPayload;
+}): Promise<AiraloTopUpOrderSubmissionResult> {
+  const airaloCallStartedAt = Date.now();
+  const airaloOrderResponse = await invokeWithBackoff(() =>
+    options.airalo.createTopUpOrderResponse(options.payload),
+  );
+
+  return {
+    airaloOrderResponse,
+    airaloOrder: airaloOrderResponse.data,
+    airaloLatencyMs: Date.now() - airaloCallStartedAt,
+  };
+}
+
 export function logAiraloSubmissionSuccess(options: {
   pkg: AiraloOrderPackage;
   submission: AiraloOrderSubmissionResult;
@@ -319,4 +353,19 @@ export function logAiraloSubmissionSuccess(options: {
       latencyMs: options.submission.airaloLatencyMs,
     });
   }
+}
+
+export function logAiraloTopUpSubmissionSuccess(options: {
+  pkg: AiraloOrderPackage;
+  iccid: string;
+  submission: AiraloTopUpOrderSubmissionResult;
+}): void {
+  logOrderInfo("airalo.order.topup.completed", {
+    packageId: options.pkg.id,
+    packageExternalId: options.pkg.airaloPackageId,
+    iccid: options.iccid,
+    airaloOrderId: resolveAiraloOrderId(options.submission.airaloOrder),
+    status: options.submission.airaloOrder.status ?? "completed",
+    latencyMs: options.submission.airaloLatencyMs,
+  });
 }

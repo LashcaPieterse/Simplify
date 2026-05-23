@@ -56,6 +56,7 @@ type AutoDeactivatePackageInput = {
 };
 
 const AIRALO_FIELD_PATHS: Record<string, string> = {
+  iccid: "iccid",
   package_id: "packageId",
   brand_settings_name: "brandSettingsName",
 };
@@ -128,7 +129,7 @@ function firstAiraloValidationMessage(
     return null;
   }
 
-  for (const field of ["package_id", "quantity", "brand_settings_name"]) {
+  for (const field of ["package_id", "iccid", "quantity", "brand_settings_name"]) {
     const message = firstAiraloFieldMessage(fieldErrors, field);
     if (message) {
       return message;

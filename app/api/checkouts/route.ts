@@ -110,6 +110,16 @@ export async function POST(request: Request) {
       payload.customerEmail = session.user.email;
     }
 
+    if (payload.intent === "top-up") {
+      return NextResponse.json(
+        {
+          message:
+            "Top-up checkouts must be started from the original eSIM order page.",
+        },
+        { status: 403 },
+      );
+    }
+
     const baseUrl = resolveBaseUrl(request);
     const result = await createCheckout(payload, {
       baseUrl,

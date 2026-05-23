@@ -14,6 +14,7 @@ interface CheckoutStatusResponse {
   status: string;
   paymentStatus?: string;
   orderId?: string | null;
+  redirectOrderId?: string | null;
   paymentUrl?: string;
   message?: string;
 }
@@ -52,8 +53,9 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
           setMessage(data.message);
         }
 
-        if (data.orderId) {
-          router.replace(`/orders/${data.orderId}`);
+        const redirectOrderId = data.redirectOrderId ?? data.orderId;
+        if (redirectOrderId) {
+          router.replace(`/orders/${redirectOrderId}`);
           return;
         }
 

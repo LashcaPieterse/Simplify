@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { PrismaClient } from "@prisma/client";
-import type { AiraloClient, CreateOrderPayload } from "../airalo/client";
+import type {
+  AiraloClient,
+  CreateOrderPayload,
+  CreateTopUpOrderPayload,
+} from "../airalo/client";
 import { OrderResponseSchema, type OrderResponse } from "../airalo/schemas";
 import type { CreateOrderOptions } from "../orders/service";
 import { finaliseOrderFromCheckout } from "./checkouts";
@@ -11,12 +15,23 @@ const TEST_PACKAGE_ID = "00000000-0000-0000-0000-000000000001";
 
 class FakeAiraloClient {
   readonly syncPayloads: CreateOrderPayload[] = [];
+  readonly topUpPayloads: CreateTopUpOrderPayload[] = [];
 
-  constructor(private readonly syncResponse: OrderResponse) {}
+  constructor(
+    private readonly syncResponse: OrderResponse,
+    private readonly topUpResponse: OrderResponse = syncResponse,
+  ) {}
 
   async createOrderResponse(payload: CreateOrderPayload): Promise<OrderResponse> {
     this.syncPayloads.push(payload);
     return this.syncResponse;
+  }
+
+  async createTopUpOrderResponse(
+    payload: CreateTopUpOrderPayload,
+  ): Promise<OrderResponse> {
+    this.topUpPayloads.push(payload);
+    return this.topUpResponse;
   }
 }
 
@@ -53,8 +68,8 @@ class FakeCheckoutDb {
     currency: "UGX",
     status: "paid",
     intent: "purchase",
-    topUpForOrderId: null,
-    topUpForIccid: null,
+    topUpForOrderId: null as string | null,
+    topUpForIccid: null as string | null,
     orderId: null as string | null,
     metadata: null,
     createdAt: new Date("2026-05-09T10:00:00Z"),
@@ -223,6 +238,20 @@ class FakeCheckoutDb {
   };
 
   readonly esimProfile = {
+    findFirst: async ({
+      where,
+    }: {
+      where: { orderId?: string; iccid?: string };
+      select?: { id?: boolean };
+    }) => {
+      return (
+        this.profiles.find(
+          (profile) =>
+            (!where.orderId || profile.orderId === where.orderId) &&
+            (!where.iccid || profile.iccid === where.iccid),
+        ) ?? null
+      );
+    },
     upsert: async ({
       where,
       create,
@@ -298,6 +327,47 @@ function createSyncAiraloClient(): FakeAiraloClient {
   );
 }
 
+function createTopUpAiraloClient(): FakeAiraloClient {
+  return new FakeAiraloClient(
+    OrderResponseSchema.parse({
+      status: true,
+      data: {
+        order_id: "A-ORDER-1",
+        order_reference: "REF-1",
+        status: "completed",
+        iccid: "8900000000000000001",
+      },
+    }),
+    OrderResponseSchema.parse({
+      data: {
+        id: 111,
+        code: "20251118-000111",
+        package_id: "bonbon-mobile-30days-3gb-topup",
+        currency: "USD",
+        quantity: 1,
+        type: "topup",
+        description: "Topup (8910300000005271146)",
+        esim_type: "local",
+        validity: 30,
+        package: "3 GB - 100 SMS - 100 Mins - 30 Days",
+        data: "3 GB",
+        price: 10,
+        pricing_model: "net_pricing",
+        text: null,
+        voice: null,
+        net_price: 8,
+        created_at: "2025-11-18 13:37:07",
+        manual_installation: "<p>Manual</p>",
+        qrcode_installation: "<p>QR</p>",
+        installation_guides: {
+          en: "https://www.airalo.com/help/getting-started-with-airalo",
+        },
+      },
+      meta: { message: "success" },
+    }),
+  );
+}
+
 function createFinaliseOptions(db: FakeCheckoutDb, airalo: FakeAiraloClient) {
   return {
     prisma: db as unknown as PrismaClient,
@@ -347,4 +417,72 @@ test("finaliseOrderFromCheckout is idempotent once a checkout has a reserved ord
   assert.equal(second.orderId, "order-1");
   assert.equal(db.orders.length, 1);
   assert.equal(airalo.syncPayloads.length, 1);
+});
+
+test("finaliseOrderFromCheckout submits paid top-ups through the documented endpoint", async () => {
+  const db = new FakeCheckoutDb();
+  const airalo = createTopUpAiraloClient();
+  db.checkout.intent = "top-up";
+  db.checkout.quantity = 1;
+  db.checkout.totalCents = 1500;
+  db.checkout.topUpForOrderId = "original-order-1";
+  db.checkout.topUpForIccid = "8910300000005271146";
+  db.checkout.package.airaloPackageId = "bonbon-mobile-30days-3gb-topup";
+  db.checkout.package.title = "3 GB - 30 Days";
+  db.profiles.push({
+    id: "profile-original",
+    iccid: "8910300000005271146",
+    orderId: "original-order-1",
+    status: "ACTIVE",
+  });
+
+  const result = await finaliseOrderFromCheckout(
+    "checkout-1",
+    createFinaliseOptions(db, airalo),
+  );
+
+  assert.equal(result.orderId, "order-1");
+  assert.equal(result.redirectOrderId, "original-order-1");
+  assert.equal(db.checkout.orderId, "order-1");
+  assert.equal(db.checkout.status, "paid");
+  assert.equal(airalo.syncPayloads.length, 0);
+  assert.equal(airalo.topUpPayloads.length, 1);
+  const topUpPayload = airalo.topUpPayloads[0];
+  assert.ok(topUpPayload);
+  assert.deepEqual(Object.keys(topUpPayload).sort(), [
+    "description",
+    "iccid",
+    "package_id",
+  ]);
+  assert.deepEqual(topUpPayload, {
+    package_id: "bonbon-mobile-30days-3gb-topup",
+    iccid: "8910300000005271146",
+    description: "Topup (8910300000005271146)",
+  });
+  assert.equal(db.orders[0]?.orderNumber, "111");
+  assert.equal(db.orders[0]?.requestId, "111");
+  assert.equal(db.orders[0]?.status, "completed");
+  assert.equal(db.orders[0]?.quantity, 1);
+  assert.equal(db.snapshots[0]?.source, "orders-topups");
+  assert.equal(db.profiles.length, 1);
+  assert.equal(db.profiles[0]?.orderId, "original-order-1");
+  assert.equal(db.installationPayloads.length, 0);
+});
+
+test("finaliseOrderFromCheckout rejects invalid top-up checkout context before Airalo", async () => {
+  const db = new FakeCheckoutDb();
+  const airalo = createTopUpAiraloClient();
+  db.checkout.intent = "top-up";
+  db.checkout.quantity = 2;
+  db.checkout.topUpForOrderId = "original-order-1";
+  db.checkout.topUpForIccid = "8910300000005271146";
+
+  await assert.rejects(
+    () => finaliseOrderFromCheckout("checkout-1", createFinaliseOptions(db, airalo)),
+    /Top-up checkouts must have a quantity of 1/,
+  );
+
+  assert.equal(airalo.syncPayloads.length, 0);
+  assert.equal(airalo.topUpPayloads.length, 0);
+  assert.equal(db.orders.length, 0);
 });
