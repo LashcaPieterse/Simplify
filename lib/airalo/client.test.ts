@@ -1570,6 +1570,165 @@ test("AiraloClient parses recycled SIM usage payloads", async () => {
   assert.equal(usage.total, 0);
 });
 
+test("AiraloClient fetches SIM top-up packages with the documented request shape", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  const rateLimiter = new RecordingRateLimiter();
+  let requestedUrl: string | null = null;
+  let capturedAuthHeader: string | null = null;
+  let capturedAcceptHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/") && target.endsWith("/topups")) {
+      requestedUrl = target;
+      capturedAuthHeader = authHeader(init);
+      capturedAcceptHeader = requestHeader(init, "Accept");
+      return jsonResponse(
+        {
+          pricing: {
+            model: "discount_pricing",
+            discount_percentage: 10,
+          },
+          data: [
+            {
+              id: "bonbon-mobile-30days-3gb-topup",
+              type: "topup",
+              price: 10,
+              amount: 3072,
+              day: 30,
+              is_unlimited: false,
+              title: "3 GB - 100 SMS - 100 Mins - 30 Days",
+              data: "3 GB",
+              short_info: "This eSIM doesn't come with a phone number.",
+              voice: 100,
+              text: 100,
+              net_price: null,
+            },
+          ],
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+    endpointRateLimiter: rateLimiter,
+    endpointThrottling: {
+      simPackagesPerMinutePerIccid: 8,
+    },
+  });
+
+  const response = await client.getSimTopUpPackagesResponse(
+    "8910300000005271146",
+  );
+
+  assert.equal(response.pricing?.model, "discount_pricing");
+  assert.equal(response.pricing?.discount_percentage, 10);
+  assert.equal(response.data.length, 1);
+  assert.equal(response.data[0]?.id, "bonbon-mobile-30days-3gb-topup");
+  assert.equal(response.data[0]?.net_price, null);
+  assert.equal(response.data[0]?.voice, 100);
+  assert.equal(response.data[0]?.text, 100);
+  assert.equal(capturedAuthHeader, "Bearer cached-token");
+  assert.equal(capturedAcceptHeader, "application/json");
+  assert(requestedUrl, "SIM top-up request should have been issued");
+
+  const url = new URL(requestedUrl!);
+  assert.equal(url.pathname, "/api/sims/8910300000005271146/topups");
+  assert.equal(url.search, "");
+  assert.equal(rateLimiter.rules.length, 1);
+  assert.equal(rateLimiter.rules[0]?.endpoint, "sim_packages");
+  assert.equal(rateLimiter.rules[0]?.limit, 8);
+  assert.equal(rateLimiter.rules[0]?.windowMs, 60_000);
+  assert.match(rateLimiter.rules[0]?.key ?? "", /^iccid:/);
+});
+
+test("AiraloClient parses empty SIM top-up package responses", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/") && target.endsWith("/topups")) {
+      return jsonResponse({ data: [] }, { status: 200 });
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const packages = await client.getSimTopUpPackages("8910300000005271146");
+
+  assert.deepEqual(packages, []);
+});
+
+test("AiraloClient classifies recycled SIM top-up package responses", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/") && target.endsWith("/topups")) {
+      return jsonResponse(
+        {
+          code: 73,
+          reason:
+            "The eSIM with iccid 8910300000005271146 has been recycled. It can no longer be used or topped up.",
+        },
+        { status: 422 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  await assert.rejects(
+    () => client.getSimTopUpPackages("8910300000005271146"),
+    (error: unknown) => {
+      assert(error instanceof AiraloError);
+      assert.equal(error.details.status, 422);
+      assert.equal(error.details.code, 73);
+      assert.equal(error.details.category, "iccid_recycled");
+      return true;
+    },
+  );
+});
+
 test("AiraloClient rejects undocumented Get eSIM include values", async () => {
   const tokenCache = new MockTokenCache({
     token: "cached-token",

@@ -31,7 +31,7 @@ function classifyEndpoint(url: string): EndpointKey {
     if (path.endsWith("/token")) {
       return "token";
     }
-    if (path.endsWith("/packages") && path.includes("/sims/")) {
+    if (path.endsWith("/topups") && path.includes("/sims/")) {
       return "sim_packages";
     }
     if (path.endsWith("/usage") && path.includes("/sims/")) {
@@ -118,15 +118,15 @@ async function main(): Promise<void> {
     }
 
     try {
-      const topups = await client.getSimPackages(iccid);
+      const topups = await client.getSimTopUpPackages(iccid);
       checks.sim_packages = {
         ok: true,
-        message: `SIM packages endpoint succeeded with ${topups.length} package(s).`,
+        message: `SIM top-ups endpoint succeeded with ${topups.length} package(s).`,
       };
     } catch (error) {
       checks.sim_packages = {
         ok: false,
-        message: `SIM packages endpoint failed: ${error instanceof Error ? error.message : String(error)}`,
+        message: `SIM top-ups endpoint failed: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
   } else {
@@ -159,4 +159,3 @@ main().catch((error) => {
   console.error("Airalo live smoke test failed", error);
   process.exitCode = 1;
 });
-

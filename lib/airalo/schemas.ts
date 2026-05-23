@@ -169,6 +169,38 @@ export const PackagesResponseSchema = BaseResponseSchema.extend({
 
 export type PackagesResponse = z.infer<typeof PackagesResponseSchema>;
 
+const TopUpPricingSchema = z
+  .object({
+    model: z.string(),
+    discount_percentage: z.coerce.number(),
+  })
+  .passthrough();
+
+export const TopUpPackageSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).transform(String),
+    type: z.string(),
+    price: z.coerce.number(),
+    amount: z.coerce.number(),
+    day: z.coerce.number(),
+    is_unlimited: z.boolean(),
+    title: z.string(),
+    data: z.string(),
+    short_info: z.string().nullable().optional(),
+    voice: z.coerce.number(),
+    text: z.coerce.number(),
+    net_price: z.coerce.number().nullable().optional(),
+  })
+  .passthrough();
+
+export const TopUpPackagesResponseSchema = BaseResponseSchema.extend({
+  pricing: TopUpPricingSchema.optional(),
+  data: z.array(TopUpPackageSchema).default([]),
+});
+
+export type TopUpPackagesResponse = z.infer<typeof TopUpPackagesResponseSchema>;
+export type AiraloTopUpPackage = z.infer<typeof TopUpPackageSchema>;
+
 export const ListPackagesResponseSchema = BaseResponseSchema.extend({
   data: ListPackagesDataSchema,
   links: PaginationLinksSchema.optional(),

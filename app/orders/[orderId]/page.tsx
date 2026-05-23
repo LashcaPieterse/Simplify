@@ -420,10 +420,20 @@ export default async function OrderPage({ params }: OrderPageParams) {
                 >
                   <input type="hidden" name="packageId" value={pkg.localPackageId} />
                   <div className="space-y-1">
-                    <p className="text-lg font-semibold text-brand-900">{pkg.name}</p>
-                    <p className="text-sm text-sand-600">{pkg.destination_name ?? pkg.destination}</p>
-                    {pkg.data_amount ? (
-                      <p className="text-sm text-sand-500">Allowance: {pkg.data_amount}</p>
+                    <p className="text-lg font-semibold text-brand-900">{pkg.title}</p>
+                    {pkg.short_info ? (
+                      <p className="text-sm text-sand-600">{pkg.short_info}</p>
+                    ) : null}
+                    <p className="text-sm text-sand-500">
+                      Data: {pkg.is_unlimited ? "Unlimited" : pkg.data}
+                    </p>
+                    <p className="text-sm text-sand-500">Validity: {pkg.day} days</p>
+                    {pkg.voice > 0 || pkg.text > 0 ? (
+                      <p className="text-sm text-sand-500">
+                        {pkg.voice > 0 ? `${pkg.voice} mins` : null}
+                        {pkg.voice > 0 && pkg.text > 0 ? " · " : null}
+                        {pkg.text > 0 ? `${pkg.text} SMS` : null}
+                      </p>
                     ) : null}
                     <p className="text-sm font-medium text-brand-900">
                       {formatCurrency(Math.round(pkg.price * 100), pkg.currency)}

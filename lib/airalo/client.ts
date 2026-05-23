@@ -5,11 +5,11 @@ import {
   ListPackagesDataSchema,
   ListPackagesResponseSchema,
   OrderResponseSchema,
-  PackagesResponseSchema,
   SubmitOrderAsyncResponseSchema,
   SimInstallationInstructionsResponseSchema,
   SimResponseSchema,
   TokenResponseSchema,
+  TopUpPackagesResponseSchema,
   UsageResponseSchema,
   WebhookPayloadSchema,
 } from "./schemas";
@@ -43,6 +43,8 @@ import type {
   SimInstallationInstructionsResponse,
   SubmitOrderAsyncAck,
   SubmitOrderAsyncResponse,
+  AiraloTopUpPackage,
+  TopUpPackagesResponse,
   Usage,
   UsageResponse,
   WebhookPayload,
@@ -973,17 +975,28 @@ export class AiraloClient {
     return response.data;
   }
 
-  async getSimPackagesResponse(iccid: string): Promise<PackagesResponse> {
+  async getSimTopUpPackagesResponse(
+    iccid: string,
+  ): Promise<TopUpPackagesResponse> {
     if (!iccid) {
-      throw new Error("An ICCID is required to request SIM packages.");
+      throw new Error("An ICCID is required to request top-up packages.");
     }
 
     return this.request({
-      path: `/sims/${encodeURIComponent(iccid)}/packages`,
-      schema: PackagesResponseSchema,
+      path: `/sims/${encodeURIComponent(iccid)}/topups`,
+      schema: TopUpPackagesResponseSchema,
       endpoint: "sim_packages",
       throttle: () => this.throttleSimPackagesRequest(iccid),
     });
+  }
+
+  async getSimTopUpPackages(iccid: string): Promise<AiraloTopUpPackage[]> {
+    const response = await this.getSimTopUpPackagesResponse(iccid);
+    return response.data;
+  }
+
+  async getSimPackagesResponse(iccid: string): Promise<TopUpPackagesResponse> {
+    return this.getSimTopUpPackagesResponse(iccid);
   }
 
   /**
@@ -1158,9 +1171,8 @@ export class AiraloClient {
     throw new Error(`Failed to complete request to ${url}`);
   }
 
-  async getSimPackages(iccid: string): Promise<Package[]> {
-    const response = await this.getSimPackagesResponse(iccid);
-    return normalizePackagesData(response.data);
+  async getSimPackages(iccid: string): Promise<AiraloTopUpPackage[]> {
+    return this.getSimTopUpPackages(iccid);
   }
 
   async getSimInstallationInstructionsResponse(
@@ -1800,10 +1812,12 @@ export type {
   OrderResponse,
   Package,
   PackagesResponse,
+  AiraloTopUpPackage,
   SubmitOrderAsyncAck,
   SubmitOrderAsyncResponse,
   TokenPayload,
   TokenResponse,
+  TopUpPackagesResponse,
   Usage,
   UsageResponse,
   WebhookPayload,

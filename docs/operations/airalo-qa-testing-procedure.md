@@ -26,7 +26,7 @@ This document defines a repeatable QA process for the Airalo integration, includ
 
 3. Live smoke tests
 - Run before deploy and after deploy.
-- Uses real credentials and real endpoints in read-only mode (`/token`, `/packages`, optional `/sims/:iccid/usage`, `/sims/:iccid/packages`).
+- Uses real credentials and real endpoints in read-only mode (`/token`, `/packages`, optional `/sims/:iccid/usage`, `/sims/:iccid/topups`).
 
 ## 3) Standard Commands
 
@@ -77,7 +77,7 @@ Minimum dashboard panels:
 
 - Token request rate and 429 rate.
 - Packages request rate and 429 rate.
-- SIM usage/packages request rate and 429 rate.
+- SIM usage/top-up request rate and 429 rate.
 - Order success/error ratio.
 
 ## 6) CI/CD Automation (Recommended)

@@ -1,14 +1,13 @@
 import type { PrismaClient } from "@prisma/client";
 
 import type { AiraloClient } from "../airalo/client";
-import type { Package } from "../airalo/schemas";
-import { resolvePackagePrice } from "../airalo/pricing";
+import type { AiraloTopUpPackage } from "../airalo/schemas";
 import prismaClient from "../db/client";
 import { resolveAiraloClient } from "./service";
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
-export type TopUpPackage = Package & {
+export type TopUpPackage = AiraloTopUpPackage & {
   localPackageId: string;
   price: number;
   currency: string;
@@ -17,6 +16,11 @@ export type TopUpPackage = Package & {
 type CacheRecord = {
   options: TopUpPackage[];
   expiresAt: number;
+};
+
+type AiraloErrorDetails = {
+  status?: number;
+  category?: string;
 };
 
 const topUpCache = new Map<string, CacheRecord>();
@@ -43,13 +47,24 @@ export async function getTopUpPackages(
   }
 
   const airalo = options.airaloClient ?? resolveAiraloClient();
-  let packages: Package[] = [];
+  let packages: AiraloTopUpPackage[] = [];
+  let lastError: unknown = null;
+
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      packages = await airalo.getSimPackages(iccid);
+      packages = await airalo.getSimTopUpPackages(iccid);
+      lastError = null;
       break;
     } catch (error) {
-      const status = (error as { details?: { status?: number } })?.details?.status;
+      lastError = error;
+      const details = getAiraloErrorDetails(error);
+      if (isUnavailableTopUpListError(details)) {
+        packages = [];
+        lastError = null;
+        break;
+      }
+
+      const status = details?.status;
       if (status !== 429 && status !== undefined && status < 500) {
         throw error;
       }
@@ -57,6 +72,13 @@ export async function getTopUpPackages(
       await new Promise((r) => setTimeout(r, delayMs));
     }
   }
+
+  if (packages.length === 0 && lastError) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Unable to fetch Airalo top-up packages.");
+  }
+
   const db = options.prisma ?? prismaClient;
 
   const localPackages = await db.package.findMany({
@@ -71,32 +93,39 @@ export async function getTopUpPackages(
     select: {
       id: true,
       airaloPackageId: true,
+      state: {
+        select: {
+          basePriceCents: true,
+          sellingPriceCents: true,
+          currencyCode: true,
+        },
+      },
     },
   });
 
   const localIdByExternalId = new Map(
-    localPackages.map((pkg) => [pkg.airaloPackageId, pkg.id] as const),
+    localPackages.map((pkg) => [pkg.airaloPackageId, pkg] as const),
   );
 
   const availablePackages = packages
     .map((pkg) => {
-      const localId = localIdByExternalId.get(pkg.id);
+      const localPackage = localIdByExternalId.get(pkg.id);
 
-      if (!localId) {
+      if (!localPackage) {
         return null;
       }
 
-      const priceDetails = resolvePackagePrice(pkg);
-
-      if (!priceDetails) {
-        return null;
-      }
+      const priceCents =
+        localPackage.state?.sellingPriceCents ??
+        localPackage.state?.basePriceCents ??
+        Math.round(pkg.price * 100);
+      const currency = localPackage.state?.currencyCode ?? "USD";
 
       return {
         ...pkg,
-        price: priceDetails.priceCents / 100,
-        currency: priceDetails.currency,
-        localPackageId: localId,
+        price: priceCents / 100,
+        currency,
+        localPackageId: localPackage.id,
       } satisfies TopUpPackage;
     })
     .filter((pkg): pkg is TopUpPackage => pkg !== null);
@@ -116,4 +145,14 @@ export function clearTopUpCache(iccid?: string): void {
   }
 
   topUpCache.clear();
+}
+
+function getAiraloErrorDetails(error: unknown): AiraloErrorDetails | undefined {
+  return (error as { details?: AiraloErrorDetails })?.details;
+}
+
+function isUnavailableTopUpListError(
+  details: AiraloErrorDetails | undefined,
+): boolean {
+  return details?.category === "iccid_recycled" || details?.status === 404;
 }
