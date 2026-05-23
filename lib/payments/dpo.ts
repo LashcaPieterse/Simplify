@@ -58,6 +58,25 @@ function normaliseUrl(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
+function escapeXml(value: string | number): string {
+  return String(value).replace(/[<>&'"]/g, (character) => {
+    switch (character) {
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "&":
+        return "&amp;";
+      case "'":
+        return "&apos;";
+      case "\"":
+        return "&quot;";
+      default:
+        return character;
+    }
+  });
+}
+
 function extractTag(xml: string, tag: string): string | undefined {
   const match = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`, "i"));
   return match?.[1]?.trim();
@@ -90,9 +109,9 @@ export class DpoClient {
   async createTransaction(input: CreateDpoTransactionInput): Promise<CreateDpoTransactionResult> {
     const url = `${this.serviceUrl}/`;
     const now = new Date();
-  const serviceDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(
-    now.getHours(),
-  ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const serviceDate = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")} ${String(
+      now.getHours(),
+    ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
     const ptl = input.paymentTimeLimitMinutes ?? 5;
     const serviceDescription = input.serviceDescription ?? input.serviceName ?? "Simplify eSIM plan";
@@ -101,26 +120,26 @@ export class DpoClient {
 
     const xml = [
       `<API3G>`,
-      `<CompanyToken>${this.companyToken}</CompanyToken>`,
+      `<CompanyToken>${escapeXml(this.companyToken)}</CompanyToken>`,
       `<Request>createToken</Request>`,
       `<Transaction>`,
-      `<PaymentAmount>${input.amount}</PaymentAmount>`,
-      `<PaymentCurrency>${input.currency}</PaymentCurrency>`,
-      `<CompanyRef>${input.reference}</CompanyRef>`,
+      `<PaymentAmount>${escapeXml(input.amount)}</PaymentAmount>`,
+      `<PaymentCurrency>${escapeXml(input.currency)}</PaymentCurrency>`,
+      `<CompanyRef>${escapeXml(input.reference)}</CompanyRef>`,
       `<CompanyRefUnique>0</CompanyRefUnique>`,
-      `<PTL>${ptl}</PTL>`,
-      input.customerEmail ? `<CustomerEmail>${input.customerEmail}</CustomerEmail>` : "",
-      `<RedirectURL>${input.redirectUrl}</RedirectURL>`,
-      `<BackURL>${input.cancelUrl}</BackURL>`,
-      `<CallBackURL>${input.callbackUrl}</CallBackURL>`,
+      `<PTL>${escapeXml(ptl)}</PTL>`,
+      input.customerEmail ? `<CustomerEmail>${escapeXml(input.customerEmail)}</CustomerEmail>` : "",
+      `<RedirectURL>${escapeXml(input.redirectUrl)}</RedirectURL>`,
+      `<BackURL>${escapeXml(input.cancelUrl)}</BackURL>`,
+      `<CallBackURL>${escapeXml(input.callbackUrl)}</CallBackURL>`,
       `</Transaction>`,
       `<Services>`,
       `<Service>`,
-      `<ServiceType>${this.serviceType}</ServiceType>`,
-      serviceDescription ? `<ServiceDescription>${serviceDescription}</ServiceDescription>` : "",
-      serviceId ? `<ServiceID>${serviceId}</ServiceID>` : "",
-      serviceName ? `<ServiceTypeName>${serviceName}</ServiceTypeName>` : "",
-      `<ServiceDate>${serviceDate}</ServiceDate>`,
+      `<ServiceType>${escapeXml(this.serviceType)}</ServiceType>`,
+      serviceDescription ? `<ServiceDescription>${escapeXml(serviceDescription)}</ServiceDescription>` : "",
+      serviceId ? `<ServiceID>${escapeXml(serviceId)}</ServiceID>` : "",
+      serviceName ? `<ServiceTypeName>${escapeXml(serviceName)}</ServiceTypeName>` : "",
+      `<ServiceDate>${escapeXml(serviceDate)}</ServiceDate>`,
       `</Service>`,
       `</Services>`,
       `</API3G>`,
@@ -169,10 +188,10 @@ export class DpoClient {
 
     const xml = [
       `<API3G>`,
-      `<CompanyToken>${this.companyToken}</CompanyToken>`,
+      `<CompanyToken>${escapeXml(this.companyToken)}</CompanyToken>`,
       `<Request>verifyToken</Request>`,
-      `<TransactionToken>${token}</TransactionToken>`,
-      companyRef ? `<CompanyRef>${companyRef}</CompanyRef>` : "",
+      `<TransactionToken>${escapeXml(token)}</TransactionToken>`,
+      companyRef ? `<CompanyRef>${escapeXml(companyRef)}</CompanyRef>` : "",
       `<VerifyTransaction>1</VerifyTransaction>`,
       `</API3G>`,
     ].join("");
