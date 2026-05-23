@@ -270,26 +270,18 @@ export type SubmitOrderAsyncResponse = z.infer<
 >;
 export type SubmitOrderAsyncAck = SubmitOrderAsyncResponse["data"];
 
-const UsageMetricSchema = z
-  .object({
-    unit: z.string().optional(),
-    total: z.coerce.number().optional(),
-    used: z.coerce.number().optional(),
-    remaining: z.coerce.number().optional(),
-    voice: z.coerce.number().optional(),
-    sms: z.coerce.number().optional(),
-    data: z.coerce.number().optional(),
-  })
-  .passthrough();
-
 export const UsageResponseSchema = BaseResponseSchema.extend({
   data: z
     .object({
-      iccid: z.string(),
-      data: UsageMetricSchema.optional(),
-      voice: UsageMetricSchema.optional(),
-      sms: UsageMetricSchema.optional(),
-      last_updated_at: z.string().datetime().optional(),
+      remaining: z.coerce.number(),
+      total: z.coerce.number(),
+      expired_at: z.string().nullable(),
+      is_unlimited: z.boolean().nullable(),
+      status: z.string(),
+      remaining_voice: z.coerce.number(),
+      remaining_text: z.coerce.number(),
+      total_voice: z.coerce.number(),
+      total_text: z.coerce.number(),
     })
     .passthrough(),
 });

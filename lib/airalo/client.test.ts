@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { AiraloClient, AiraloError } from "./client";
 import type { AiraloClientOptions } from "./client";
+import type { EndpointRateLimiter, EndpointThrottleRule } from "./throttle";
 import type { TokenCache, TokenCacheRecord } from "./token-cache";
 
 const RELAXED_TEST_THROTTLING: AiraloClientOptions["endpointThrottling"] = {
@@ -42,6 +43,14 @@ class MockTokenCache implements TokenCache {
   async clear(): Promise<void> {
     this.record = null;
     this.clearCount++;
+  }
+}
+
+class RecordingRateLimiter implements EndpointRateLimiter {
+  readonly rules: EndpointThrottleRule[] = [];
+
+  async acquire(rule: EndpointThrottleRule): Promise<void> {
+    this.rules.push(rule);
   }
 }
 
@@ -1422,6 +1431,143 @@ test("AiraloClient sends the requested language for installation instructions", 
   });
 
   assert.equal(capturedLanguageHeader, "fr");
+});
+
+test("AiraloClient fetches SIM usage with the documented request shape and throttle rules", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+  const rateLimiter = new RecordingRateLimiter();
+  let requestedUrl: string | null = null;
+  let capturedAuthHeader: string | null = null;
+  let capturedAcceptHeader: string | null = null;
+
+  const fetchImplementation: typeof fetch = async (url, init) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/") && target.endsWith("/usage")) {
+      requestedUrl = target;
+      capturedAuthHeader = authHeader(init);
+      capturedAcceptHeader = requestHeader(init, "Accept");
+      return jsonResponse(
+        {
+          data: {
+            remaining: 767,
+            total: 2048,
+            expired_at: "2022-01-01 00:00:00",
+            is_unlimited: false,
+            status: "ACTIVE",
+            remaining_voice: 12,
+            remaining_text: 34,
+            total_voice: 60,
+            total_text: 100,
+          },
+          meta: { message: "api.succes" },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+    endpointRateLimiter: rateLimiter,
+    endpointThrottling: {
+      simUsagePerMinutePerIccid: 10,
+      simUsagePerSecondPerClient: 5,
+    },
+  });
+
+  const usage = await client.getSimUsage("8944465400000267221");
+
+  assert.equal(usage.remaining, 767);
+  assert.equal(usage.total, 2048);
+  assert.equal(usage.expired_at, "2022-01-01 00:00:00");
+  assert.equal(usage.is_unlimited, false);
+  assert.equal(usage.status, "ACTIVE");
+  assert.equal(usage.remaining_voice, 12);
+  assert.equal(usage.remaining_text, 34);
+  assert.equal(usage.total_voice, 60);
+  assert.equal(usage.total_text, 100);
+  assert.equal(capturedAuthHeader, "Bearer cached-token");
+  assert.equal(capturedAcceptHeader, "application/json");
+  assert(requestedUrl, "SIM usage request should have been issued");
+
+  const url = new URL(requestedUrl!);
+  assert.equal(url.pathname, "/api/sims/8944465400000267221/usage");
+  assert.equal(url.search, "");
+  assert.equal(rateLimiter.rules.length, 2);
+  assert.deepEqual(
+    rateLimiter.rules.map(({ endpoint, limit, windowMs }) => ({
+      endpoint,
+      limit,
+      windowMs,
+    })),
+    [
+      { endpoint: "sim_usage", limit: 10, windowMs: 60_000 },
+      { endpoint: "sim_usage", limit: 5, windowMs: 1_000 },
+    ],
+  );
+  assert.match(rateLimiter.rules[0]?.key ?? "", /^iccid:/);
+  assert.match(rateLimiter.rules[1]?.key ?? "", /^client:/);
+});
+
+test("AiraloClient parses recycled SIM usage payloads", async () => {
+  const tokenCache = new MockTokenCache({
+    token: "cached-token",
+    expiresAt: Date.now() + 60_000,
+    tokenType: "Bearer",
+  });
+
+  const fetchImplementation: typeof fetch = async (url) => {
+    const target = typeof url === "string" ? url : url.toString();
+
+    if (target.includes("/sims/") && target.endsWith("/usage")) {
+      return jsonResponse(
+        {
+          data: {
+            remaining: 0,
+            total: 0,
+            expired_at: null,
+            is_unlimited: null,
+            status: "RECYCLED",
+            remaining_voice: 0,
+            remaining_text: 0,
+            total_voice: 0,
+            total_text: 0,
+          },
+          meta: { message: "api.succes" },
+        },
+        { status: 200 },
+      );
+    }
+
+    throw new Error(`Unexpected URL ${target}`);
+  };
+
+  const client = createTestClient({
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    baseUrl: "https://example.com/api/",
+    fetchImplementation,
+    tokenCache,
+  });
+
+  const usage = await client.getSimUsage("8944465400000267221");
+
+  assert.equal(usage.status, "RECYCLED");
+  assert.equal(usage.expired_at, null);
+  assert.equal(usage.is_unlimited, null);
+  assert.equal(usage.remaining, 0);
+  assert.equal(usage.total, 0);
 });
 
 test("AiraloClient rejects undocumented Get eSIM include values", async () => {

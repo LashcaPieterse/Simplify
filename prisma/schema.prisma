@@ -269,14 +269,23 @@ model EsimProfile {
 }
 
 model UsageSnapshot {
-  id          String      @id @default(cuid())
-  profile     EsimProfile @relation(fields: [profileId], references: [id])
-  profileId   String
-  order       EsimOrder   @relation(fields: [orderId], references: [id])
-  orderId     String
-  usedMb      Float?
-  remainingMb Float?
-  recordedAt  DateTime    @default(now())
+  id                    String      @id @default(cuid())
+  profile               EsimProfile @relation(fields: [profileId], references: [id])
+  profileId             String
+  order                 EsimOrder   @relation(fields: [orderId], references: [id])
+  orderId               String
+  usedMb                Float?
+  remainingMb           Float?
+  totalMb               Float?
+  status                String?
+  expiredAt             DateTime?
+  isUnlimited           Boolean?
+  remainingVoiceMinutes Int?
+  totalVoiceMinutes     Int?
+  remainingTextMessages Int?
+  totalTextMessages     Int?
+  rawPayload            Json?
+  recordedAt            DateTime    @default(now())
 }
 
 model WebhookEvent {

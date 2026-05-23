@@ -43,6 +43,24 @@ function formatDataAmount(value: number | null | undefined): string {
   return `${value.toFixed(2)} MB`;
 }
 
+function formatOptionalDate(value: Date | null | undefined): string {
+  return value ? value.toLocaleString() : "Not set";
+}
+
+function formatCounter(value: number | null | undefined): string {
+  return typeof value === "number" ? value.toLocaleString() : "—";
+}
+
+function hasUsageCounter(
+  remaining: number | null | undefined,
+  total: number | null | undefined,
+): boolean {
+  return (
+    (typeof remaining === "number" && remaining > 0) ||
+    (typeof total === "number" && total > 0)
+  );
+}
+
 function canAccessOrder(order: OrderWithDetails, session: SessionLike): boolean {
   return canAccessOwnerScopedRecord(
     order,
@@ -170,6 +188,24 @@ export default async function OrderPage({ params }: OrderPageParams) {
   const profile = order.profiles[0] ?? null;
 
   const usageResult = profile ? await pollUsageForProfile(order.id, profile) : null;
+  const usageSnapshot = usageResult?.snapshot ?? null;
+  const usageStatus = usageSnapshot?.status ?? null;
+  const isRecycledUsage = usageStatus?.toUpperCase() === "RECYCLED";
+  const shouldShowFiniteDataUsage =
+    Boolean(usageSnapshot) &&
+    usageSnapshot?.isUnlimited !== true &&
+    !isRecycledUsage &&
+    (usageSnapshot?.usedMb !== null ||
+      usageSnapshot?.remainingMb !== null ||
+      usageSnapshot?.totalMb !== null);
+  const hasVoiceUsage = hasUsageCounter(
+    usageSnapshot?.remainingVoiceMinutes,
+    usageSnapshot?.totalVoiceMinutes,
+  );
+  const hasTextUsage = hasUsageCounter(
+    usageSnapshot?.remainingTextMessages,
+    usageSnapshot?.totalTextMessages,
+  );
   const topUpPackages = profile?.iccid ? await getTopUpPackages(profile.iccid) : [];
   const installationPayload = parseInstallationPayload(order.installation?.payload ?? null);
   const qrCodeUrl = resolveQrCodeUrl(installationPayload);
@@ -285,27 +321,84 @@ export default async function OrderPage({ params }: OrderPageParams) {
 
       <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-200">
         <h2 className="text-xl font-semibold text-brand-900">Data usage</h2>
-        {usageResult?.snapshot ? (
-          <dl className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <dt className="text-sm text-sand-500">Used</dt>
-              <dd className="text-lg font-semibold text-brand-900">
-                {formatDataAmount(usageResult.snapshot.usedMb)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-sand-500">Remaining</dt>
-              <dd className="text-lg font-semibold text-brand-900">
-                {formatDataAmount(usageResult.snapshot.remainingMb)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-sand-500">Last updated</dt>
-              <dd className="text-lg font-semibold text-brand-900">
-                {usageResult.snapshot.recordedAt.toLocaleString()}
-              </dd>
-            </div>
-          </dl>
+        {usageSnapshot ? (
+          <div className="mt-4 space-y-4">
+            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <dt className="text-sm text-sand-500">Status</dt>
+                <dd className="text-lg font-semibold text-brand-900">
+                  {usageStatus ?? "Unknown"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-sand-500">Expires</dt>
+                <dd className="text-lg font-semibold text-brand-900">
+                  {formatOptionalDate(usageSnapshot.expiredAt)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-sand-500">Last updated</dt>
+                <dd className="text-lg font-semibold text-brand-900">
+                  {usageSnapshot.recordedAt.toLocaleString()}
+                </dd>
+              </div>
+            </dl>
+
+            {isRecycledUsage ? (
+              <p className="rounded-2xl bg-sand-50 p-4 text-sm text-sand-600">
+                Airalo marks this SIM as recycled, so usage counters are no longer shown.
+              </p>
+            ) : usageSnapshot.isUnlimited ? (
+              <p className="rounded-2xl bg-sand-50 p-4 text-sm text-sand-600">
+                This is an unlimited data package. Airalo reports data counters as zero for
+                unlimited plans, so finite usage is not shown.
+              </p>
+            ) : shouldShowFiniteDataUsage ? (
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <dt className="text-sm text-sand-500">Used</dt>
+                  <dd className="text-lg font-semibold text-brand-900">
+                    {formatDataAmount(usageSnapshot.usedMb)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-sand-500">Remaining</dt>
+                  <dd className="text-lg font-semibold text-brand-900">
+                    {formatDataAmount(usageSnapshot.remainingMb)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-sm text-sand-500">Total</dt>
+                  <dd className="text-lg font-semibold text-brand-900">
+                    {formatDataAmount(usageSnapshot.totalMb)}
+                  </dd>
+                </div>
+              </dl>
+            ) : null}
+
+            {hasVoiceUsage || hasTextUsage ? (
+              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {hasVoiceUsage ? (
+                  <div>
+                    <dt className="text-sm text-sand-500">Voice minutes</dt>
+                    <dd className="text-lg font-semibold text-brand-900">
+                      {formatCounter(usageSnapshot.remainingVoiceMinutes)} remaining of{" "}
+                      {formatCounter(usageSnapshot.totalVoiceMinutes)}
+                    </dd>
+                  </div>
+                ) : null}
+                {hasTextUsage ? (
+                  <div>
+                    <dt className="text-sm text-sand-500">Text messages</dt>
+                    <dd className="text-lg font-semibold text-brand-900">
+                      {formatCounter(usageSnapshot.remainingTextMessages)} remaining of{" "}
+                      {formatCounter(usageSnapshot.totalTextMessages)}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : null}
+          </div>
         ) : (
           <p className="mt-4 text-sm text-sand-600">
             Usage information isn&apos;t available yet. We&apos;ll refresh it as soon as the SIM is

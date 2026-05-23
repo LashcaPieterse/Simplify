@@ -418,11 +418,6 @@ function normalizePackagesData(data: unknown): Package[] {
   return Object.values(legacyData).flatMap((packages) => packages);
 }
 
-export interface GetUsageOptions {
-  iccid?: string;
-  orderId?: string;
-}
-
 export interface GetSimOptions {
   include?: GetSimInclude | GetSimInclude[];
 }
@@ -957,29 +952,6 @@ export class AiraloClient {
     payload: CreateOrderPayload,
   ): Promise<SubmitOrderAsyncAck> {
     const response = await this.createOrderAsyncResponse(payload);
-    return response.data;
-  }
-
-  async getUsageResponse({
-    iccid,
-    orderId,
-  }: GetUsageOptions): Promise<UsageResponse> {
-    const identifier = iccid ?? orderId;
-
-    if (!identifier) {
-      throw new Error(
-        "An ICCID or order ID is required to request usage information.",
-      );
-    }
-
-    return this.request({
-      path: `/orders/${encodeURIComponent(identifier)}/usage`,
-      schema: UsageResponseSchema,
-    });
-  }
-
-  async getUsage(options: GetUsageOptions): Promise<Usage> {
-    const response = await this.getUsageResponse(options);
     return response.data;
   }
 
