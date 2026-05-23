@@ -1,9 +1,5 @@
 # Submit order
 
-> Local implementation note: this file mirrors Airalo's upstream contract, where
-> `quantity` can be up to 50. Simplify intentionally caps checkout/order
-> quantity at 10; see `docs/operations/airalo-submit-order.md`.
-
 ## OpenAPI Specification
 
 ```yaml

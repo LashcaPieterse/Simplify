@@ -33,7 +33,7 @@ This document defines a repeatable QA process for the Airalo integration, includ
 Local correctness:
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm run airalo:test
 ```
 
@@ -83,8 +83,10 @@ Minimum dashboard panels:
 ## 6) CI/CD Automation (Recommended)
 
 1. PR pipeline:
-- `npx tsc --noEmit`
+- `npm run typecheck`
 - `npm run airalo:test`
+- `npm run lint`
+- `npm run build`
 
 2. Pre-deploy manual gate:
 - Run `npm run airalo:smoke-live` with deployment credentials.

@@ -9,7 +9,8 @@ An order/profile status can move away from `pending` in either of these moments:
 1. **At order creation time**
    - During order persistence, `esimOrder.status` and `esimProfile.status` are initialized from Airalo's order response (`order.status`), with fallback to `pending` if the field is missing.
 2. **When Airalo webhook events arrive**
-   - The Airalo webhook handler updates both `esimOrder.status` and `esimProfile.status` to `payload.data.status`.
+   - The Airalo webhook handler updates `esimOrder.status` to `payload.data.status`.
+   - When the webhook includes an ICCID, the handler upserts `esimProfile` and stores the same provider status on that profile.
    - Webhook payloads may also include `previous_status`, which indicates the prior provider state.
 
 ## Source-of-truth for "when did it change"

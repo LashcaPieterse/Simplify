@@ -1,6 +1,6 @@
 # Dependency Security Triage
 
-Last reviewed: 2026-05-23.
+Last reviewed: 2026-05-24.
 
 ## Current Status
 
@@ -22,4 +22,3 @@ Last reviewed: 2026-05-23.
 ## CI Policy
 
 CI runs `npm run security:audit` as a report-only step until the major framework and Studio upgrades are completed. Do not treat a passing typecheck/build as security clearance while this document lists unresolved high-severity runtime advisories.
-

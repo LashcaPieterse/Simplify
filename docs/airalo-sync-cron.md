@@ -21,7 +21,7 @@ This project supports triggering `/api/airalo-sync` from an external scheduler. 
 
    Use a stable production alias/custom domain, **not** a single deployment URL.
 
-4. Check debug output correctly:
+4. Check non-production debug output correctly:
    - The debug field `vercelUrl` comes from Vercel runtime (`VERCEL_URL`) and usually points to the backing deployment host.
    - It does **not** mean your GitHub secret is wrong as long as `AIRALO_SYNC_URL` targets your stable production domain.
 
@@ -30,7 +30,7 @@ This project supports triggering `/api/airalo-sync` from an external scheduler. 
    - Schedule: hourly (`7 * * * *`)
    - Manual runs supported via **Run workflow** with two modes:
      - `sync` (default): runs package sync
-     - `debug`: calls `/api/airalo-sync?debug=1` and returns env diagnostics
+     - `debug`: calls `/api/airalo-sync?debug=1`. Diagnostics are returned only outside production; production returns 404 by design.
 
 6. Verify it works:
    - Trigger it manually once from the Actions tab.
@@ -49,16 +49,17 @@ If `AIRALO_SYNC_CRON_TOKEN` is set and the incoming token does not match, it ret
 
 If your Actions log shows `HTTP 500` and `{"error":"Airalo sync failed"}`:
 
-1. Run the workflow manually with `mode=debug`.
-2. Check debug JSON output for these fields:
+1. Check Vercel function logs for `/api/airalo-sync`; production debug diagnostics are intentionally disabled.
+2. In a preview/staging deployment, run the workflow manually with `mode=debug`.
+3. Check debug JSON output for these fields:
    - `airaloClientIdPresent`
    - `airaloClientSecretPresent`
    - `databaseUrlPresent`
    - `cronTokenPresent`
-3. If any of those are false, fix Vercel env vars and redeploy.
-4. Check Vercel function logs for `/api/airalo-sync` to get the exact exception stack.
+4. If any of those are false, fix Vercel env vars and redeploy.
+5. Check Vercel function logs for `/api/airalo-sync` to get the exact exception stack.
 
-The workflow also attempts a debug probe automatically after a failed `sync` run to speed up diagnosis.
+The workflow also attempts a debug probe automatically after a failed `sync` run. On production deployments this probe is expected to return 404, so the production function logs remain the primary diagnostic source.
 
 ## Alerting
 
@@ -74,14 +75,13 @@ Without notification settings enabled, failed runs will not automatically email 
 ## Notes
 
 - If you use preview/staging environments, give each environment its own URL/token pair.
-- The route disconnects Prisma on completion to keep cold-start invocations lightweight.
 
 ## Stale-package and price-change handling
 
 The sync endpoint now acts as the **single source of truth** for package availability and pricing:
 
 - Sync writes latest Airalo package details into Prisma (including updated prices).
-- Sync uses paginated `GET /v2/packages` requests with `include=topup` and `limit=100` rather than the no-limit full-catalog response. This keeps serverless memory use predictable while still following Airalo's documented `links.next` / `meta.current_page` / `meta.last_page` pagination contract.
+- Sync uses paginated `GET /v2/packages` requests with `include=topup` and `limit=100` rather than the no-limit full-catalog response. The Airalo export in [`Airalo API/getPackages.md`](<Airalo API/getPackages.md>) allows either approach; Simplify chooses pagination to keep serverless memory predictable while still following Airalo's documented `links.next` / `meta.current_page` / `meta.last_page` pagination contract.
 - Each Airalo page response is stored as a raw JSON snapshot on `package_sync_pages.raw_payload_json` alongside the extracted `links`, `meta`, and `pricing` envelopes once the latest database migration has been deployed. If the column is not present yet, sync continues without raw snapshots and logs a warning.
 - Packages missing from the latest upstream dataset are automatically marked inactive (`isActive=false`).
 - After a successful sync, the route triggers `revalidatePath` for home/country/plan pages so static pages refresh without a full redeploy.

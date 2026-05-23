@@ -23,7 +23,7 @@ Set the following environment variables in production and non-production environ
 1. `/api/checkouts` validates the requested package, persists a `CheckoutSession`, and creates a DPO transaction.
 2. `/api/checkouts` sets a scoped HTTP-only checkout access cookie. Authenticated users can also access their own checkout by session ownership.
 3. Customers are redirected to DPO's hosted page. On completion DPO sends both a browser redirect to `/checkout/[id]/return` and a server-to-server notification to `/api/payments/dpo/ipn`.
-4. The IPN handler validates the signature, stores the payload in `PaymentTransactionEvent`, updates the payment status, and finalises the order when the status is `approved`.
+4. The IPN handler validates the `x-dpo-signature` HMAC signature, stores accepted payloads in `PaymentTransactionEvent`, updates the payment status, and finalises the order when the status is `approved`.
 5. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` or `/checkout/{id}/failed`.
 6. When finalisation exposes an order ID, the status API sets a scoped HTTP-only order access cookie for guest order-page and eSIM-instruction access.
 
@@ -39,7 +39,7 @@ Set the following environment variables in production and non-production environ
 ### Incident: IPN signature mismatch
 
 1. Confirm `DPO_IPN_SECRET` matches the value configured in the DPO dashboard.
-2. Inspect the latest `PaymentTransactionEvent` entries for `eventType=ipn` to review the raw payload.
+2. Inspect platform logs for `invalid_signature`. Accepted IPNs are stored in `PaymentTransactionEvent` with `eventType=ipn`; rejected IPNs are not persisted.
 3. Do not unset `DPO_IPN_SECRET` in production. Production fails closed when the secret is missing.
 4. Rotate the secret in both DPO and the platform, redeploy, and replay the affected IPNs if needed.
 

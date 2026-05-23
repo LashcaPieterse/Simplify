@@ -1,6 +1,6 @@
 # Get Packages Endpoint Alignment Review
 
-This review tracks how the Simplify catalog schema and sync job align with the local Airalo `getPackages` OpenAPI export.
+This review tracks how the Simplify catalog schema and sync job align with the local Airalo [`getPackages.md`](<Airalo API/getPackages.md>) OpenAPI export.
 
 ## Current status
 
@@ -14,7 +14,7 @@ The previous review stated that the catalog tables were missing. That is no long
 
 ## Sync contract
 
-- Scheduled syncs call `GET /v2/packages` hourly.
+- Scheduled syncs call `GET /v2/packages` hourly, matching the cadence recommended in the Airalo export.
 - The request includes `Authorization: Bearer <token>` and `Accept: application/json`.
 - Scheduled syncs intentionally use `include=topup` and `limit=100` with pagination instead of the no-limit full-catalog response. This keeps serverless memory predictable while still following the Airalo pagination contract.
 - Pagination follows `links.next`, `meta.current_page`, and `meta.last_page`; it does not infer completion from the number of countries returned.
@@ -23,7 +23,7 @@ The previous review stated that the catalog tables were missing. That is no long
 
 ## Rate limits
 
-The local Airalo export identifies the package endpoint limit as 80 requests per minute per authentication token. Simplify keeps an internal sync pacing limit of 40 requests per minute for unattended catalog jobs. This is intentionally conservative and still far above the hourly scheduler's normal needs.
+The endpoint-specific Airalo export identifies the package endpoint limit as 80 requests per minute per authentication token. Simplify keeps an internal sync pacing limit of 40 requests per minute for unattended catalog jobs. This is intentionally conservative and still far above the hourly scheduler's normal needs.
 
 ## Notes for future changes
 

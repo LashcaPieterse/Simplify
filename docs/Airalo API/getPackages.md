@@ -87,9 +87,8 @@ paths:
         ### Rate-Limit Context
 
         - The browse packages endpoint allows up to 80 requests per minute per
-        unique authentication token. Simplify intentionally paces unattended
-        catalog sync below that ceiling at 40 requests per minute. One sync per
-        hour is far below the threshold and safe to run continuously.
+        unique authentication token. One sync per hour is far below the
+        threshold and safe to run continuously.
 
 
         ### Snapshot-Based Processing

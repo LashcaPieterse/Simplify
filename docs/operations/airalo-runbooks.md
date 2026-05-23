@@ -19,6 +19,10 @@ This document describes the operational playbooks for the Airalo integration, in
 | `airalo_webhook_events_total` | Counter | `result`, `event_type`, `reason` | Webhook processing outcomes (processed/duplicate/rejected/error). |
 | `airalo_webhook_processing_duration_seconds` | Histogram | `result`, `event_type`, `reason` | Processing time per webhook. |
 | `airalo_rate_limit_events_total` | Counter | `source` | Rate-limit observations for orders/webhooks. |
+| `airalo_endpoint_requests_total` | Counter | `endpoint`, `result`, `status` | Outbound Airalo endpoint attempts. |
+| `airalo_api_errors_total` | Counter | `endpoint`, `status`, `code`, `category`, `retriable` | Classified outbound Airalo API errors. |
+| `airalo_token_refresh_total` | Counter | `source` | Airalo token refresh count. |
+| `airalo_package_sync_last_success_timestamp` | Gauge | none | Unix timestamp of the last successful package sync. |
 
 ### Structured Log Events
 
@@ -27,7 +31,10 @@ Logs are emitted as JSON with the `service` field set to `order-service`. Key ev
 - `order.validation.failed` – Validation errors before contacting Airalo.
 - `order.package.unavailable` – Order aborted because the package no longer exists locally.
 - `airalo.order.create.failed` – Airalo request rejected/errored. Includes latency, Airalo status, and request identifiers when available.
-- `airalo.order.create.succeeded` – Successful response from Airalo.
+- `airalo.order.async.accepted` – Successful `/orders-async` acknowledgement.
+- `airalo.order.sync.completed` – Successful synchronous `/orders` response.
+- `airalo.order.async_fallback_sync` – Async order submission fell back to the synchronous endpoint after an Airalo webhook opt-in error.
+- `catalog.package.auto_paused` – Local package state was deactivated after Airalo returned an out-of-stock or invalid-package signal.
 - `order.persistence.failed` – Database persistence failures.
 - `order.create.completed` – Order fully persisted locally.
 - `webhook.*` – Webhook processing lifecycle events (duplicate, processed, failures, etc.).
@@ -74,7 +81,7 @@ Logs are emitted as JSON with the `service` field set to `order-service`. Key ev
     severity: critical
   annotations:
     summary: "Repeated 5xx responses from Next.js API routes"
-    description: "Investigate /api/orders and /api/airalo/webhooks endpoints."
+    description: "Investigate /api/checkouts, /api/orders, and /api/airalo/webhooks endpoints."
 ```
 
 ### Dashboard Suggestions
@@ -82,7 +89,7 @@ Logs are emitted as JSON with the `service` field set to `order-service`. Key ev
 - **Order Health Panel**: Plot `rate(airalo_order_requests_total{result="success"}[5m])` vs. `result="error"` to visualise success rate.
 - **Webhook Throughput**: Graph `increase(airalo_webhook_events_total[5m])` split by `result` and `event_type`.
 - **Latency Heatmap**: Use `airalo_order_request_duration_seconds_bucket` and `airalo_webhook_processing_duration_seconds_bucket` for histograms.
-- **Rate Limit Monitor**: Chart `increase(airalo_rate_limit_events_total[15m])` for early warnings.
+- **Rate Limit Monitor**: Chart `increase(airalo_rate_limit_events_total[15m])` for early warnings. Sources include `orders`, `webhooks`, `token`, `packages`, `sim_usage`, and `sim_packages`.
 
 ## Runbooks
 
@@ -90,8 +97,9 @@ Logs are emitted as JSON with the `service` field set to `order-service`. Key ev
 
 Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appears to run without updating package data.
 
-1. **Run endpoint diagnostics first**
-   - Open `GET /api/airalo-sync?debug=1` on the same deployment that is failing.
+1. **Run endpoint diagnostics where allowed**
+   - Production returns 404 for `GET /api/airalo-sync?debug=1` by design. Use Vercel function logs for production failures.
+   - On preview/staging deployments, open `GET /api/airalo-sync?debug=1` on the same deployment that is failing.
    - If a cron token is configured, include `x-airalo-sync-key: <AIRALO_SYNC_CRON_TOKEN>` or add `?key=<AIRALO_SYNC_CRON_TOKEN>`.
    - Confirm the response flags and lengths:
      - `airaloClientIdPresent` = `true`
@@ -112,7 +120,7 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 
 3. **Force a fresh deployment after env changes**
    - Vercel environment updates do not affect already-built deployments.
-   - Redeploy and then rerun `/api/airalo-sync?debug=1` to confirm new values are loaded.
+   - Redeploy and then rerun `/api/airalo-sync?debug=1` in a non-production environment, or inspect production function logs, to confirm new values are loaded.
 
 4. **Check authorization failures (`401`)**
    - If `AIRALO_SYNC_CRON_TOKEN` is set, requests without a matching key are rejected.
@@ -131,7 +139,7 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 
 1. **Confirm the alert**: Check the `PublicApiFiveHundreds` alert in Alertmanager/Grafana.
 2. **Inspect metrics**: Review `airalo_order_requests_total` and `airalo_webhook_events_total` for concurrent failures.
-3. **Review logs**: Search for `order.persistence.failed`, `airalo.order.create.failed`, or `webhook.processing.failed` events.
+3. **Review logs**: Search for `order.persistence.failed`, `airalo.order.create.failed`, `airalo.order.async_fallback_sync`, `catalog.package.auto_paused`, or `webhook.processing.failed` events.
 4. **Mitigation**:
    - If due to Airalo 5xx/429 responses, enable request backoff and contact the partner if sustained.
    - For database failures, check Prisma migrations and database availability.
