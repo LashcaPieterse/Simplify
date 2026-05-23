@@ -9,6 +9,7 @@ import { createCheckout } from "@/lib/payments/checkouts";
 import { authOptions } from "@/lib/auth/options";
 import { getServerSession } from "next-auth";
 import InstallationInstructions from "@/components/esim/InstallationInstructions";
+import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 
 type OrderPageParams = {
   params: {
@@ -124,11 +125,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
   if (!order) {
     notFound();
   }
-  const pkg = await prisma.package.findFirst({
-    where: {
-      OR: [{ id: order.packageId }, { airaloPackageId: order.packageId }],
-    },
-  });
+  const pkg = await findPackageDisplayByIdentifier(prisma, order.packageId);
   const profile = order.profiles[0] ?? null;
 
   const usageResult = profile ? await pollUsageForProfile(order.id, profile) : null;

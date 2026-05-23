@@ -12,6 +12,11 @@ import {
   extractAiraloBusinessError,
   type AiraloBusinessErrorInfo,
 } from "../airalo/errors";
+import {
+  findActivePackageByIdentifier,
+  getPackagePrice,
+  inspectPackageIdentifierLookup,
+} from "../catalog/package-resolver";
 import type {
   Order as AiraloOrder,
   OrderResponse,
@@ -1129,37 +1134,15 @@ export async function createOrder(
     orderTotalCents = reservedOrder.totalCents;
     currencyCode = reservedOrder.currency;
   } else {
-    const uuidRegex =
-      /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-    const packageLookup: Prisma.PackageWhereInput = uuidRegex.test(packageId)
-      ? {
-          state: { is: { isActive: true } },
-          OR: [{ id: packageId }, { airaloPackageId: packageId }],
-        }
-      : {
-          state: { is: { isActive: true } },
-          airaloPackageId: packageId,
-        };
-
-    const resolvedPackage = await db.package.findFirst({
-      where: packageLookup,
-      include: { state: true },
-    });
+    const resolvedPackage = await findActivePackageByIdentifier(db, packageId);
     if (!resolvedPackage) {
-      const byId = await db.package.findFirst({
-        where: { id: packageId },
-        include: { state: true },
-      });
-      const byExternalId = await db.package.findFirst({
-        where: { airaloPackageId: packageId },
-        include: { state: true },
-      });
+      const lookupDiagnostics = await inspectPackageIdentifierLookup(
+        db,
+        packageId,
+      );
       console.info("order.package.lookup", {
         packageId,
-        foundById: Boolean(byId),
-        foundByExternalId: Boolean(byExternalId),
-        isActiveById: byId?.state?.isActive ?? null,
-        isActiveByExternalId: byExternalId?.state?.isActive ?? null,
+        ...lookupDiagnostics,
       });
     }
 
@@ -1178,7 +1161,9 @@ export async function createOrder(
       throw new OrderValidationError("Selected plan is no longer available.");
     }
 
-    if (typeof resolvedPackage.state?.sellingPriceCents !== "number") {
+    const packagePrice = getPackagePrice(resolvedPackage);
+
+    if (!packagePrice) {
       logOrderError("order.package.missing_price", {
         packageId: resolvedPackage.id,
         packageExternalId: resolvedPackage.airaloPackageId,
@@ -1196,9 +1181,8 @@ export async function createOrder(
 
     pkg = resolvedPackage;
     normalisedQuantity = normaliseQuantity(quantity);
-    orderTotalCents =
-      resolvedPackage.state.sellingPriceCents * normalisedQuantity;
-    currencyCode = resolvedPackage.state?.currencyCode ?? "USD";
+    orderTotalCents = packagePrice.sellingPriceCents * normalisedQuantity;
+    currencyCode = packagePrice.currencyCode;
   }
 
   const description = `${normalisedQuantity} x ${pkg.title}`;

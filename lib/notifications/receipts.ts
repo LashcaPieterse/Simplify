@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 
+import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 import prismaClient from "@/lib/db/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { sendEmail } from "@/lib/notifications/email";
@@ -126,10 +127,7 @@ export async function sendOrderReceipt(
     return { sent: false, skipped: true, reason: "already_sent" };
   }
 
-  const pkg = await db.package.findFirst({
-    where: { OR: [{ id: order.packageId }, { airaloPackageId: order.packageId }] },
-    include: { operator: { include: { country: true } } },
-  });
+  const pkg = await findPackageDisplayByIdentifier(db, order.packageId);
 
   const amountCents = order.totalCents ?? order.payment?.amountCents ?? null;
   const currency = order.currency ?? order.payment?.currency ?? "USD";
