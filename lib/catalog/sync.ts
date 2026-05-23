@@ -9,6 +9,7 @@ import {
 import { resolveSharedTokenCache } from "../airalo/token-cache";
 import type { Package } from "../airalo/schemas";
 import prismaClient from "../db/client";
+import { toPrismaJson } from "../db/json";
 import { recordPackageSyncSuccess } from "../observability/metrics";
 
 interface SyncLogger {
@@ -81,14 +82,6 @@ type ResolvedPrice = {
 const PACKAGE_SYNC_PAGE_SELECT = {
   id: true,
 } as const;
-
-function toPrismaJson(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
-  if (value === null || value === undefined) {
-    return Prisma.JsonNull;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
 
 function delay(ms: number): Promise<void> {
   if (ms <= 0) {

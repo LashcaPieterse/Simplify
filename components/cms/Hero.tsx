@@ -15,6 +15,7 @@ import type {
 } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
+import { formatMoneyAmount } from "@/lib/format";
 import { ProductCard } from "./ProductCard";
 
 const fadeIn = {
@@ -30,25 +31,6 @@ type HeroProps = {
   highlightedProducts: EsimProductSummary[];
   allProducts: EsimProductSummary[];
   fallbackCountries?: CountrySummary[];
-};
-
-const formatPrice = (amount?: number, currency = "USD") => {
-  if (typeof amount !== "number") {
-    return "";
-  }
-
-  try {
-    const hasCents = amount % 1 !== 0;
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: hasCents ? 2 : 0,
-      maximumFractionDigits: 2
-    }).format(amount);
-  } catch (error) {
-    console.warn("Failed to format price", error);
-    return `${amount}`;
-  }
 };
 
 const getCtaHref = (cta: SanityLink) => resolveLinkHref(cta);
@@ -239,7 +221,7 @@ function HeroCountryCard({ country }: { country: CountrySummary }) {
       </div>
       <div className="flex flex-col items-end gap-3">
         {typeof priceAmount === "number" ? (
-          <p className="font-semibold text-brand-900">{formatPrice(priceAmount, priceCurrency)}</p>
+          <p className="font-semibold text-brand-900">{formatMoneyAmount(priceAmount, priceCurrency)}</p>
         ) : null}
         <Button variant="ghost" size="sm" className="text-xs" asChild>
           <Link href={`/country/${country.slug}`}>View plans</Link>

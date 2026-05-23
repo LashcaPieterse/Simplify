@@ -9,6 +9,7 @@ import type {
   SubmitOrderAsyncResponse,
 } from "../airalo/schemas";
 import prismaClient from "../db/client";
+import { toPrismaJson } from "../db/json";
 import { logOrderError, logOrderWarn } from "../observability/logging";
 import { recordOrderMetrics } from "../observability/metrics";
 import { createInstallationPayload } from "./airalo-metadata";
@@ -56,16 +57,6 @@ const RESERVED_ORDER_CLAIMABLE_STATUSES = [
 
 export function isPrismaClient(client: PrismaDbClient): client is PrismaClient {
   return typeof (client as PrismaClient).$transaction === "function";
-}
-
-export function toPrismaJson(
-  value: unknown,
-): Prisma.InputJsonValue | typeof Prisma.JsonNull {
-  if (value === null || value === undefined) {
-    return Prisma.JsonNull;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 export function createResultFromExistingOrder(order: {

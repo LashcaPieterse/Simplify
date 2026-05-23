@@ -10,6 +10,7 @@ import { authOptions } from "@/lib/auth/options";
 import { getServerSession } from "next-auth";
 import InstallationInstructions from "@/components/esim/InstallationInstructions";
 import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
+import { formatCurrency } from "@/lib/format";
 
 type OrderPageParams = {
   params: {
@@ -27,24 +28,6 @@ function formatDataAmount(value: number | null | undefined): string {
   }
 
   return `${value.toFixed(2)} MB`;
-}
-
-function formatCurrency(amount: number | null | undefined, currency?: string | null): string {
-  if (amount === null || amount === undefined || Number.isNaN(amount)) {
-    return "—";
-  }
-
-  try {
-    const hasCents = amount % 100 !== 0;
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency ?? "USD",
-      minimumFractionDigits: hasCents ? 2 : 0,
-      maximumFractionDigits: 2,
-    }).format(amount / 100);
-  } catch {
-    return `${amount / 100} ${currency ?? "USD"}`;
-  }
 }
 
 async function purchaseTopUp(

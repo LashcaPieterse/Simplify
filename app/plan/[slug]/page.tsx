@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { CheckCircle2, Globe2, Router, SignalHigh } from "lucide-react";
 import { OrderButton } from "@/components/orders/OrderButton";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
+import { formatMoneyAmount } from "@/lib/format";
 import { getCatalogPackageId, getPlanBySlug, getPlanSlugs, getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 
@@ -72,12 +73,7 @@ export default async function PlanPage({ params }: PlanPageProps) {
             ) : null}
             <p className="text-3xl font-semibold text-brand-900">
               {hasLivePrice
-                ? new Intl.NumberFormat("en-US", {
-                    style: "currency",
-                    currency: livePrice?.currency ?? "USD",
-                    minimumFractionDigits: (livePrice?.amount ?? 0) % 1 !== 0 ? 2 : 0,
-                    maximumFractionDigits: 2
-                  }).format(livePrice?.amount ?? 0)
+                ? formatMoneyAmount(livePrice?.amount, livePrice?.currency ?? "USD")
                 : "Unavailable"}
             </p>
             <OrderButton

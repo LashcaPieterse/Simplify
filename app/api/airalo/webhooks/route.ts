@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/db/client";
+import { toPrismaJson } from "@/lib/db/json";
 import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
 import { logOrderError, logOrderInfo } from "@/lib/observability/logging";
 import {
@@ -22,16 +23,6 @@ import {
   buildWebhookOrderClauses,
   resolveWebhookRequestId,
 } from "@/lib/orders/webhook-matching";
-
-function toPrismaJson(
-  value: unknown,
-): Prisma.InputJsonValue | typeof Prisma.JsonNull {
-  if (value === null || value === undefined) {
-    return Prisma.JsonNull;
-  }
-
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
 
 function decodeSignature(signature: string): Buffer | null {
   const trimmed = signature.trim();

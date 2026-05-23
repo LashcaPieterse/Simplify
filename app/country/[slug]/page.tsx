@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Clock3, Gauge, Router, SignalHigh, Star, Wifi } from "lucide-react";
 import { OrderButton } from "@/components/orders/OrderButton";
 import { Button } from "@/components/ui/button";
+import { formatMoneyAmount } from "@/lib/format";
 import {
   getCatalogPackageId,
   getCountryBySlug,
@@ -107,12 +108,7 @@ function PlanCard({ plan }: { plan: PlanDetail }) {
   const livePrice = plan.price?.source === "airalo" ? plan.price : null;
   const hasLivePrice = Boolean(livePrice && typeof livePrice.amount === "number");
   const formattedPrice = hasLivePrice
-    ? new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: livePrice?.currency ?? "USD",
-        minimumFractionDigits: (livePrice?.amount ?? 0) % 1 !== 0 ? 2 : 0,
-        maximumFractionDigits: 2
-      }).format(livePrice?.amount ?? 0)
+    ? formatMoneyAmount(livePrice?.amount, livePrice?.currency ?? "USD")
     : "Unavailable";
 
   return (

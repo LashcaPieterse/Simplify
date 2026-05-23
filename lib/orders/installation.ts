@@ -8,6 +8,7 @@ import type {
   SimResponse,
 } from "../airalo/schemas";
 import prismaClient from "../db/client";
+import { toPrismaJson } from "../db/json";
 import { logOrderWarn } from "../observability/logging";
 import {
   createInstallationPayload,
@@ -24,7 +25,6 @@ import {
 } from "./airalo-ordering";
 import {
   isPrismaClient,
-  toPrismaJson,
   type CreateOrderResult,
   type PrismaDbClient,
 } from "./persistence";

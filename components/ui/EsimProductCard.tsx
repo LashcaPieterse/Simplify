@@ -3,22 +3,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/utils";
 import type { EsimProductCardData } from "@/lib/products";
-
-const formatPrice = (price?: { amount?: number; currency?: string }) => {
-  if (typeof price?.amount !== "number") {
-    return null;
-  }
-
-  const currency = price.currency ?? "USD";
-  const hasCents = price.amount % 1 !== 0;
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: hasCents ? 2 : 0,
-    maximumFractionDigits: 2
-  }).format(price.amount);
-};
+import { formatMoneyAmount } from "@/lib/format";
 
 export function EsimProductCard({
   product,
@@ -29,7 +14,7 @@ export function EsimProductCard({
 }) {
   const formattedPrice =
     typeof product.price?.amount === "number"
-      ? formatPrice({ amount: product.price.amount, currency: product.price.currency })
+      ? formatMoneyAmount(product.price.amount, product.price.currency ?? "USD")
       : null;
   const href = product.href;
   const ctaLabel = product.ctaLabel ?? "View details";

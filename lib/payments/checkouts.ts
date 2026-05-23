@@ -8,14 +8,17 @@ import {
   isUuid,
 } from "../catalog/package-resolver";
 import prismaClient from "../db/client";
+import { centsToMajorUnits } from "../format";
 import { sendOrderReceipt } from "../notifications/receipts";
 import { logOrderError, logOrderInfo } from "../observability/logging";
+import { DEFAULT_QUANTITY, MAX_QUANTITY, normaliseQuantity } from "../orders/quantity";
 import { createOrder } from "../orders/service";
 import type {
   CreateOrderOptions,
   CreateOrderResult,
   ReservedOrderSnapshot,
 } from "../orders/service";
+import { appendStatusHistory, createStatusHistory, serialise } from "./status-history";
 import { resolveDpoClient } from "./dpo";
 
 const checkoutInputSchema = z.object({
@@ -24,8 +27,8 @@ const checkoutInputSchema = z.object({
     .number({ invalid_type_error: "Quantity must be a number." })
     .int("Quantity must be an integer.")
     .positive("Quantity must be at least 1.")
-    .max(10, "You can order up to 10 eSIMs per checkout.")
-    .default(1)
+    .max(MAX_QUANTITY, `You can order up to ${MAX_QUANTITY} eSIMs per checkout.`)
+    .default(DEFAULT_QUANTITY)
     .optional(),
   customerEmail: z.string().email("Enter a valid email address.").optional(),
   intent: z.enum(["purchase", "top-up"]).default("purchase").optional(),
@@ -63,26 +66,6 @@ const STATUS_APPROVED = "approved";
 const STATUS_FINALIZING = "finalizing";
 const PROVIDER = "dpo";
 const RESERVED_ORDER_FAILED_STATUS = "airalo_failed";
-
-function normaliseQuantity(quantity?: number): number {
-  if (typeof quantity !== "number" || Number.isNaN(quantity)) {
-    return 1;
-  }
-
-  return Math.min(Math.max(quantity, 1), 10);
-}
-
-function centsToMajorUnits(cents: number): number {
-  return Number((cents / 100).toFixed(2));
-}
-
-function serialise(value: unknown): string {
-  try {
-    return JSON.stringify(value ?? null);
-  } catch (error) {
-    return JSON.stringify({ error: String(error) });
-  }
-}
 
 async function resolveCheckoutUserId(
   db: PrismaClient,
@@ -235,9 +218,11 @@ export async function createCheckout(
       amountCents: totalCents,
       currency: checkout.currency,
       metadata: response.rawResponse ? serialise(response.rawResponse) : null,
-      statusHistory: serialise([
-        { status: STATUS_PENDING, at: new Date().toISOString(), source: "checkout" },
-      ]),
+      statusHistory: createStatusHistory({
+        status: STATUS_PENDING,
+        at: new Date().toISOString(),
+        source: "checkout",
+      }),
       checkout: {
         connect: { id: checkout.id },
       },
@@ -302,24 +287,6 @@ type FinaliseOptions = {
   airaloOptions?: CreateOrderOptions;
   forceStatus?: string;
 };
-
-function appendStatusHistory(history: string | null, event: unknown): string {
-  let items: unknown[] = [];
-
-  if (history) {
-    try {
-      const parsed = JSON.parse(history);
-      if (Array.isArray(parsed)) {
-        items = parsed;
-      }
-    } catch {
-      items = [history];
-    }
-  }
-
-  items.push(event);
-  return JSON.stringify(items);
-}
 
 async function markCheckoutStatus(
   checkoutId: string,

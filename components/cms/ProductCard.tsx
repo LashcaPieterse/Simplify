@@ -7,25 +7,7 @@ import { getCatalogPackageId, type EsimProductSummary } from "@/lib/sanity.queri
 import { urlForImage } from "@/lib/image";
 import { cn } from "@/components/utils";
 import { getEsimProductHref } from "@/lib/products";
-
-const formatPrice = (amount?: number, currency = "USD") => {
-  if (typeof amount !== "number") {
-    return "";
-  }
-
-  try {
-    const hasCents = amount % 1 !== 0;
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: hasCents ? 2 : 0,
-      maximumFractionDigits: 2
-    }).format(amount);
-  } catch (error) {
-    console.warn("Failed to format price", error);
-    return `${amount}`;
-  }
-};
+import { formatMoneyAmount } from "@/lib/format";
 
 export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
   product: EsimProductSummary;
@@ -75,7 +57,7 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
           </span>
         ) : null}
         {typeof priceAmount === "number" ? (
-          <p className="font-semibold text-brand-900">{formatPrice(priceAmount, priceCurrency)}</p>
+          <p className="font-semibold text-brand-900">{formatMoneyAmount(priceAmount, priceCurrency)}</p>
         ) : null}
         <OrderButton
           packageId={packageId}

@@ -34,10 +34,10 @@ import {
 } from "./persistence";
 import {
   createOrderInputSchema,
-  normaliseQuantity,
   type CreateOrderInput,
   type ReservedOrderSnapshot,
 } from "./validation";
+import { normaliseQuantity } from "./quantity";
 
 export { resolveAiraloClient } from "./airalo-ordering";
 export {
