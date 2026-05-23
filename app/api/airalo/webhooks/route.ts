@@ -5,7 +5,12 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/db/client";
 import { toPrismaJson } from "@/lib/db/json";
-import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
+import {
+  jsonInvalidJson,
+  jsonServerError,
+  jsonUnauthorized,
+  jsonValidationError,
+} from "@/lib/api/errors";
 import { logOrderError, logOrderInfo } from "@/lib/observability/logging";
 import {
   recordRateLimit,
@@ -123,10 +128,7 @@ export async function POST(request: Request) {
   const secret = process.env.AIRALO_WEBHOOK_SECRET;
   if (!secret) {
     logOrderError("webhook.secret.missing");
-    return NextResponse.json(
-      { message: "Webhook secret is not configured." },
-      { status: 500 },
-    );
+    return jsonServerError("webhook_secret_missing", "Webhook secret is not configured.");
   }
 
   const rawBody = await request.text();
@@ -139,10 +141,7 @@ export async function POST(request: Request) {
       durationMs: 0,
       reason: "invalid_signature",
     });
-    return NextResponse.json(
-      { message: "Invalid signature." },
-      { status: 401 },
-    );
+    return jsonUnauthorized("invalid_signature", "Invalid signature.");
   }
 
   let parsed: unknown;
@@ -355,10 +354,7 @@ export async function POST(request: Request) {
       reason: "processing_failed",
     });
 
-    return NextResponse.json(
-      { message: "Failed to process webhook." },
-      { status: 500 },
-    );
+    return jsonServerError("webhook_processing_failed", "Failed to process webhook.");
   }
 }
 

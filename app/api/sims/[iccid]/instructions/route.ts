@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
 
+import { jsonApiError, jsonBadRequest, jsonServerError } from "@/lib/api/errors";
 import {
   getInstallationInstructions,
   InstallationInstructionsError,
@@ -40,16 +41,17 @@ export async function GET(
   const iccid = normalizeIccid(decodeURIComponent(params.iccid ?? ""));
 
   if (!iccid) {
-    return NextResponse.json(
-      { message: "An ICCID is required to look up installation instructions." },
-      { status: 400 },
+    return jsonBadRequest(
+      "iccid_required",
+      "An ICCID is required to look up installation instructions.",
     );
   }
 
   if (!isValidIccid(iccid)) {
-    return NextResponse.json(
-      { message: "Enter a valid ICCID before requesting installation instructions." },
-      { status: 422 },
+    return jsonApiError(
+      422,
+      "invalid_iccid",
+      "Enter a valid ICCID before requesting installation instructions.",
     );
   }
 
@@ -79,16 +81,17 @@ export async function GET(
     return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof InstallationInstructionsError) {
-      return NextResponse.json(
-        { message: error.message },
-        { status: error.status },
+      return jsonApiError(
+        error.status,
+        "installation_instructions_error",
+        error.message,
       );
     }
 
     console.error("Failed to load installation instructions", error);
-    return NextResponse.json(
-      { message: "Unexpected error while loading installation instructions." },
-      { status: 500 },
+    return jsonServerError(
+      "installation_instructions_failed",
+      "Unexpected error while loading installation instructions.",
     );
   }
 }

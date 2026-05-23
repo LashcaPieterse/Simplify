@@ -36,6 +36,46 @@ export function jsonApiError(
   return NextResponse.json(payload, { status });
 }
 
+export function jsonBadRequest(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return jsonApiError(400, code, message, details);
+}
+
+export function jsonUnauthorized(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return jsonApiError(401, code, message, details);
+}
+
+export function jsonForbidden(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return jsonApiError(403, code, message, details);
+}
+
+export function jsonNotFound(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return jsonApiError(404, code, message, details);
+}
+
+export function jsonServerError(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+) {
+  return jsonApiError(500, code, message, details);
+}
+
 export function jsonInvalidJson(message = "Invalid JSON payload.") {
   return jsonApiError(400, "invalid_json", message);
 }

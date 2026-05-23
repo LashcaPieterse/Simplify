@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { jsonApiError, jsonForbidden, jsonServerError } from "@/lib/api/errors";
 import {
   OrderOutOfStockError,
   OrderServiceError,
@@ -37,38 +38,34 @@ async function parseBody(request: Request): Promise<unknown> {
 
 function buildErrorResponse(error: unknown): NextResponse {
   if (error instanceof OrderOutOfStockError) {
-    return NextResponse.json({ message: error.message }, { status: error.status });
+    return jsonApiError(error.status, "order_out_of_stock", error.message);
   }
 
   if (error instanceof OrderValidationError) {
-    return NextResponse.json(
-      {
-        message: error.message,
-        issues: error.issues,
-      },
-      { status: error.status },
-    );
+    return jsonApiError(error.status, "order_validation_error", error.message, {
+      issues: error.issues,
+    });
   }
 
   if (error instanceof OrderServiceError) {
-    return NextResponse.json({ message: error.message }, { status: error.status });
+    return jsonApiError(error.status, "order_service_error", error.message);
   }
 
-  return NextResponse.json({ message: "Unexpected error while creating the order." }, { status: 500 });
+  return jsonServerError("order_create_failed", "Unexpected error while creating the order.");
 }
 
 export async function POST(request: Request) {
   if (!hasValidBearerToken(request)) {
-    return NextResponse.json(
-      { message: "Direct order creation is no longer available. Use the checkout flow." },
-      { status: 403 },
+    return jsonForbidden(
+      "direct_order_creation_disabled",
+      "Direct order creation is no longer available. Use the checkout flow.",
     );
   }
 
   const body = await parseBody(request);
 
   if (!body) {
-    return NextResponse.json({ message: "Request body must be JSON." }, { status: 422 });
+    return jsonApiError(422, "invalid_request_body", "Request body must be JSON.");
   }
 
   try {

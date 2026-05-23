@@ -4,7 +4,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import prismaClient from "@/lib/db/client";
-import { jsonInvalidJson, jsonValidationError } from "@/lib/api/errors";
+import {
+  jsonInvalidJson,
+  jsonNotFound,
+  jsonUnauthorized,
+  jsonValidationError,
+} from "@/lib/api/errors";
 import {
   finaliseOrderFromCheckout,
   recordPaymentEvent,
@@ -75,7 +80,7 @@ export async function POST(request: Request) {
   const contentType = request.headers.get("content-type");
 
   if (!verifySignature(rawBody, signature)) {
-    return NextResponse.json({ message: "Invalid signature" }, { status: 401 });
+    return jsonUnauthorized("invalid_signature", "Invalid signature");
   }
 
   let parsedPayload: unknown;
@@ -109,7 +114,7 @@ export async function POST(request: Request) {
   });
 
   if (!transaction) {
-    return NextResponse.json({ message: "Transaction not found" }, { status: 404 });
+    return jsonNotFound("payment_transaction_not_found", "Transaction not found");
   }
 
   await recordPaymentEvent(transaction.id, "ipn", payload);

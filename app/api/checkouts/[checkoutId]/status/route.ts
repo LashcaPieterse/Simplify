@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { jsonBadRequest, jsonNotFound, jsonServerError } from "@/lib/api/errors";
 import { getCheckoutSummary, verifyCheckoutPayment } from "@/lib/payments/checkouts";
 
 export const dynamic = "force-dynamic";
@@ -12,14 +13,14 @@ export async function GET(request: Request, context: { params: Params }) {
   const { checkoutId } = context.params;
 
   if (!checkoutId) {
-    return NextResponse.json({ message: "Checkout ID is required." }, { status: 400 });
+    return jsonBadRequest("checkout_id_required", "Checkout ID is required.");
   }
 
   try {
     const summary = await getCheckoutSummary(checkoutId);
 
     if (!summary) {
-      return NextResponse.json({ message: "Checkout not found." }, { status: 404 });
+      return jsonNotFound("checkout_not_found", "Checkout not found.");
     }
 
     let paymentStatus = summary.paymentStatus;
@@ -43,6 +44,6 @@ export async function GET(request: Request, context: { params: Params }) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch checkout status.";
-    return NextResponse.json({ message }, { status: 500 });
+    return jsonServerError("checkout_status_failed", message);
   }
 }
