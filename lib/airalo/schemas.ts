@@ -321,8 +321,90 @@ export const UsageResponseSchema = BaseResponseSchema.extend({
 export type UsageResponse = z.infer<typeof UsageResponseSchema>;
 export type Usage = UsageResponse["data"];
 
-export const WebhookPayloadSchema = z
-  .object({
+function normalizeWebhookOrderId(data: Record<string, unknown>): string | null {
+  const value = data.order_id ?? data.id ?? data.code;
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return null;
+}
+
+function normalizeWebhookStatus(data: Record<string, unknown>): string {
+  const value = data.status;
+  return typeof value === "string" && value.trim() ? value.trim() : "completed";
+}
+
+function normalizeWebhookIccid(data: Record<string, unknown>): string | undefined {
+  const value = data.iccid;
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  const sims = data.sims;
+  if (Array.isArray(sims)) {
+    const firstSim = sims.find(
+      (sim): sim is Record<string, unknown> =>
+        Boolean(sim) && typeof sim === "object" && !Array.isArray(sim),
+    );
+    const simIccid = firstSim?.iccid;
+    if (typeof simIccid === "string" && simIccid.trim()) {
+      return simIccid.trim();
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeWebhookPayload(payload: unknown): unknown {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const data = record.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return payload;
+  }
+
+  const dataRecord = data as Record<string, unknown>;
+  if (
+    typeof record.event === "string" &&
+    "order_id" in dataRecord &&
+    typeof dataRecord.status === "string"
+  ) {
+    return payload;
+  }
+
+  const orderId = normalizeWebhookOrderId(dataRecord);
+  if (!orderId) {
+    return payload;
+  }
+
+  const iccid = normalizeWebhookIccid(dataRecord);
+  return {
+    ...record,
+    event: typeof record.event === "string" ? record.event : "order.processed",
+    data: {
+      ...dataRecord,
+      order_id: orderId,
+      status: normalizeWebhookStatus(dataRecord),
+      ...(typeof dataRecord.order_reference === "string" &&
+      !dataRecord.reference
+        ? { reference: dataRecord.order_reference }
+        : {}),
+      ...(iccid ? { iccid } : {}),
+    },
+  };
+}
+
+export const WebhookPayloadSchema = z.preprocess(
+  normalizeWebhookPayload,
+  z.object({
     event: z.string(),
     timestamp: z.string().datetime().optional(),
     data: z
@@ -342,7 +424,8 @@ export const WebhookPayloadSchema = z
       })
       .passthrough(),
   })
-  .passthrough();
+    .passthrough(),
+);
 
 export type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { WebhookPayloadSchema } from "../airalo/schemas";
 import {
   buildWebhookOrderClauses,
   resolveWebhookRequestId,
@@ -42,5 +43,35 @@ test("webhook matching prefers reference and falls back to request_id", () => {
   assert.deepEqual(buildWebhookOrderClauses(withCamelCaseRequestId), [
     { orderNumber: "A-ORDER-3" },
     { requestId: "req-camel" },
+  ]);
+});
+
+test("Airalo webhook schema normalizes documented order response payloads", () => {
+  const payload = WebhookPayloadSchema.parse({
+    data: {
+      id: 583747,
+      code: "20250415-583747",
+      package_id: "uki-mobile-15days-2gb",
+      request_id: "req-async",
+      manual_installation: "<p>Manual</p>",
+      sims: [
+        {
+          iccid: "8944465400003573253",
+          matching_id: "YVTGM-5LZC6-PIC56-KFEZJ",
+          qrcode: "LPA:1$RSP-3088.IDEMIA.IO$YVTGM-5LZC6-PIC56-KFEZJ",
+        },
+      ],
+    },
+    meta: { message: "success" },
+  });
+
+  assert.equal(payload.event, "order.processed");
+  assert.equal(payload.data.order_id, "583747");
+  assert.equal(payload.data.status, "completed");
+  assert.equal(payload.data.iccid, "8944465400003573253");
+  assert.equal(resolveWebhookRequestId(payload.data), "req-async");
+  assert.deepEqual(buildWebhookOrderClauses(payload.data), [
+    { orderNumber: "583747" },
+    { requestId: "req-async" },
   ]);
 });

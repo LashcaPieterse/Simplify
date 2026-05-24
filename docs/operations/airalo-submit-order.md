@@ -55,7 +55,7 @@ The protected direct order API (`app/api/orders/route.ts`) forces `submissionMod
 - `data.accepted_at`: Timestamp string showing when Airalo queued the request.
 - `meta.message`: Usually `"success"`, useful for observability dashboards.
 
-No SIM metadata is returned at submission time. Simplify stores the complete async acknowledgement envelope in `airalo_order_snapshots` with source `orders-async` and keeps the `request_id` in `EsimOrder.requestId` while `EsimOrder.orderNumber` remains empty. Once Airalo finishes provisioning, it sends a webhook that includes the provider order ID plus a correlation value. The current handler accepts `payload.data.reference`, `payload.data.request_id`, or `payload.data.requestId` so it remains compatible with the async and future-order docs. At that point Simplify must:
+No SIM metadata is returned at submission time. Simplify stores the complete async acknowledgement envelope in `airalo_order_snapshots` with source `orders-async` and keeps the `request_id` in `EsimOrder.requestId` while `EsimOrder.orderNumber` remains empty. Once Airalo finishes provisioning, it sends a webhook using the regular order response shape (`data.id`, `data.sims[]`, `meta`) plus the async correlation value. The current handler also accepts an event-wrapper shape with `payload.data.reference`, `payload.data.request_id`, or `payload.data.requestId` so it remains compatible with the async and future-order docs. At that point Simplify must:
 
 1. Match the webhook via `reference`/`request_id`/`requestId` to update the pending order status.
 2. Persist the newly revealed `order_id` so that follow-up operations (`GET /v2/orders/{id}` or `/usage`) work.
