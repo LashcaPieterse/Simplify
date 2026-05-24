@@ -142,6 +142,6 @@ Deploy pending Prisma migrations with `npx prisma migrate deploy` before or duri
 
 If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
 
-Async order submissions send `AIRALO_ASYNC_WEBHOOK_URL` as the per-request `webhook_url`. Leave it unset only if Airalo has confirmed a dashboard-level async order webhook; in that case set `AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true` so the service can distinguish intentional global opt-in from missing configuration.
+Async order submissions send `AIRALO_ASYNC_WEBHOOK_URL` as the per-request `webhook_url`. If that override is unset, Simplify derives `https://<public-app-domain>/api/airalo/webhooks` from `NEXT_PUBLIC_APP_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, or `VERCEL_URL`. Leave all callback URLs unset only if Airalo has confirmed a dashboard-level async order webhook; in that case set `AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true` so the service can distinguish intentional global opt-in from missing configuration.
 
 > Recommended cadence: execute the script every 60 minutes via cron or a background worker. The Airalo package endpoint is documented at 80 requests/minute per token; Simplify sync paces itself at 40 requests/minute as a conservative unattended-job limit.

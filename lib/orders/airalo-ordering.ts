@@ -72,12 +72,91 @@ function normalizeOptionalString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function normalizeVercelHost(value: unknown): string | null {
+  const host = normalizeOptionalString(value);
+  if (!host) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(host)) {
+    return host;
+  }
+
+  return `https://${host}`;
+}
+
 function envFlagEnabled(value: string | undefined): boolean {
   if (!value) {
     return false;
   }
 
   return ["1", "true", "yes"].includes(value.trim().toLowerCase());
+}
+
+function isLocalWebhookHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local")
+  ) {
+    return true;
+  }
+
+  const octets = normalized.split(".").map((part) => Number(part));
+  if (
+    octets.length !== 4 ||
+    octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return false;
+  }
+
+  const [first, second] = octets;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function resolvePublicAppWebhookUrl(): string | null {
+  const candidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    normalizeVercelHost(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+    normalizeVercelHost(process.env.VERCEL_URL),
+  ];
+
+  for (const candidate of candidates) {
+    const configuredUrl = normalizeOptionalString(candidate);
+    if (!configuredUrl) {
+      continue;
+    }
+
+    let url: URL;
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      continue;
+    }
+
+    if (!["https:", "http:"].includes(url.protocol)) {
+      continue;
+    }
+
+    if (isLocalWebhookHost(url.hostname)) {
+      continue;
+    }
+
+    url.pathname = "/api/airalo/webhooks";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  }
+
+  return null;
 }
 
 function resolveAsyncWebhookUrl(options: {
@@ -118,8 +197,13 @@ export function resolveRequiredAsyncWebhookUrl(options: {
     return null;
   }
 
+  const derivedWebhookUrl = resolvePublicAppWebhookUrl();
+  if (derivedWebhookUrl) {
+    return derivedWebhookUrl;
+  }
+
   throw new OrderServiceError(
-    "AIRALO_ASYNC_WEBHOOK_URL must be configured for async orders unless AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true.",
+    "AIRALO_ASYNC_WEBHOOK_URL must be configured for async orders unless AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true or NEXT_PUBLIC_APP_URL/VERCEL_URL provides a public app URL.",
     500,
   );
 }
