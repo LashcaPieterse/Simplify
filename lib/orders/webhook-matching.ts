@@ -7,6 +7,22 @@ function normalizeWebhookString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+export function resolveWebhookLocalOrderId(data: WebhookData): string | null {
+  const description = normalizeWebhookString(
+    (data as Record<string, unknown>).description,
+  );
+  if (!description) {
+    return null;
+  }
+
+  const match = description.match(/\bsimplify_order_id:([a-z0-9_-]+)\b/i);
+  return match?.[1] ?? null;
+}
+
+export function resolveWebhookPackageExternalId(data: WebhookData): string | null {
+  return normalizeWebhookString((data as Record<string, unknown>).package_id);
+}
+
 export function resolveWebhookRequestId(data: WebhookData): string | null {
   const record = data as Record<string, unknown>;
   return (
@@ -22,7 +38,12 @@ export function buildWebhookOrderClauses(
   const clauses: Prisma.EsimOrderWhereInput[] = [
     { orderNumber: data.order_id },
   ];
+  const localOrderId = resolveWebhookLocalOrderId(data);
   const requestId = resolveWebhookRequestId(data);
+
+  if (localOrderId) {
+    clauses.push({ id: localOrderId });
+  }
 
   if (requestId) {
     clauses.push({ requestId });

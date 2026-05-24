@@ -598,7 +598,10 @@ test("createOrder hydrates a reserved checkout order using the checkout price sn
   assert.equal(result.orderId, "reserved-order-1");
   assert.equal(airalo.syncPayloads.length, 1);
   assert.equal(airalo.syncPayloads[0]?.quantity, "2");
-  assert.equal(airalo.syncPayloads[0]?.description, "2 x Test 1GB");
+  assert.equal(
+    airalo.syncPayloads[0]?.description,
+    "2 x Test 1GB [simplify_order_id:reserved-order-1]",
+  );
   assert.equal(airalo.syncPayloads[0]?.to_email, "checkout@example.com");
   assert.equal(db.orders.length, 1);
   assert.equal(db.orders[0]?.totalCents, 2500);

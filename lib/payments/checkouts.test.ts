@@ -432,7 +432,10 @@ test("finaliseOrderFromCheckout reserves a local order before Airalo and uses th
   assert.equal(airalo.syncPayloads.length, 1);
   assert.equal(airalo.syncPayloads[0]?.package_id, "pkg-test");
   assert.equal(airalo.syncPayloads[0]?.quantity, "2");
-  assert.equal(airalo.syncPayloads[0]?.description, "2 x Test 1GB");
+  assert.equal(
+    airalo.syncPayloads[0]?.description,
+    "2 x Test 1GB [simplify_order_id:order-1]",
+  );
   assert.equal(db.orders[0]?.totalCents, 2500);
   assert.equal(db.orders[0]?.currency, "UGX");
   assert.equal(db.orders[0]?.customerEmail, "checkout@example.com");

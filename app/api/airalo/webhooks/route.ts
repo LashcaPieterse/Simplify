@@ -30,6 +30,7 @@ import {
 } from "@/lib/orders/airalo-metadata";
 import {
   buildWebhookOrderClauses,
+  resolveWebhookPackageExternalId,
   resolveWebhookRequestId,
 } from "@/lib/orders/webhook-matching";
 
@@ -193,6 +194,64 @@ async function recordWebhookSnapshot({
   });
 }
 
+async function findOrderForWebhook(
+  tx: Prisma.TransactionClient,
+  payload: WebhookPayload,
+): Promise<{
+  order: Prisma.EsimOrderGetPayload<{ include: { profiles: true } }> | null;
+  matchMethod: "direct" | "package_fallback" | null;
+  fallbackCandidates: number | null;
+}> {
+  const orderClauses = buildWebhookOrderClauses(payload.data);
+
+  const directOrder = await tx.esimOrder.findFirst({
+    where: { OR: orderClauses },
+    include: { profiles: true },
+  });
+
+  if (directOrder) {
+    return {
+      order: directOrder,
+      matchMethod: "direct",
+      fallbackCandidates: null,
+    };
+  }
+
+  const packageExternalId = resolveWebhookPackageExternalId(payload.data);
+  if (!packageExternalId) {
+    return { order: null, matchMethod: null, fallbackCandidates: null };
+  }
+
+  const fallbackCandidates = await tx.esimOrder.findMany({
+    where: {
+      orderNumber: null,
+      profiles: { none: {} },
+      status: { in: ["pending", "airalo_submitting"] },
+      package: { is: { airaloPackageId: packageExternalId } },
+      createdAt: {
+        gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    },
+    include: { profiles: true },
+    orderBy: { createdAt: "desc" },
+    take: 2,
+  });
+
+  if (fallbackCandidates.length === 1) {
+    return {
+      order: fallbackCandidates[0],
+      matchMethod: "package_fallback",
+      fallbackCandidates: 1,
+    };
+  }
+
+  return {
+    order: null,
+    matchMethod: null,
+    fallbackCandidates: fallbackCandidates.length,
+  };
+}
+
 export async function POST(request: Request) {
   const secret = process.env.AIRALO_WEBHOOK_SECRET;
   if (!secret) {
@@ -258,34 +317,43 @@ export async function POST(request: Request) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const existing = await tx.webhookEvent.findUnique({ where: { eventId } });
-      if (existing) {
+      let eventRecord = await tx.webhookEvent.findUnique({
+        where: { eventId },
+      });
+      if (eventRecord?.orderId) {
         return { status: "duplicate" as const };
       }
 
-      const orderClauses = buildWebhookOrderClauses(payload.data);
+      const match = await findOrderForWebhook(tx, payload);
+      const order = match.order;
 
-      const order = await tx.esimOrder.findFirst({
-        where: { OR: orderClauses },
-        include: { profiles: true },
-      });
-
-      const eventRecord = await tx.webhookEvent
-        .create({
+      if (eventRecord) {
+        eventRecord = await tx.webhookEvent.update({
+          where: { id: eventRecord.id },
           data: {
-            eventId,
             eventType: payload.event,
             orderId: order?.id ?? null,
             payload: rawBody,
           },
-        })
-        .catch((error: unknown) => {
-          if (isWebhookDuplicateError(error)) {
-            return null;
-          }
-
-          throw error;
         });
+      } else {
+        eventRecord = await tx.webhookEvent
+          .create({
+            data: {
+              eventId,
+              eventType: payload.event,
+              orderId: order?.id ?? null,
+              payload: rawBody,
+            },
+          })
+          .catch((error: unknown) => {
+            if (isWebhookDuplicateError(error)) {
+              return null;
+            }
+
+            throw error;
+          });
+      }
 
       if (!eventRecord) {
         return { status: "duplicate" as const };
@@ -362,6 +430,8 @@ export async function POST(request: Request) {
       return {
         status: "processed" as const,
         orderId: order?.id ?? null,
+        matchMethod: match.matchMethod,
+        fallbackCandidates: match.fallbackCandidates,
       };
     });
 
@@ -389,6 +459,8 @@ export async function POST(request: Request) {
       matchedOrderId: result.orderId,
       requestId: resolveWebhookRequestId(payload.data),
       authMethod: auth.method,
+      matchMethod: result.matchMethod,
+      fallbackCandidates: result.fallbackCandidates,
       reason: result.orderId ? "ok" : "order_not_found",
     });
 

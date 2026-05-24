@@ -266,16 +266,33 @@ export function resolveAiraloStatus(
   return order.status ?? "pending";
 }
 
+function buildOrderDescription(options: {
+  quantity: number;
+  title: string;
+  localOrderId?: string | null;
+}): string {
+  const base = `${options.quantity} x ${options.title}`;
+  const localOrderId = normalizeOptionalString(options.localOrderId);
+  return localOrderId
+    ? `${base} [simplify_order_id:${localOrderId}]`
+    : base;
+}
+
 export function buildAiraloOrderPayload(options: {
   pkg: AiraloOrderPackage;
   quantity: number;
   customerEmail?: string | null;
+  localOrderId?: string | null;
 }): CreateOrderPayload {
   const payload: CreateOrderPayload = {
     package_id: options.pkg.airaloPackageId,
     quantity: String(options.quantity),
     type: "sim",
-    description: `${options.quantity} x ${options.pkg.title}`,
+    description: buildOrderDescription({
+      quantity: options.quantity,
+      title: options.pkg.title,
+      localOrderId: options.localOrderId,
+    }),
   };
 
   const brandSettingsName = resolveAiraloBrandSettingsName();

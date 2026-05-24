@@ -205,6 +205,7 @@ export async function createOrder(
     pkg: resolvedPackage.pkg,
     quantity: resolvedPackage.quantity,
     customerEmail: resolvedPackage.customerEmail,
+    localOrderId: reservedOrder?.orderId ?? null,
   });
 
   let airalo: AiraloClient;
