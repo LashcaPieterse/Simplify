@@ -46,12 +46,13 @@ test("resolveRequiredAsyncWebhookUrl prefers the explicit async webhook URL", ()
   withWebhookEnv(
     {
       AIRALO_ASYNC_WEBHOOK_URL: "https://hooks.example.com/airalo",
+      AIRALO_WEBHOOK_SECRET: "webhook-secret",
       NEXT_PUBLIC_APP_URL: "https://simplify.example.com",
     },
     () => {
       assert.equal(
         resolveRequiredAsyncWebhookUrl({}),
-        "https://hooks.example.com/airalo",
+        "https://hooks.example.com/airalo?airalo_webhook_secret=webhook-secret",
       );
     },
   );
@@ -60,12 +61,13 @@ test("resolveRequiredAsyncWebhookUrl prefers the explicit async webhook URL", ()
 test("resolveRequiredAsyncWebhookUrl derives the Airalo webhook from the public app URL", () => {
   withWebhookEnv(
     {
+      AIRALO_WEBHOOK_SECRET: "webhook-secret",
       NEXT_PUBLIC_APP_URL: "https://simplify.example.com/account",
     },
     () => {
       assert.equal(
         resolveRequiredAsyncWebhookUrl({}),
-        "https://simplify.example.com/api/airalo/webhooks",
+        "https://simplify.example.com/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
       );
     },
   );
@@ -89,12 +91,27 @@ test("resolveRequiredAsyncWebhookUrl appends the shared webhook secret when conf
 test("resolveRequiredAsyncWebhookUrl derives the Airalo webhook from Vercel URL", () => {
   withWebhookEnv(
     {
+      AIRALO_WEBHOOK_SECRET: "webhook-secret",
       VERCEL_URL: "simplify-git-main-example.vercel.app",
     },
     () => {
       assert.equal(
         resolveRequiredAsyncWebhookUrl({}),
-        "https://simplify-git-main-example.vercel.app/api/airalo/webhooks",
+        "https://simplify-git-main-example.vercel.app/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
+      );
+    },
+  );
+});
+
+test("resolveRequiredAsyncWebhookUrl requires the Airalo webhook secret", () => {
+  withWebhookEnv(
+    {
+      AIRALO_ASYNC_WEBHOOK_URL: "https://hooks.example.com/airalo",
+    },
+    () => {
+      assert.throws(
+        () => resolveRequiredAsyncWebhookUrl({}),
+        /AIRALO_WEBHOOK_SECRET must be configured/,
       );
     },
   );

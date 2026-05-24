@@ -126,10 +126,11 @@ AIRALO_ASYNC_WEBHOOK_URL=https://<your-domain>/api/airalo/webhooks
 AIRALO_WEBHOOK_SECRET=<url-safe-random-webhook-secret>
 ```
 
-When `AIRALO_WEBHOOK_SECRET` is configured, async order submissions append it to
-the Airalo callback URL as `airalo_webhook_secret`. The webhook endpoint still
-accepts `x-airalo-signature` HMAC callbacks if Airalo sends that header, but the
-URL token is required for Airalo accounts that post unsigned callbacks.
+`AIRALO_WEBHOOK_SECRET` is required for async orders. Simplify appends it to the
+Airalo callback URL as `airalo_webhook_secret` and the webhook endpoint rejects
+callbacks that do not include the same token. Airalo's async order docs do not
+define a webhook signing header, so this URL token is Simplify's app-level guard
+for the public callback endpoint.
 
 Then run the sync script:
 

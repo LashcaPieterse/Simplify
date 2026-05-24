@@ -46,6 +46,29 @@ async function withBrandSettingsEnv<T>(
   }
 }
 
+async function withWebhookSecretEnv<T>(
+  value: string | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const original = process.env.AIRALO_WEBHOOK_SECRET;
+
+  if (value === undefined) {
+    delete process.env.AIRALO_WEBHOOK_SECRET;
+  } else {
+    process.env.AIRALO_WEBHOOK_SECRET = value;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    if (original === undefined) {
+      delete process.env.AIRALO_WEBHOOK_SECRET;
+    } else {
+      process.env.AIRALO_WEBHOOK_SECRET = original;
+    }
+  }
+}
+
 type SnapshotRecord = {
   orderId: string;
   source: string;
@@ -356,75 +379,105 @@ function createTestOrder(
 
 test("createOrder sends /orders-async webhook_url and persists request_id with raw ack snapshot", async () => {
   await withBrandSettingsEnv(undefined, async () => {
-    const db = new FakeOrderDb();
-    const asyncResponse: SubmitOrderAsyncResponse = {
-      status: true,
-      data: {
-        request_id: "req_123",
-        accepted_at: "2026-05-09T10:00:00Z",
-      },
-      meta: { message: "success" },
-    };
-    const airalo = new FakeAiraloClient({ asyncResponse });
+    await withWebhookSecretEnv("webhook-secret", async () => {
+      const db = new FakeOrderDb();
+      const asyncResponse: SubmitOrderAsyncResponse = {
+        status: true,
+        data: {
+          request_id: "req_123",
+          accepted_at: "2026-05-09T10:00:00Z",
+        },
+        meta: { message: "success" },
+      };
+      const airalo = new FakeAiraloClient({ asyncResponse });
 
-    const result = await createTestOrder(
-      {
-        quantity: 2,
-        customerEmail: "customer@example.com",
-      },
-      {
-        db,
-        airalo,
-        submissionMode: "async",
-        asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
-      },
-    );
+      const result = await createTestOrder(
+        {
+          quantity: 2,
+          customerEmail: "customer@example.com",
+        },
+        {
+          db,
+          airalo,
+          submissionMode: "async",
+          asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
+        },
+      );
 
-    assert.equal(airalo.asyncPayloads.length, 1);
-    assert.equal(
-      airalo.asyncPayloads[0]?.webhook_url,
-      "https://example.com/api/airalo/webhooks",
-    );
-    assert.equal(airalo.asyncPayloads[0]?.quantity, "2");
-    assert.equal(airalo.asyncPayloads[0]?.brand_settings_name, undefined);
-    assert.equal(airalo.asyncPayloads[0]?.to_email, "customer@example.com");
-    assert.deepEqual(airalo.asyncPayloads[0]?.["sharing_option[]"], ["link"]);
-    assert.equal(db.orders[0]?.requestId, "req_123");
-    assert.equal(result.requestId, "req_123");
-    assert.equal(db.snapshots.length, 1);
-    assert.equal(db.snapshots[0]?.source, "orders-async");
-    assert.equal(db.snapshots[0]?.requestId, "req_123");
-    assert.deepEqual(db.snapshots[0]?.rawPayloadJson, asyncResponse);
+      assert.equal(airalo.asyncPayloads.length, 1);
+      assert.equal(
+        airalo.asyncPayloads[0]?.webhook_url,
+        "https://example.com/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
+      );
+      assert.equal(airalo.asyncPayloads[0]?.quantity, "2");
+      assert.equal(airalo.asyncPayloads[0]?.brand_settings_name, undefined);
+      assert.equal(airalo.asyncPayloads[0]?.to_email, "customer@example.com");
+      assert.deepEqual(airalo.asyncPayloads[0]?.["sharing_option[]"], ["link"]);
+      assert.equal(db.orders[0]?.requestId, "req_123");
+      assert.equal(result.requestId, "req_123");
+      assert.equal(db.snapshots.length, 1);
+      assert.equal(db.snapshots[0]?.source, "orders-async");
+      assert.equal(db.snapshots[0]?.requestId, "req_123");
+      assert.deepEqual(db.snapshots[0]?.rawPayloadJson, asyncResponse);
+    });
+  });
+});
+
+test("createOrder rejects async submission before Airalo when webhook secret is missing", async () => {
+  await withBrandSettingsEnv(undefined, async () => {
+    await withWebhookSecretEnv(undefined, async () => {
+      const db = new FakeOrderDb();
+      const airalo = new FakeAiraloClient({});
+
+      await assert.rejects(
+        () =>
+          createTestOrder(
+            { quantity: 1 },
+            {
+              db,
+              airalo,
+              submissionMode: "async",
+              asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
+            },
+          ),
+        /AIRALO_WEBHOOK_SECRET must be configured/,
+      );
+
+      assert.equal(airalo.asyncPayloads.length, 0);
+      assert.equal(db.orders.length, 0);
+    });
   });
 });
 
 test("createOrder sends configured Airalo brand settings name", async () => {
   await withBrandSettingsEnv("Brand Test Production", async () => {
-    const db = new FakeOrderDb();
-    const asyncResponse: SubmitOrderAsyncResponse = {
-      status: true,
-      data: {
-        request_id: "req_brand",
-        accepted_at: "2026-05-09T10:00:00Z",
-      },
-      meta: { message: "success" },
-    };
-    const airalo = new FakeAiraloClient({ asyncResponse });
+    await withWebhookSecretEnv("webhook-secret", async () => {
+      const db = new FakeOrderDb();
+      const asyncResponse: SubmitOrderAsyncResponse = {
+        status: true,
+        data: {
+          request_id: "req_brand",
+          accepted_at: "2026-05-09T10:00:00Z",
+        },
+        meta: { message: "success" },
+      };
+      const airalo = new FakeAiraloClient({ asyncResponse });
 
-    await createTestOrder(
-      { quantity: 1 },
-      {
-        db,
-        airalo,
-        submissionMode: "async",
-        asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
-      },
-    );
+      await createTestOrder(
+        { quantity: 1 },
+        {
+          db,
+          airalo,
+          submissionMode: "async",
+          asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
+        },
+      );
 
-    assert.equal(
-      airalo.asyncPayloads[0]?.brand_settings_name,
-      "Brand Test Production",
-    );
+      assert.equal(
+        airalo.asyncPayloads[0]?.brand_settings_name,
+        "Brand Test Production",
+      );
+    });
   });
 });
 

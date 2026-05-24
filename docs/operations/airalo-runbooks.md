@@ -150,7 +150,7 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 
 1. **Identify failing events**: Use the `AiraloWebhookFailure` alert data and inspect `airalo_webhook_events_total{result="error"}`.
 2. **Check WebhookEvent table**: Query the latest events to confirm deduplication and payload storage.
-3. **Validate authentication**: If logs show `webhook.signature.invalid` with `hasSignature=false`, Airalo posted an unsigned callback. Ensure the callback URL includes `?airalo_webhook_secret=<AIRALO_WEBHOOK_SECRET>` or that async submissions are appending the token automatically. If `hasSignature=true`, ensure `AIRALO_WEBHOOK_SECRET` matches Airalo's signing secret.
+3. **Validate authentication**: If logs show `webhook.auth.invalid`, ensure async submissions are appending `?airalo_webhook_secret=<AIRALO_WEBHOOK_SECRET>` and that the platform environment contains the same URL-safe token. Airalo's async order docs do not define a signing header, so the URL token is the expected authentication mechanism.
 4. **Retry strategy**: Airalo retries on 5xx. Once fixed, confirm retries succeed and mark incidents resolved.
 5. **Edge cases**: If payload schema changes, update `WebhookPayloadSchema` accordingly.
 
@@ -164,7 +164,7 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 ### Webhook Replay/Recovery
 
 1. **Locate event**: Search `WebhookEvent` for the stored payload (`eventId` column).
-2. **Manual replay**: Repost the saved payload to `/api/airalo/webhooks` using the stored JSON and a valid signature.
+2. **Manual replay**: Repost the saved payload to `/api/airalo/webhooks?airalo_webhook_secret=<AIRALO_WEBHOOK_SECRET>` using the stored JSON.
 3. **Database verification**: Confirm `EsimOrder` status and `UsageSnapshot` records match the payload data.
 4. **Close incident**: Update documentation with remediation steps and payload anomalies if any.
 
@@ -188,7 +188,7 @@ has been retried and the last observed error message.
 
 ## Maintenance Checklist
 
-- Rotate `AIRALO_WEBHOOK_SECRET` regularly and update both the Airalo dashboard and environment variables.
+- Rotate `AIRALO_WEBHOOK_SECRET` regularly and update the platform environment. If any Airalo dashboard webhook URL is used outside per-request async submissions, update that URL too.
 - Ensure `/api/metrics` is scraped with `METRICS_BEARER_TOKEN` by Prometheus (or exposed via an agent) and forwarded to your observability stack.
 - Keep Prisma migrations in sync with the webhook persistence schema (particularly `WebhookEvent`).
 - Review alert thresholds quarterly based on observed traffic.

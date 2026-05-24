@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
@@ -33,113 +33,7 @@ import {
   resolveWebhookPackageExternalId,
   resolveWebhookRequestId,
 } from "@/lib/orders/webhook-matching";
-
-const WEBHOOK_SECRET_QUERY_PARAMS = [
-  "airalo_webhook_secret",
-  "webhook_secret",
-] as const;
-
-interface WebhookAuthResult {
-  valid: boolean;
-  method: "signature" | "url_secret" | null;
-  hasSignature: boolean;
-  hasUrlSecret: boolean;
-}
-
-function decodeSignature(signature: string): Buffer | null {
-  const trimmed = signature.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const cleaned = trimmed.replace(/^sha256=/i, "");
-
-  if (/^[0-9a-f]+$/i.test(cleaned) && cleaned.length % 2 === 0) {
-    return Buffer.from(cleaned, "hex");
-  }
-
-  try {
-    return Buffer.from(cleaned, "base64");
-  } catch {
-    return null;
-  }
-}
-
-function isValidSignature(
-  body: string,
-  signature: string | null,
-  secret: string,
-): boolean {
-  if (!signature) {
-    return false;
-  }
-
-  const provided = decodeSignature(signature);
-  if (!provided) {
-    return false;
-  }
-
-  const expected = createHmac("sha256", secret).update(body).digest();
-
-  if (provided.length !== expected.length) {
-    return false;
-  }
-
-  return timingSafeEqual(provided, expected);
-}
-
-function safeEqualString(provided: string, expected: string): boolean {
-  const providedBuffer = Buffer.from(provided);
-  const expectedBuffer = Buffer.from(expected);
-
-  if (providedBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(providedBuffer, expectedBuffer);
-}
-
-function readWebhookUrlSecret(requestUrl: string): string | null {
-  const url = new URL(requestUrl);
-
-  for (const param of WEBHOOK_SECRET_QUERY_PARAMS) {
-    const value = url.searchParams.get(param);
-    if (value) {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function authenticateWebhookRequest(
-  body: string,
-  signature: string | null,
-  secret: string,
-  requestUrl: string,
-): WebhookAuthResult {
-  const urlSecret = readWebhookUrlSecret(requestUrl);
-  const hasSignature = Boolean(signature);
-  const hasUrlSecret = Boolean(urlSecret);
-
-  if (signature) {
-    const valid = isValidSignature(body, signature, secret);
-    return {
-      valid,
-      method: valid ? "signature" : null,
-      hasSignature,
-      hasUrlSecret,
-    };
-  }
-
-  const valid = urlSecret ? safeEqualString(urlSecret, secret) : false;
-  return {
-    valid,
-    method: valid ? "url_secret" : null,
-    hasSignature,
-    hasUrlSecret,
-  };
-}
+import { authenticateAiraloWebhookRequest } from "@/lib/orders/webhook-auth";
 
 function resolveEventId(
   headers: Headers,
@@ -253,24 +147,20 @@ async function findOrderForWebhook(
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.AIRALO_WEBHOOK_SECRET;
+  const secret = process.env.AIRALO_WEBHOOK_SECRET?.trim();
   if (!secret) {
     logOrderError("webhook.secret.missing");
     return jsonServerError("webhook_secret_missing", "Webhook secret is not configured.");
   }
 
   const rawBody = await request.text();
-  const signature = request.headers.get("x-airalo-signature");
-  const auth = authenticateWebhookRequest(
-    rawBody,
-    signature,
+  const auth = authenticateAiraloWebhookRequest({
+    requestUrl: request.url,
     secret,
-    request.url,
-  );
+  });
 
   if (!auth.valid) {
-    logOrderWarn("webhook.signature.invalid", {
-      hasSignature: auth.hasSignature,
+    logOrderWarn("webhook.auth.invalid", {
       hasUrlSecret: auth.hasUrlSecret,
       bodySha256: createHash("sha256").update(rawBody).digest("hex"),
     });
@@ -279,9 +169,9 @@ export async function POST(request: Request) {
       eventType: "unknown",
       result: "rejected",
       durationMs: 0,
-      reason: "invalid_signature",
+      reason: "invalid_webhook_secret",
     });
-    return jsonUnauthorized("invalid_signature", "Invalid signature.");
+    return jsonUnauthorized("invalid_webhook_secret", "Invalid webhook secret.");
   }
 
   let parsed: unknown;

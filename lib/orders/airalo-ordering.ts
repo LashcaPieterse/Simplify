@@ -160,12 +160,20 @@ const AIRALO_WEBHOOK_SECRET_QUERY_PARAMS = [
   "webhook_secret",
 ] as const;
 
-function appendWebhookUrlSecret(url: URL): string {
+function resolveRequiredAiraloWebhookSecret(): string {
   const secret = normalizeOptionalString(process.env.AIRALO_WEBHOOK_SECRET);
   if (!secret) {
-    return url.toString();
+    throw new OrderServiceError(
+      "AIRALO_WEBHOOK_SECRET must be configured for async order webhooks.",
+      500,
+    );
   }
 
+  return secret;
+}
+
+function appendWebhookUrlSecret(url: URL): string {
+  const secret = resolveRequiredAiraloWebhookSecret();
   const alreadyHasSecret = AIRALO_WEBHOOK_SECRET_QUERY_PARAMS.some((param) =>
     url.searchParams.has(param),
   );
@@ -187,14 +195,17 @@ function resolveAsyncWebhookUrl(options: {
     return null;
   }
 
+  let url: URL;
   try {
-    return appendWebhookUrlSecret(new URL(configuredUrl));
+    url = new URL(configuredUrl);
   } catch {
     throw new OrderServiceError(
       "AIRALO_ASYNC_WEBHOOK_URL must be a valid absolute URL.",
       500,
     );
   }
+
+  return appendWebhookUrlSecret(url);
 }
 
 export function resolveRequiredAsyncWebhookUrl(options: {
