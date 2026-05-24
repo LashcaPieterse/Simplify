@@ -10,13 +10,14 @@ export function PrismaUserIdentityAdapter(): Adapter {
           email: data.email ?? "",
           name: data.name ?? null,
           phone: null,
+          emailVerifiedAt: data.emailVerified ?? null,
         },
       });
       return {
         id: user.id,
         email: user.email,
         name: user.name,
-        emailVerified: null,
+        emailVerified: user.emailVerifiedAt,
       };
     },
     async getUser(id: string) {
@@ -26,7 +27,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
         id: user.id,
         email: user.email,
         name: user.name,
-        emailVerified: null,
+        emailVerified: user.emailVerifiedAt,
       };
     },
     async getUserByEmail(email: string) {
@@ -36,7 +37,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
         id: user.id,
         email: user.email,
         name: user.name,
-        emailVerified: null,
+        emailVerified: user.emailVerifiedAt,
       };
     },
     async getUserByAccount({ provider, providerAccountId }: { provider: string; providerAccountId: string }) {
@@ -49,7 +50,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
         id: identity.user.id,
         email: identity.user.email,
         name: identity.user.name,
-        emailVerified: null,
+        emailVerified: identity.user.emailVerifiedAt,
       };
     },
     async updateUser(user: Partial<AdapterUser> & { id: string }) {
@@ -58,13 +59,14 @@ export function PrismaUserIdentityAdapter(): Adapter {
         data: {
           email: user.email ?? undefined,
           name: user.name ?? undefined,
+          emailVerifiedAt: user.emailVerified ?? undefined,
         },
       });
       return {
         id: updated.id,
         email: updated.email,
         name: updated.name,
-        emailVerified: null,
+        emailVerified: updated.emailVerifiedAt,
       };
     },
     async deleteUser(id: string) {

@@ -4,6 +4,10 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 
 import { createCheckout } from "@/lib/payments/checkouts";
+import {
+  CheckoutRequestError,
+  prepareCheckoutRequestPayload,
+} from "@/lib/payments/checkout-request";
 import { authOptions } from "@/lib/auth/options";
 import {
   canIssueScopedAccessTokens,
@@ -75,6 +79,10 @@ function resolveCheckoutError(error: unknown): {
   }
 
   if (error instanceof Error) {
+    if (error instanceof CheckoutRequestError) {
+      return { message: error.message, status: error.status };
+    }
+
     return { message: error.message, status: 422 };
   }
 
@@ -97,18 +105,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const payload =
-      rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
-        ? { ...rawBody }
-        : {};
-
-    if (typeof payload.customerEmail === "string") {
-      payload.customerEmail = payload.customerEmail.trim();
-    }
-
-    if (session?.user?.email && !payload.customerEmail) {
-      payload.customerEmail = session.user.email;
-    }
+    const payload = prepareCheckoutRequestPayload(rawBody, {
+      sessionEmail: session?.user?.email,
+      isAuthenticated: Boolean(session?.user?.id),
+    }) as Parameters<typeof createCheckout>[0];
 
     if (payload.intent === "top-up") {
       return NextResponse.json(

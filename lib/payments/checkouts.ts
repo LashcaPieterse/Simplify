@@ -12,6 +12,7 @@ import { centsToMajorUnits } from "../format";
 import { sendOrderReceipt } from "../notifications/receipts";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { DEFAULT_QUANTITY, MAX_QUANTITY, normaliseQuantity } from "../orders/quantity";
+import { normalizeEmailAddress } from "./checkout-request";
 import {
   buildAiraloTopUpOrderPayload,
   logAiraloTopUpSubmissionSuccess,
@@ -43,7 +44,12 @@ const checkoutInputSchema = z.object({
     .max(MAX_QUANTITY, `You can order up to ${MAX_QUANTITY} eSIMs per checkout.`)
     .default(DEFAULT_QUANTITY)
     .optional(),
-  customerEmail: z.string().email("Enter a valid email address.").optional(),
+  customerEmail: z
+    .string()
+    .trim()
+    .email("Enter a valid email address.")
+    .transform((value) => normalizeEmailAddress(value))
+    .optional(),
   intent: z.enum(["purchase", "top-up"]).default("purchase").optional(),
   topUpForOrderId: z.string().min(1).optional(),
   topUpForIccid: z.string().min(1).optional(),

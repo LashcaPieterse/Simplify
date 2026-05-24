@@ -20,12 +20,13 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
   const searchParams = useSearchParams();
   const router = useRouter();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const initialEmail = searchParams.get("email") ?? "";
 
   const oauthProviders = useMemo(() => providers.filter((provider) => provider.type === "oauth"), [providers]);
   const emailProvider = useMemo(() => providers.find((provider) => provider.type === "email"), [providers]);
   const hasCredentials = useMemo(() => providers.some((provider) => provider.id === "credentials"), [providers]);
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);

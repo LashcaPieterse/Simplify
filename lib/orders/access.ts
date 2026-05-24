@@ -91,6 +91,19 @@ export function createScopedAccessToken(
   return `${payload}|${signature}`;
 }
 
+export function createOrderAccessLink(
+  orderId: string,
+  baseUrl: string,
+  options: { issuedAt?: number; ttlSeconds?: number } = {},
+): string {
+  const url = new URL(`/orders/${encodeURIComponent(orderId)}/access`, baseUrl);
+  url.searchParams.set(
+    "token",
+    createScopedAccessToken("order", orderId, options),
+  );
+  return url.toString();
+}
+
 export function verifyScopedAccessToken(
   token: string | null | undefined,
   scope: ScopedAccessScope,

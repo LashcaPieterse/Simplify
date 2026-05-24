@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
+import type { Route } from "next";
 import { cookies } from "next/headers";
+import Link from "next/link";
 
 import {
   ensureOrderInstallation,
@@ -210,6 +212,10 @@ export default async function OrderPage({ params }: OrderPageParams) {
   const installationPayload = parseInstallationPayload(order.installation?.payload ?? null);
   const qrCodeUrl = resolveQrCodeUrl(installationPayload);
   const qrCodeData = readPayloadString(installationPayload, "qrCodeData");
+  const showSaveAccountPrompt = !order.userId && Boolean(order.customerEmail);
+  const saveAccountHref = order.customerEmail
+    ? `/auth/signin?callbackUrl=${encodeURIComponent(`/orders/${order.id}`)}&email=${encodeURIComponent(order.customerEmail)}&method=email`
+    : "/auth/signin";
 
   const purchaseAction = purchaseTopUp.bind(
     null,
@@ -240,6 +246,27 @@ export default async function OrderPage({ params }: OrderPageParams) {
           {order.customerEmail ? <p>Customer email: {order.customerEmail}</p> : null}
         </div>
       </header>
+
+      {showSaveAccountPrompt ? (
+        <section className="rounded-3xl bg-teal-50 p-6 shadow-sm ring-1 ring-teal-100">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-brand-900">
+                Save this eSIM for easier top-ups and support.
+              </h2>
+              <p className="mt-1 text-sm text-brand-700">
+                Verify {order.customerEmail} to keep this order with your account.
+              </p>
+            </div>
+            <Link
+              href={saveAccountHref as Route}
+              className="inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            >
+              Save this eSIM
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       {order.payment ? (
         <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-sand-200">

@@ -4,6 +4,10 @@ import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 import prismaClient from "@/lib/db/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { sendEmail } from "@/lib/notifications/email";
+import {
+  canIssueScopedAccessTokens,
+  createOrderAccessLink,
+} from "@/lib/orders/access";
 
 const DEFAULT_FROM = "receipts@simplify.africa";
 
@@ -30,6 +34,14 @@ function resolveBaseUrl() {
   return "http://localhost:3000";
 }
 
+function buildOrderLink(orderId: string, baseUrl: string): string {
+  if (canIssueScopedAccessTokens()) {
+    return createOrderAccessLink(orderId, baseUrl);
+  }
+
+  return `${baseUrl}/orders/${orderId}`;
+}
+
 function buildReceiptEmail(options: {
   recipientName: string | null;
   orderReference: string;
@@ -54,7 +66,8 @@ function buildReceiptEmail(options: {
     `Amount: ${options.amountLabel}`,
     `Date: ${options.purchasedAt}`,
     "",
-    `View your order: ${options.orderLink}`,
+    `Manage your order: ${options.orderLink}`,
+    "For security, your eSIM installation details are available from your order page.",
     "",
     "Need help? Email support@simplify.africa.",
   ].filter(Boolean);
@@ -76,8 +89,9 @@ function buildReceiptEmail(options: {
         <tr><td style="padding: 6px 0; color: #64748b;">Date</td><td style="padding: 6px 0; font-weight: 600;">${options.purchasedAt}</td></tr>
       </table>
       <p style="margin-top: 16px;">
-        <a href="${options.orderLink}" style="color: #0f766e; font-weight: 600; text-decoration: underline;">View your order</a>
+        <a href="${options.orderLink}" style="color: #0f766e; font-weight: 600; text-decoration: underline;">Manage your order</a>
       </p>
+      <p style="color: #64748b; font-size: 13px;">For security, your eSIM installation details are available from your order page.</p>
       <p style="color: #64748b; font-size: 13px;">Need help? Email support@simplify.africa.</p>
     </div>
   `;
@@ -134,7 +148,8 @@ export async function sendOrderReceipt(
   const amountLabel = amountCents === null ? currency : formatCurrency(amountCents, currency);
   const orderReference = order.orderNumber ?? order.requestId ?? order.id;
   const purchasedAt = formatDate(order.createdAt);
-  const orderLink = `${options.baseUrl ?? resolveBaseUrl()}/orders/${order.id}`;
+  const baseUrl = options.baseUrl ?? resolveBaseUrl();
+  const orderLink = buildOrderLink(order.id, baseUrl);
 
   const { subject, text, html } = buildReceiptEmail({
     recipientName: order.user?.name ?? null,

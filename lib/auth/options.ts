@@ -7,6 +7,7 @@ import type { NextAuthOptions } from "next-auth";
 import { PrismaUserIdentityAdapter } from "./adapter";
 import prisma from "@/lib/db/client";
 import { verifyPassword } from "./password";
+import { markUserEmailVerifiedAndClaimGuestOrders } from "./guest-orders";
 
 const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -64,6 +65,30 @@ export const authOptions: NextAuthOptions = {
       : []),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      const trustedVerifiedProvider =
+        account?.provider === "email" ||
+        account?.provider === "google" ||
+        account?.provider === "apple";
+
+      if (trustedVerifiedProvider && user.id && user.email) {
+        try {
+          await markUserEmailVerifiedAndClaimGuestOrders(
+            prisma,
+            user.id,
+            user.email,
+          );
+        } catch (error) {
+          console.error("Failed to claim guest orders after verified sign-in", {
+            userId: user.id,
+            provider: account?.provider,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      return true;
+    },
     async jwt({ token, user }) {
       if (user?.id) {
         token.sub = user.id;

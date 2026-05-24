@@ -10,8 +10,46 @@ import type {
 import { OrderResponseSchema, type OrderResponse } from "../airalo/schemas";
 import type { CreateOrderOptions } from "../orders/service";
 import { finaliseOrderFromCheckout } from "./checkouts";
+import { prepareCheckoutRequestPayload } from "./checkout-request";
+import type { CheckoutRequestError } from "./checkout-request";
 
 const TEST_PACKAGE_ID = "00000000-0000-0000-0000-000000000001";
+
+test("guest purchase checkout requests require an email", () => {
+  let caught: unknown;
+  try {
+    prepareCheckoutRequestPayload(
+      { packageId: TEST_PACKAGE_ID },
+      { isAuthenticated: false },
+    );
+  } catch (error) {
+    caught = error;
+  }
+
+  assert.equal((caught as CheckoutRequestError).name, "CheckoutRequestError");
+  assert.equal((caught as CheckoutRequestError).status, 422);
+});
+
+test("checkout request emails are normalized before checkout creation", () => {
+  const payload = prepareCheckoutRequestPayload(
+    { packageId: TEST_PACKAGE_ID, customerEmail: " Customer@Example.COM " },
+    { isAuthenticated: false },
+  );
+
+  assert.equal(payload.customerEmail, "customer@example.com");
+});
+
+test("signed-in checkout requests default to the session email", () => {
+  const payload = prepareCheckoutRequestPayload(
+    { packageId: TEST_PACKAGE_ID },
+    {
+      isAuthenticated: true,
+      sessionEmail: " Traveler@Example.COM ",
+    },
+  );
+
+  assert.equal(payload.customerEmail, "traveler@example.com");
+});
 
 class FakeAiraloClient {
   readonly syncPayloads: CreateOrderPayload[] = [];

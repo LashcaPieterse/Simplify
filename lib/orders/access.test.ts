@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   canAccessOwnerScopedRecord,
+  createOrderAccessLink,
   createScopedAccessToken,
   hasScopedAccessFromCookieHeader,
   scopedAccessCookieName,
@@ -84,3 +85,23 @@ test("cookie-header helper validates the scoped cookie value", () => {
   });
 });
 
+test("signed order access links carry a valid scoped token", () => {
+  withAccessSecret(() => {
+    const issuedAt = Date.now();
+    const link = createOrderAccessLink("order-1", "https://simplify.example", {
+      issuedAt,
+      ttlSeconds: 60,
+    });
+    const url = new URL(link);
+    const token = url.searchParams.get("token");
+
+    assert.equal(url.pathname, "/orders/order-1/access");
+    assert.equal(
+      verifyScopedAccessToken(token, "order", "order-1", {
+        now: issuedAt + 30_000,
+      }),
+      true,
+    );
+    assert.equal(verifyScopedAccessToken(token, "order", "order-2"), false);
+  });
+});
