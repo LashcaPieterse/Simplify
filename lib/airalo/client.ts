@@ -36,7 +36,6 @@ import type {
   Order,
   OrderResponse,
   Package,
-  PackagesResponse,
   Sim,
   SimInstallationInstructionsPayload,
   SimResponse,
