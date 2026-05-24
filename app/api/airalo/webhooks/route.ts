@@ -11,7 +11,11 @@ import {
   jsonUnauthorized,
   jsonValidationError,
 } from "@/lib/api/errors";
-import { logOrderError, logOrderInfo } from "@/lib/observability/logging";
+import {
+  logOrderError,
+  logOrderInfo,
+  logOrderWarn,
+} from "@/lib/observability/logging";
 import {
   recordRateLimit,
   recordWebhookMetrics,
@@ -135,6 +139,11 @@ export async function POST(request: Request) {
   const signature = request.headers.get("x-airalo-signature");
 
   if (!isValidSignature(rawBody, signature, secret)) {
+    logOrderWarn("webhook.signature.invalid", {
+      hasSignature: Boolean(signature),
+      bodySha256: createHash("sha256").update(rawBody).digest("hex"),
+    });
+
     recordWebhookMetrics({
       eventType: "unknown",
       result: "rejected",
@@ -305,6 +314,9 @@ export async function POST(request: Request) {
       eventId,
       eventType: payload.event,
       orderId: payload.data.order_id,
+      matchedOrderId: result.orderId,
+      requestId: resolveWebhookRequestId(payload.data),
+      reason: result.orderId ? "ok" : "order_not_found",
     });
 
     recordWebhookMetrics({
@@ -356,6 +368,10 @@ export async function POST(request: Request) {
 
     return jsonServerError("webhook_processing_failed", "Failed to process webhook.");
   }
+}
+
+export async function HEAD() {
+  return new Response(null, { status: 200 });
 }
 
 function isWebhookDuplicateError(
