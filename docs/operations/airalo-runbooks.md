@@ -150,7 +150,7 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 
 1. **Identify failing events**: Use the `AiraloWebhookFailure` alert data and inspect `airalo_webhook_events_total{result="error"}`.
 2. **Check WebhookEvent table**: Query the latest events to confirm deduplication and payload storage.
-3. **Validate signature**: Ensure `AIRALO_WEBHOOK_SECRET` matches Airalo's configuration.
+3. **Validate authentication**: If logs show `webhook.signature.invalid` with `hasSignature=false`, Airalo posted an unsigned callback. Ensure the callback URL includes `?airalo_webhook_secret=<AIRALO_WEBHOOK_SECRET>` or that async submissions are appending the token automatically. If `hasSignature=true`, ensure `AIRALO_WEBHOOK_SECRET` matches Airalo's signing secret.
 4. **Retry strategy**: Airalo retries on 5xx. Once fixed, confirm retries succeed and mark incidents resolved.
 5. **Edge cases**: If payload schema changes, update `WebhookPayloadSchema` accordingly.
 

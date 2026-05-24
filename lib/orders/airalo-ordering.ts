@@ -156,10 +156,32 @@ function resolvePublicAppWebhookUrl(): string | null {
     url.pathname = "/api/airalo/webhooks";
     url.search = "";
     url.hash = "";
-    return url.toString();
+    return appendWebhookUrlSecret(url);
   }
 
   return null;
+}
+
+const AIRALO_WEBHOOK_SECRET_QUERY_PARAM = "airalo_webhook_secret";
+const AIRALO_WEBHOOK_SECRET_QUERY_PARAMS = [
+  AIRALO_WEBHOOK_SECRET_QUERY_PARAM,
+  "webhook_secret",
+] as const;
+
+function appendWebhookUrlSecret(url: URL): string {
+  const secret = normalizeOptionalString(process.env.AIRALO_WEBHOOK_SECRET);
+  if (!secret) {
+    return url.toString();
+  }
+
+  const alreadyHasSecret = AIRALO_WEBHOOK_SECRET_QUERY_PARAMS.some((param) =>
+    url.searchParams.has(param),
+  );
+  if (!alreadyHasSecret) {
+    url.searchParams.set(AIRALO_WEBHOOK_SECRET_QUERY_PARAM, secret);
+  }
+
+  return url.toString();
 }
 
 function resolveAsyncWebhookUrl(options: {
@@ -174,7 +196,7 @@ function resolveAsyncWebhookUrl(options: {
   }
 
   try {
-    return new URL(configuredUrl).toString();
+    return appendWebhookUrlSecret(new URL(configuredUrl));
   } catch {
     throw new OrderServiceError(
       "AIRALO_ASYNC_WEBHOOK_URL must be a valid absolute URL.",

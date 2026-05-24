@@ -33,6 +33,18 @@ import {
   resolveWebhookRequestId,
 } from "@/lib/orders/webhook-matching";
 
+const WEBHOOK_SECRET_QUERY_PARAMS = [
+  "airalo_webhook_secret",
+  "webhook_secret",
+] as const;
+
+interface WebhookAuthResult {
+  valid: boolean;
+  method: "signature" | "url_secret" | null;
+  hasSignature: boolean;
+  hasUrlSecret: boolean;
+}
+
 function decodeSignature(signature: string): Buffer | null {
   const trimmed = signature.trim();
   if (!trimmed) {
@@ -73,6 +85,59 @@ function isValidSignature(
   }
 
   return timingSafeEqual(provided, expected);
+}
+
+function safeEqualString(provided: string, expected: string): boolean {
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (providedBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+function readWebhookUrlSecret(requestUrl: string): string | null {
+  const url = new URL(requestUrl);
+
+  for (const param of WEBHOOK_SECRET_QUERY_PARAMS) {
+    const value = url.searchParams.get(param);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function authenticateWebhookRequest(
+  body: string,
+  signature: string | null,
+  secret: string,
+  requestUrl: string,
+): WebhookAuthResult {
+  const urlSecret = readWebhookUrlSecret(requestUrl);
+  const hasSignature = Boolean(signature);
+  const hasUrlSecret = Boolean(urlSecret);
+
+  if (signature) {
+    const valid = isValidSignature(body, signature, secret);
+    return {
+      valid,
+      method: valid ? "signature" : null,
+      hasSignature,
+      hasUrlSecret,
+    };
+  }
+
+  const valid = urlSecret ? safeEqualString(urlSecret, secret) : false;
+  return {
+    valid,
+    method: valid ? "url_secret" : null,
+    hasSignature,
+    hasUrlSecret,
+  };
 }
 
 function resolveEventId(
@@ -137,10 +202,17 @@ export async function POST(request: Request) {
 
   const rawBody = await request.text();
   const signature = request.headers.get("x-airalo-signature");
+  const auth = authenticateWebhookRequest(
+    rawBody,
+    signature,
+    secret,
+    request.url,
+  );
 
-  if (!isValidSignature(rawBody, signature, secret)) {
+  if (!auth.valid) {
     logOrderWarn("webhook.signature.invalid", {
-      hasSignature: Boolean(signature),
+      hasSignature: auth.hasSignature,
+      hasUrlSecret: auth.hasUrlSecret,
       bodySha256: createHash("sha256").update(rawBody).digest("hex"),
     });
 
@@ -316,6 +388,7 @@ export async function POST(request: Request) {
       orderId: payload.data.order_id,
       matchedOrderId: result.orderId,
       requestId: resolveWebhookRequestId(payload.data),
+      authMethod: auth.method,
       reason: result.orderId ? "ok" : "order_not_found",
     });
 

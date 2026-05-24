@@ -123,8 +123,13 @@ AIRALO_CLIENT_SECRET=<airalo-client-secret>
 AIRALO_PACKAGES_SEND_CREDENTIALS=true
 AIRALO_BRAND_SETTINGS_NAME=<exact-airalo-brand-name>
 AIRALO_ASYNC_WEBHOOK_URL=https://<your-domain>/api/airalo/webhooks
-AIRALO_WEBHOOK_SECRET=<airalo-webhook-secret>
+AIRALO_WEBHOOK_SECRET=<url-safe-random-webhook-secret>
 ```
+
+When `AIRALO_WEBHOOK_SECRET` is configured, async order submissions append it to
+the Airalo callback URL as `airalo_webhook_secret`. The webhook endpoint still
+accepts `x-airalo-signature` HMAC callbacks if Airalo sends that header, but the
+URL token is required for Airalo accounts that post unsigned callbacks.
 
 Then run the sync script:
 

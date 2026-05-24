@@ -6,6 +6,7 @@ import { resolveRequiredAsyncWebhookUrl } from "./airalo-ordering";
 const WEBHOOK_ENV_KEYS = [
   "AIRALO_ASYNC_WEBHOOK_URL",
   "AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN",
+  "AIRALO_WEBHOOK_SECRET",
   "NEXT_PUBLIC_APP_URL",
   "VERCEL_PROJECT_PRODUCTION_URL",
   "VERCEL_URL",
@@ -66,6 +67,21 @@ test("resolveRequiredAsyncWebhookUrl derives the Airalo webhook from the public 
       assert.equal(
         resolveRequiredAsyncWebhookUrl({}),
         "https://simplify.example.com/api/airalo/webhooks",
+      );
+    },
+  );
+});
+
+test("resolveRequiredAsyncWebhookUrl appends the shared webhook secret when configured", () => {
+  withWebhookEnv(
+    {
+      AIRALO_ASYNC_WEBHOOK_URL: "https://hooks.example.com/airalo?source=airalo",
+      AIRALO_WEBHOOK_SECRET: "webhook-secret",
+    },
+    () => {
+      assert.equal(
+        resolveRequiredAsyncWebhookUrl({}),
+        "https://hooks.example.com/airalo?source=airalo&airalo_webhook_secret=webhook-secret",
       );
     },
   );
