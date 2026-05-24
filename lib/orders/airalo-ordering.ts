@@ -16,7 +16,6 @@ import { logOrderInfo, logOrderWarn } from "../observability/logging";
 import { resolveAiraloOrderActivationCode as resolveAiraloInstallActivationCode } from "./airalo-metadata";
 import { OrderServiceError } from "./errors";
 
-const AIRALO_BRAND_SETTINGS_NAME = "Simplify";
 const ORDER_RATE_LIMIT_RETRY = { attempts: 3, baseDelayMs: 500 };
 
 let cachedAiraloClient: AiraloClient | null = null;
@@ -91,6 +90,10 @@ function envFlagEnabled(value: string | undefined): boolean {
   }
 
   return ["1", "true", "yes"].includes(value.trim().toLowerCase());
+}
+
+export function resolveAiraloBrandSettingsName(): string | null {
+  return normalizeOptionalString(process.env.AIRALO_BRAND_SETTINGS_NAME);
 }
 
 function isLocalWebhookHost(hostname: string): boolean {
@@ -267,8 +270,12 @@ export function buildAiraloOrderPayload(options: {
     quantity: String(options.quantity),
     type: "sim",
     description: `${options.quantity} x ${options.pkg.title}`,
-    brand_settings_name: AIRALO_BRAND_SETTINGS_NAME,
   };
+
+  const brandSettingsName = resolveAiraloBrandSettingsName();
+  if (brandSettingsName) {
+    payload.brand_settings_name = brandSettingsName;
+  }
 
   if (options.customerEmail) {
     payload.to_email = options.customerEmail;

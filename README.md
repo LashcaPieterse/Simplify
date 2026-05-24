@@ -121,6 +121,7 @@ AIRALO_CLIENT_SECRET=<airalo-client-secret>
 # Optional: force credential passthrough on every /packages request.
 # The client also auto-retries with credential passthrough after an auth-rejected 401.
 AIRALO_PACKAGES_SEND_CREDENTIALS=true
+AIRALO_BRAND_SETTINGS_NAME=<exact-airalo-brand-name>
 AIRALO_ASYNC_WEBHOOK_URL=https://<your-domain>/api/airalo/webhooks
 AIRALO_WEBHOOK_SECRET=<airalo-webhook-secret>
 ```
@@ -143,5 +144,7 @@ Deploy pending Prisma migrations with `npx prisma migrate deploy` before or duri
 If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
 
 Async order submissions send `AIRALO_ASYNC_WEBHOOK_URL` as the per-request `webhook_url`. If that override is unset, Simplify derives `https://<public-app-domain>/api/airalo/webhooks` from `NEXT_PUBLIC_APP_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, or `VERCEL_URL`. Leave all callback URLs unset only if Airalo has confirmed a dashboard-level async order webhook; in that case set `AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true` so the service can distinguish intentional global opt-in from missing configuration.
+
+`AIRALO_BRAND_SETTINGS_NAME` is optional. Leave it empty for unbranded Airalo fulfillment, or set it to the exact brand profile name configured in the Airalo dashboard.
 
 > Recommended cadence: execute the script every 60 minutes via cron or a background worker. The Airalo package endpoint is documented at 80 requests/minute per token; Simplify sync paces itself at 40 requests/minute as a conservative unattended-job limit.

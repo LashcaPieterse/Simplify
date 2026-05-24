@@ -10,11 +10,13 @@ const DEFAULT_LIMIT = 100;
 type ScriptArgs = {
   dryRun: boolean;
   limit: number;
+  checkoutId: string | null;
 };
 
 function parseArgs(argv: string[]): ScriptArgs {
   let dryRun = false;
   let limit = DEFAULT_LIMIT;
+  let checkoutId: string | null = null;
 
   for (const arg of argv) {
     if (arg === "--dry-run") {
@@ -28,10 +30,18 @@ function parseArgs(argv: string[]): ScriptArgs {
       if (Number.isFinite(parsed) && parsed > 0) {
         limit = Math.floor(parsed);
       }
+      continue;
+    }
+
+    if (arg.startsWith("--checkout-id=")) {
+      const raw = arg.slice("--checkout-id=".length).trim();
+      if (raw) {
+        checkoutId = raw;
+      }
     }
   }
 
-  return { dryRun, limit };
+  return { dryRun, limit, checkoutId };
 }
 
 function normalizeStatus(value: string | null | undefined): string {
@@ -85,8 +95,20 @@ async function main() {
 
   const candidates = await prisma.checkoutSession.findMany({
     where: {
-      orderId: null,
+      ...(args.checkoutId ? { id: args.checkoutId } : {}),
       status: { in: ["paid", "pending"] },
+      OR: [
+        { orderId: null },
+        {
+          order: {
+            is: {
+              orderNumber: null,
+              requestId: null,
+              status: "airalo_failed",
+            },
+          },
+        },
+      ],
       payments: {
         some: {
           status: { in: ["approved", "paid"] },
@@ -115,6 +137,14 @@ async function main() {
           },
         },
       },
+      order: {
+        select: {
+          id: true,
+          status: true,
+          orderNumber: true,
+          requestId: true,
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
     take: args.limit,
@@ -127,7 +157,7 @@ async function main() {
   let failed = 0;
 
   console.info(
-    `[checkout-recovery] candidates=${candidates.length} dryRun=${args.dryRun} limit=${args.limit}`,
+    `[checkout-recovery] candidates=${candidates.length} dryRun=${args.dryRun} limit=${args.limit} checkoutId=${args.checkoutId ?? "any"}`,
   );
 
   for (const checkout of candidates) {
@@ -146,6 +176,8 @@ async function main() {
       createdAt: checkout.createdAt.toISOString(),
       checkoutStatus: checkout.status,
       paymentStatus: payment.status,
+      reservedOrderId: checkout.order?.id ?? null,
+      reservedOrderStatus: checkout.order?.status ?? null,
       packageExternalId: checkout.package.airaloPackageId,
       packageTitle: checkout.package.title,
       country: checkout.package.operator.country.slug,

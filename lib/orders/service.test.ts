@@ -23,6 +23,29 @@ import { createInstallationPayload } from "./airalo-metadata";
 
 const TEST_PACKAGE_ID = "00000000-0000-0000-0000-000000000001";
 
+async function withBrandSettingsEnv<T>(
+  value: string | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const original = process.env.AIRALO_BRAND_SETTINGS_NAME;
+
+  if (value === undefined) {
+    delete process.env.AIRALO_BRAND_SETTINGS_NAME;
+  } else {
+    process.env.AIRALO_BRAND_SETTINGS_NAME = value;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    if (original === undefined) {
+      delete process.env.AIRALO_BRAND_SETTINGS_NAME;
+    } else {
+      process.env.AIRALO_BRAND_SETTINGS_NAME = original;
+    }
+  }
+}
+
 type SnapshotRecord = {
   orderId: string;
   source: string;
@@ -332,113 +355,147 @@ function createTestOrder(
 }
 
 test("createOrder sends /orders-async webhook_url and persists request_id with raw ack snapshot", async () => {
-  const db = new FakeOrderDb();
-  const asyncResponse: SubmitOrderAsyncResponse = {
-    status: true,
-    data: {
-      request_id: "req_123",
-      accepted_at: "2026-05-09T10:00:00Z",
-    },
-    meta: { message: "success" },
-  };
-  const airalo = new FakeAiraloClient({ asyncResponse });
+  await withBrandSettingsEnv(undefined, async () => {
+    const db = new FakeOrderDb();
+    const asyncResponse: SubmitOrderAsyncResponse = {
+      status: true,
+      data: {
+        request_id: "req_123",
+        accepted_at: "2026-05-09T10:00:00Z",
+      },
+      meta: { message: "success" },
+    };
+    const airalo = new FakeAiraloClient({ asyncResponse });
 
-  const result = await createTestOrder(
-    {
-      quantity: 2,
-      customerEmail: "customer@example.com",
-    },
-    {
-      db,
-      airalo,
-      submissionMode: "async",
-      asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
-    },
-  );
+    const result = await createTestOrder(
+      {
+        quantity: 2,
+        customerEmail: "customer@example.com",
+      },
+      {
+        db,
+        airalo,
+        submissionMode: "async",
+        asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
+      },
+    );
 
-  assert.equal(airalo.asyncPayloads.length, 1);
-  assert.equal(
-    airalo.asyncPayloads[0]?.webhook_url,
-    "https://example.com/api/airalo/webhooks",
-  );
-  assert.equal(airalo.asyncPayloads[0]?.quantity, "2");
-  assert.equal(airalo.asyncPayloads[0]?.brand_settings_name, "Simplify");
-  assert.equal(airalo.asyncPayloads[0]?.to_email, "customer@example.com");
-  assert.deepEqual(airalo.asyncPayloads[0]?.["sharing_option[]"], ["link"]);
-  assert.equal(db.orders[0]?.requestId, "req_123");
-  assert.equal(result.requestId, "req_123");
-  assert.equal(db.snapshots.length, 1);
-  assert.equal(db.snapshots[0]?.source, "orders-async");
-  assert.equal(db.snapshots[0]?.requestId, "req_123");
-  assert.deepEqual(db.snapshots[0]?.rawPayloadJson, asyncResponse);
+    assert.equal(airalo.asyncPayloads.length, 1);
+    assert.equal(
+      airalo.asyncPayloads[0]?.webhook_url,
+      "https://example.com/api/airalo/webhooks",
+    );
+    assert.equal(airalo.asyncPayloads[0]?.quantity, "2");
+    assert.equal(airalo.asyncPayloads[0]?.brand_settings_name, undefined);
+    assert.equal(airalo.asyncPayloads[0]?.to_email, "customer@example.com");
+    assert.deepEqual(airalo.asyncPayloads[0]?.["sharing_option[]"], ["link"]);
+    assert.equal(db.orders[0]?.requestId, "req_123");
+    assert.equal(result.requestId, "req_123");
+    assert.equal(db.snapshots.length, 1);
+    assert.equal(db.snapshots[0]?.source, "orders-async");
+    assert.equal(db.snapshots[0]?.requestId, "req_123");
+    assert.deepEqual(db.snapshots[0]?.rawPayloadJson, asyncResponse);
+  });
+});
+
+test("createOrder sends configured Airalo brand settings name", async () => {
+  await withBrandSettingsEnv("Brand Test Production", async () => {
+    const db = new FakeOrderDb();
+    const asyncResponse: SubmitOrderAsyncResponse = {
+      status: true,
+      data: {
+        request_id: "req_brand",
+        accepted_at: "2026-05-09T10:00:00Z",
+      },
+      meta: { message: "success" },
+    };
+    const airalo = new FakeAiraloClient({ asyncResponse });
+
+    await createTestOrder(
+      { quantity: 1 },
+      {
+        db,
+        airalo,
+        submissionMode: "async",
+        asyncWebhookUrl: "https://example.com/api/airalo/webhooks",
+      },
+    );
+
+    assert.equal(
+      airalo.asyncPayloads[0]?.brand_settings_name,
+      "Brand Test Production",
+    );
+  });
 });
 
 test("createOrder stores rich /orders response data, APN, and raw snapshot", async () => {
-  const db = new FakeOrderDb();
-  const syncResponse = OrderResponseSchema.parse({
-    status: true,
-    data: {
-      order_id: "A-ORDER-1",
-      order_reference: "REF-1",
-      status: "completed",
-      iccid: "8900000000000000001",
-      activation_code: "LPA:1$example$activation",
-      direct_apple_installation_url: "https://example.com/apple-install",
-      apn: "globaldata",
-      net_price: "4.50",
-      voice: 30,
-      text: 100,
-      sims: [
-        {
-          iccid: "8900000000000000001",
-          activation_code: "LPA:1$example$activation",
-          apn_value: "sim-apn",
-          direct_apple_installation_url: "https://example.com/apple-install",
-        },
-      ],
-    },
+  await withBrandSettingsEnv(undefined, async () => {
+    const db = new FakeOrderDb();
+    const syncResponse = OrderResponseSchema.parse({
+      status: true,
+      data: {
+        order_id: "A-ORDER-1",
+        order_reference: "REF-1",
+        status: "completed",
+        iccid: "8900000000000000001",
+        activation_code: "LPA:1$example$activation",
+        direct_apple_installation_url: "https://example.com/apple-install",
+        apn: "globaldata",
+        net_price: "4.50",
+        voice: 30,
+        text: 100,
+        sims: [
+          {
+            iccid: "8900000000000000001",
+            activation_code: "LPA:1$example$activation",
+            apn_value: "sim-apn",
+            direct_apple_installation_url: "https://example.com/apple-install",
+          },
+        ],
+      },
+    });
+    const airalo = new FakeAiraloClient({ syncResponse });
+
+    const result = await createTestOrder(
+      { quantity: 1 },
+      {
+        db,
+        airalo,
+        submissionMode: "sync",
+      },
+    );
+
+    assert.equal(result.orderNumber, "A-ORDER-1");
+    assert.equal(airalo.syncPayloads[0]?.brand_settings_name, undefined);
+    assert.equal(result.requestId, "REF-1");
+    assert.equal(result.installation?.apn, "globaldata");
+    assert.equal(db.profiles[0]?.iccid, "8900000000000000001");
+    assert.equal(db.snapshots.length, 1);
+    assert.equal(db.snapshots[0]?.source, "orders");
+    assert.equal(db.snapshots[0]?.orderNumber, "A-ORDER-1");
+    assert.deepEqual(db.snapshots[0]?.rawPayloadJson, syncResponse);
+
+    const installationPayload = JSON.parse(
+      String(db.installationPayloads[0]?.payload),
+    ) as Record<string, unknown>;
+    assert.equal(
+      installationPayload.directAppleUrl,
+      "https://example.com/apple-install",
+    );
+    assert.equal(installationPayload.apn, "globaldata");
+    assert.equal(
+      (db.snapshots[0]?.rawPayloadJson as OrderResponse).data.net_price,
+      "4.50",
+    );
+    assert.equal(
+      (db.snapshots[0]?.rawPayloadJson as OrderResponse).data.voice,
+      30,
+    );
+    assert.equal(
+      (db.snapshots[0]?.rawPayloadJson as OrderResponse).data.text,
+      100,
+    );
   });
-  const airalo = new FakeAiraloClient({ syncResponse });
-
-  const result = await createTestOrder(
-    { quantity: 1 },
-    {
-      db,
-      airalo,
-      submissionMode: "sync",
-    },
-  );
-
-  assert.equal(result.orderNumber, "A-ORDER-1");
-  assert.equal(airalo.syncPayloads[0]?.brand_settings_name, "Simplify");
-  assert.equal(result.requestId, "REF-1");
-  assert.equal(result.installation?.apn, "globaldata");
-  assert.equal(db.profiles[0]?.iccid, "8900000000000000001");
-  assert.equal(db.snapshots.length, 1);
-  assert.equal(db.snapshots[0]?.source, "orders");
-  assert.equal(db.snapshots[0]?.orderNumber, "A-ORDER-1");
-  assert.deepEqual(db.snapshots[0]?.rawPayloadJson, syncResponse);
-
-  const installationPayload = JSON.parse(
-    String(db.installationPayloads[0]?.payload),
-  ) as Record<string, unknown>;
-  assert.equal(
-    installationPayload.directAppleUrl,
-    "https://example.com/apple-install",
-  );
-  assert.equal(installationPayload.apn, "globaldata");
-  assert.equal(
-    (db.snapshots[0]?.rawPayloadJson as OrderResponse).data.net_price,
-    "4.50",
-  );
-  assert.equal(
-    (db.snapshots[0]?.rawPayloadJson as OrderResponse).data.voice,
-    30,
-  );
-  assert.equal(
-    (db.snapshots[0]?.rawPayloadJson as OrderResponse).data.text,
-    100,
-  );
 });
 
 test("createOrder stores the documented Airalo order id before the display code", async () => {

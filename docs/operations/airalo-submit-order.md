@@ -29,7 +29,7 @@ Airalo treats the payload as multipart form fields, so every value (even numeric
 | `package_id`          | string         | ✅       | Use IDs fetched from the catalog sync. Reject stale/unknown IDs before calling Airalo.                                                                                                                                  |
 | `type`                | string         | ⚠️       | Only valid value is `"sim"`. When omitted, Airalo defaults to `sim`, but we should still send it for clarity.                                                                                                           |
 | `description`         | string         | ⚠️       | Optional identifier/notes for the partner. Simplify uses the local order ID + product summary.                                                                                                                          |
-| `brand_settings_name` | string ⁄ null  | ⚠️       | Controls white-label branding when sharing eSIMs. Simplify sends `"Simplify"` on both sync and async order submissions; Airalo must have a matching brand profile configured.                                           |
+| `brand_settings_name` | string ⁄ null  | ⚠️       | Controls white-label branding when sharing eSIMs. Simplify sends `AIRALO_BRAND_SETTINGS_NAME` only when configured; the value must exactly match an Airalo dashboard brand profile.                                     |
 | `to_email`            | string         | ⚠️       | Provide when Airalo should email the subscriber. Requires `sharing_option[]`.                                                                                                                                           |
 | `sharing_option[]`    | array (string) | ⚠️       | Required if `to_email` is set. Valid values: `link`, `pdf`. Send as repeated form keys (e.g., `sharing_option[]=link`).                                                                                                 |
 | `copy_address[]`      | array (string) | ⚠️       | Additional recipients for the white-label email. Optional but only valid alongside `to_email`.                                                                                                                          |
@@ -82,7 +82,7 @@ Airalo surfaces validation errors through the `data` object with field-specific 
 | Top-up limit exceeded | `package_id`          | "validation.order_exceed_limit"                           | Surface the Airalo limit to support and prevent retrying the same top-up.                           |
 | Quantity > available  | `quantity`            | "SIM quantity is not available. Available quantity: {n}." | Surface remaining quantity to the user and refresh availability cache.                              |
 | Quantity > 50         | `quantity`            | "The quantity may not be greater than 50."                | Airalo's upstream maximum is 50, but Simplify blocks local requests above 10 before calling Airalo. |
-| Missing brand profile | `brand_settings_name` | "Brand settings name doesn't exist."                      | Offer a fallback unbranded share or force the user to pick a valid brand.                           |
+| Missing brand profile | `brand_settings_name` | "Brand settings name doesn't exist."                      | Leave `AIRALO_BRAND_SETTINGS_NAME` unset for unbranded fulfillment or set it to an exact valid brand. |
 
 Whenever the API returns a 422, log `order.validation.failed` with the returned field map so support can compare with this table.
 
@@ -107,10 +107,11 @@ Maintaining these mappings keeps the integration “on standard” with Airalo�
 2. **Form encoding** – Use a multipart-capable HTTP client; do not send JSON. Arrays must repeat the field name with `[]` suffix.
 3. **Async callback** – Configure `AIRALO_ASYNC_WEBHOOK_URL=https://<domain>/api/airalo/webhooks` or ensure `NEXT_PUBLIC_APP_URL`/Vercel exposes a public app URL so Simplify can derive it. If Airalo has confirmed global opt-in, set `AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true`.
 4. **Async correlation** – Persist `request_id` from the `202 Accepted` response and map it to `payload.data.reference`, `payload.data.request_id`, or `payload.data.requestId` from the webhook.
-5. **Email sharing** – Only send `to_email` when the customer opted in. Always include at least one `sharing_option[]` (`link` is the safest default). Optionally set `copy_address[]` for internal notifications.
-6. **Raw snapshots** – Persist full Airalo response/webhook envelopes in `airalo_order_snapshots` for audit, support replay, and schema drift debugging.
-7. **Observability** – Continue emitting `airalo_order_requests_total` counters tagged with `result`=`success`/`error` and current reason labels such as `ok`, `validation_failed`, `airalo_error`, `rate_limited`, and mapped Airalo business categories. Deviations from this spec should trigger alerts described in `airalo-runbooks.md`.
-8. **Schema drift watch** – Monitor release notes for new properties (e.g., the recently added `direct_apple_installation_url`). When a field appears in the response, persist it even if we do not expose it yet.
+5. **Brand settings** – Keep `AIRALO_BRAND_SETTINGS_NAME` empty unless the Airalo account has a matching brand profile. A stale or guessed value blocks paid checkout fulfillment with a 422.
+6. **Email sharing** – Only send `to_email` when the customer opted in. Always include at least one `sharing_option[]` (`link` is the safest default). Optionally set `copy_address[]` for internal notifications.
+7. **Raw snapshots** – Persist full Airalo response/webhook envelopes in `airalo_order_snapshots` for audit, support replay, and schema drift debugging.
+8. **Observability** – Continue emitting `airalo_order_requests_total` counters tagged with `result`=`success`/`error` and current reason labels such as `ok`, `validation_failed`, `airalo_error`, `rate_limited`, and mapped Airalo business categories. Deviations from this spec should trigger alerts described in `airalo-runbooks.md`.
+9. **Schema drift watch** – Monitor release notes for new properties (e.g., the recently added `direct_apple_installation_url`). When a field appears in the response, persist it even if we do not expose it yet.
 
 Keeping these guardrails in place keeps Simplify "on Standard" with the Airalo Submit Order specification and reduces the chance of regressions when Airalo evolves the endpoint.
 
