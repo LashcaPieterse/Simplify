@@ -84,14 +84,6 @@ function normalizeVercelHost(value: unknown): string | null {
   return `https://${host}`;
 }
 
-function envFlagEnabled(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-
-  return ["1", "true", "yes"].includes(value.trim().toLowerCase());
-}
-
 export function resolveAiraloBrandSettingsName(): string | null {
   return normalizeOptionalString(process.env.AIRALO_BRAND_SETTINGS_NAME);
 }
@@ -205,10 +197,6 @@ function resolveAsyncWebhookUrl(options: {
   }
 }
 
-function hasGlobalAsyncWebhookOptIn(): boolean {
-  return envFlagEnabled(process.env.AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN);
-}
-
 export function resolveRequiredAsyncWebhookUrl(options: {
   asyncWebhookUrl?: string | null;
 }): string | null {
@@ -218,17 +206,13 @@ export function resolveRequiredAsyncWebhookUrl(options: {
     return webhookUrl;
   }
 
-  if (hasGlobalAsyncWebhookOptIn()) {
-    return null;
-  }
-
   const derivedWebhookUrl = resolvePublicAppWebhookUrl();
   if (derivedWebhookUrl) {
     return derivedWebhookUrl;
   }
 
   throw new OrderServiceError(
-    "AIRALO_ASYNC_WEBHOOK_URL must be configured for async orders unless AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true or NEXT_PUBLIC_APP_URL/VERCEL_URL provides a public app URL.",
+    "AIRALO_ASYNC_WEBHOOK_URL must be configured for async orders unless NEXT_PUBLIC_APP_URL/VERCEL_URL provides a public app URL.",
     500,
   );
 }

@@ -148,7 +148,7 @@ Deploy pending Prisma migrations with `npx prisma migrate deploy` before or duri
 
 If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
 
-Async order submissions send `AIRALO_ASYNC_WEBHOOK_URL` as the per-request `webhook_url`. If that override is unset, Simplify derives `https://<public-app-domain>/api/airalo/webhooks` from `NEXT_PUBLIC_APP_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, or `VERCEL_URL`. Leave all callback URLs unset only if Airalo has confirmed a dashboard-level async order webhook; in that case set `AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN=true` so the service can distinguish intentional global opt-in from missing configuration.
+Async order submissions always send a per-request `webhook_url`. Simplify uses `AIRALO_ASYNC_WEBHOOK_URL` when configured; otherwise it derives `https://<public-app-domain>/api/airalo/webhooks` from `NEXT_PUBLIC_APP_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, or `VERCEL_URL`.
 
 `AIRALO_BRAND_SETTINGS_NAME` is optional. Leave it empty for unbranded Airalo fulfillment, or set it to the exact brand profile name configured in the Airalo dashboard.
 

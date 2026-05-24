@@ -5,7 +5,6 @@ import { resolveRequiredAsyncWebhookUrl } from "./airalo-ordering";
 
 const WEBHOOK_ENV_KEYS = [
   "AIRALO_ASYNC_WEBHOOK_URL",
-  "AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN",
   "AIRALO_WEBHOOK_SECRET",
   "NEXT_PUBLIC_APP_URL",
   "VERCEL_PROJECT_PRODUCTION_URL",
@@ -97,18 +96,6 @@ test("resolveRequiredAsyncWebhookUrl derives the Airalo webhook from Vercel URL"
         resolveRequiredAsyncWebhookUrl({}),
         "https://simplify-git-main-example.vercel.app/api/airalo/webhooks",
       );
-    },
-  );
-});
-
-test("resolveRequiredAsyncWebhookUrl skips per-request URLs when global opt-in is set", () => {
-  withWebhookEnv(
-    {
-      AIRALO_ASYNC_WEBHOOK_GLOBAL_OPT_IN: "true",
-      NEXT_PUBLIC_APP_URL: "https://simplify.example.com",
-    },
-    () => {
-      assert.equal(resolveRequiredAsyncWebhookUrl({}), null);
     },
   );
 });
