@@ -7,16 +7,16 @@ import { getExternalLinkProps, resolveLinkHref } from "@/lib/links";
 import { HeaderActions } from "./HeaderActions";
 
 export function SiteHeader({ settings }: { settings: SiteSettings }) {
-  const logoUrl = settings.logo ? urlForImage(settings.logo)?.width(240).height(120).fit("max").auto("format").url() : null;
+  const logoUrl = settings.logo ? urlForImage(settings.logo)?.width(320).height(160).fit("max").auto("format").url() : null;
 
   return (
     <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pb-8 pt-10 lg:px-10">
       <div className="flex items-center gap-4">
         <Link href="/" aria-label={settings.title} className="flex items-center">
           {logoUrl ? (
-            <Image src={logoUrl} alt="" width={104} height={56} className="h-14 w-auto object-contain" priority />
+            <Image src={logoUrl} alt="" width={148} height={80} className="h-20 w-auto object-contain" priority />
           ) : (
-            <Wifi aria-hidden="true" className="h-10 w-10 text-brand-600" />
+            <Wifi aria-hidden="true" className="h-14 w-14 text-brand-600" />
           )}
         </Link>
         <nav className="hidden items-center gap-8 text-sm font-medium text-brand-700 lg:flex">

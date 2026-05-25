@@ -8,8 +8,9 @@ export const metadata: Metadata = {
   title: "Simplify eSIMs",
   description: "Global eSIM marketplace for instant travel connectivity.",
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }],
-    shortcut: "/favicon.svg"
+    icon: [{ url: "/favicon.png", type: "image/png", sizes: "500x500" }],
+    shortcut: "/favicon.png",
+    apple: [{ url: "/favicon.png", type: "image/png", sizes: "500x500" }]
   }
 };
 
