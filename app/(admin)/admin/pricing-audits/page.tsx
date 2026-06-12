@@ -19,7 +19,7 @@ export default async function PricingAuditsPage({ searchParams }: { searchParams
       <form className="flex gap-2">
         <select name="severity" defaultValue={severity ?? ""} className="rounded border border-slate-200 px-3 py-2 text-sm"><option value="">All severities</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
         <select name="status" defaultValue={status ?? ""} className="rounded border border-slate-200 px-3 py-2 text-sm"><option value="">All statuses</option><option value="open">open</option><option value="ignored">ignored</option><option value="resolved">resolved</option></select>
-        <button className="rounded bg-teal-600 px-3 py-2 text-sm text-white">Apply</button>
+        <button className="button-ribbon-primary rounded-full px-3 py-2 text-sm font-semibold">Apply</button>
       </form>
       <div className="space-y-2">
         {audits.map((audit) => (

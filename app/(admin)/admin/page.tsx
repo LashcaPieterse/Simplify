@@ -125,7 +125,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
               <option value="30d">Last 30 days</option>
             </select>
           </label>
-          <button type="submit" className="rounded-lg bg-teal-600 px-4 py-2 font-semibold text-white shadow-sm">
+          <button type="submit" className="button-ribbon-primary rounded-full px-4 py-2 font-semibold">
             Apply
           </button>
         </form>

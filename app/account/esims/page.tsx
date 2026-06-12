@@ -37,7 +37,7 @@ export default async function AccountEsimsPage() {
         </p>
         <Link
           href="/"
-          className="mt-5 inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow-sm"
+          className="button-ribbon-primary mt-5 inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold"
         >
           Browse plans
         </Link>

@@ -107,6 +107,16 @@ export function AfricaCoverageMap() {
             projectionConfig={projectionConfig}
             style={{ width: "100%", height: "100%" }}
           >
+            <defs>
+              <linearGradient id="simplify-map-marker-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#31B9E6" />
+                <stop offset="45%" stopColor="#178FD3" />
+                <stop offset="100%" stopColor="#0B4FA3" />
+              </linearGradient>
+              <filter id="simplify-map-marker-shadow" x="-80%" y="-80%" width="260%" height="260%">
+                <feDropShadow dx="0" dy="2" stdDeviation="1.4" floodColor="#0B4FA3" floodOpacity="0.28" />
+              </filter>
+            </defs>
             <ZoomableGroup {...zoomableGroupProps}>
               <Geographies geography={WORLD_TOPOJSON}>
                 {({ geographies }) =>
@@ -136,9 +146,10 @@ export function AfricaCoverageMap() {
                 >
                   <circle
                     r={selected?.id === country.id ? 6.5 : 5}
-                    fill={selected?.id === country.id ? "#1f8789" : "#2dabac"}
-                    stroke="#153f41"
-                    strokeWidth={1}
+                    fill="url(#simplify-map-marker-gradient)"
+                    stroke={selected?.id === country.id ? "#31B9E6" : "#0B4FA3"}
+                    strokeWidth={selected?.id === country.id ? 1.5 : 1}
+                    filter="url(#simplify-map-marker-shadow)"
                   />
                   {hoverId === country.id && (
                     <g transform="translate(0,-18)">
@@ -183,7 +194,7 @@ export function AfricaCoverageMap() {
                       </p>
                       <button
                         type="button"
-                        className="mt-2 inline-flex items-center rounded-full bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+                        className="button-ribbon-primary mt-2 inline-flex items-center rounded-full px-3 py-1.5 text-sm font-semibold focus-visible:outline-none"
                         onClick={() => {
                           alert(`Start checkout for ${pkg.title} in ${selected.name}`);
                         }}

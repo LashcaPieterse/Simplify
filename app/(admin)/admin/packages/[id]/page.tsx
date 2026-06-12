@@ -86,7 +86,7 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
         >
           <button
             type="submit"
-            className={`rounded-lg px-4 py-2 text-sm font-semibold shadow-sm ${isActive ? "border border-slate-200 bg-white text-slate-800" : "bg-teal-600 text-white"}`}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${isActive ? "border border-slate-200 bg-white text-slate-800 shadow-sm" : "button-ribbon-primary"}`}
           >
             {isActive ? "Deactivate" : "Activate"}
           </button>
@@ -142,7 +142,7 @@ export default async function PackageDetailPage({ params }: { params: { id: stri
                 placeholder="Eg. 14.99"
               />
             </label>
-            <button type="submit" className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
+            <button type="submit" className="button-ribbon-primary rounded-full px-4 py-2 text-sm font-semibold">
               Save
             </button>
           </form>

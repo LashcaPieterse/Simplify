@@ -79,6 +79,7 @@ export default async function HomePage() {
               highlightedProducts={highlightedProducts}
               allProducts={allProducts}
               fallbackCountries={countrySection?.countries ?? []}
+              regionalBundle={bundleSection?.bundle ?? null}
             />
           ) : null}
         </Container>

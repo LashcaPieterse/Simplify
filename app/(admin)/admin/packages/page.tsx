@@ -53,7 +53,7 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
       <h1 className="text-2xl font-semibold text-slate-900">Packages pricing integrity</h1>
       <form className="flex gap-2">
         <input defaultValue={q} name="q" placeholder="Search package/operator/country" className="w-full rounded border border-slate-200 px-3 py-2 text-sm" />
-        <button className="rounded bg-teal-600 px-3 py-2 text-sm text-white">Search</button>
+        <button className="button-ribbon-primary rounded-full px-3 py-2 text-sm font-semibold">Search</button>
       </form>
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="min-w-full text-sm">

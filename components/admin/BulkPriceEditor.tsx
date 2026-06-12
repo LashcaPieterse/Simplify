@@ -26,7 +26,7 @@ export function BulkPriceEditor({ packages }: { packages: PackageLite[] }) {
           <p className="text-sm text-slate-600">Inline edit selling prices and save in one action.</p>
         </div>
         <button
-          className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+          className="button-ribbon-primary rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50"
           disabled={isPending}
           onClick={() => {
             startTransition(async () => {

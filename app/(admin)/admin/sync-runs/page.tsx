@@ -35,7 +35,7 @@ export default async function SyncRunsPage({ searchParams }: { searchParams: Rec
           <option value="success">Success</option>
           <option value="failed">Failed</option>
         </select>
-        <button className="rounded bg-teal-600 px-3 py-2 text-sm text-white">Apply</button>
+        <button className="button-ribbon-primary rounded-full px-3 py-2 text-sm font-semibold">Apply</button>
       </form>
       <div className="rounded-xl border border-slate-200 bg-white">
         <table className="min-w-full text-sm">

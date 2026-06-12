@@ -75,7 +75,7 @@ export default async function OperationsPage() {
               className="mt-2 w-32 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
             />
           </label>
-          <button type="submit" className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm">
+          <button type="submit" className="button-ribbon-primary rounded-full px-4 py-2 text-sm font-semibold">
             Apply markup
           </button>
         </form>

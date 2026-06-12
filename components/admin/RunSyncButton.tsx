@@ -19,7 +19,7 @@ export function RunSyncButton() {
           setStatus("error");
         }
       }}
-      className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60"
+      className="button-ribbon-primary flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
       disabled={status === "running"}
     >
       {status === "running" ? "Syncing..." : "Run Sync Now"}

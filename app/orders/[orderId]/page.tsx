@@ -260,7 +260,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
             </div>
             <Link
               href={saveAccountHref as Route}
-              className="inline-flex items-center justify-center rounded-full bg-teal-600 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              className="button-ribbon-primary inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-semibold focus:outline-none"
             >
               Save this eSIM
             </Link>
@@ -468,7 +468,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
                   </div>
                   <button
                     type="submit"
-                    className="mt-4 inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                    className="button-ribbon-primary mt-4 inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold focus:outline-none"
                   >
                     Purchase top-up
                   </button>

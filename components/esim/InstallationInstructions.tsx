@@ -314,9 +314,9 @@ export function InstallationInstructions({ iccid, className }: InstallationInstr
                               : "Send to an iPhone running iOS 17.4+ to use direct install."
                           }
                           className={cn(
-                            "inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-sm font-semibold shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500",
+                            "inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-[#31B9E6]/45",
                             isIos174Plus && isIosDevice
-                              ? "bg-teal-600 text-white hover:bg-teal-500"
+                              ? "button-ribbon-primary"
                               : "cursor-not-allowed bg-sand-200 text-sand-500",
                           )}
                         >

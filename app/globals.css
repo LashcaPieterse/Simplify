@@ -2,6 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .button-ribbon-primary {
+    border: 1px solid rgba(49, 185, 230, 0.42);
+    background-image: linear-gradient(135deg, #31b9e6 0%, #178fd3 45%, #0b4fa3 100%);
+    color: #ffffff;
+    box-shadow: 0 16px 34px -18px rgba(11, 79, 163, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      filter 160ms ease,
+      border-color 160ms ease;
+  }
+
+  .button-ribbon-primary:hover {
+    border-color: rgba(49, 185, 230, 0.62);
+    box-shadow: 0 22px 44px -22px rgba(11, 79, 163, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+    filter: brightness(1.06) saturate(1.08);
+    transform: translateY(-1px);
+  }
+
+  .button-ribbon-primary:active {
+    box-shadow: 0 10px 24px -18px rgba(11, 79, 163, 0.9), inset 0 1px 2px rgba(3, 31, 67, 0.22);
+    filter: brightness(0.96) saturate(1.02);
+    transform: translateY(0);
+  }
+
+  .button-ribbon-primary:focus-visible {
+    outline: none;
+    box-shadow:
+      0 16px 34px -18px rgba(11, 79, 163, 0.9),
+      0 0 0 4px rgba(49, 185, 230, 0.26),
+      inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  }
+
+  .button-ribbon-primary:disabled,
+  .button-ribbon-primary[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.58;
+    box-shadow: none;
+    filter: grayscale(0.12) saturate(0.8);
+    transform: none;
+  }
+}
+
 :root {
   color-scheme: only light;
 }
