@@ -194,7 +194,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
 
         <div className="flex items-center justify-center gap-2 rounded-2xl bg-brand-50/70 px-4 py-3 text-center text-sm text-brand-700">
           <ShieldCheck className="h-4 w-4 shrink-0 text-brand-500" />
-          <span>Secure sign-in. We'll never share your personal details.</span>
+          <span>Secure sign-in. We&apos;ll never share your personal details.</span>
         </div>
       </div>
     );
@@ -356,7 +356,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
 
       {!hasCredentials && !emailProvider && !oauthProviders.length ? (
         <p className="rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-800">
-          Secure sign-in. We'll never share your personal details.
+          Secure sign-in. We&apos;ll never share your personal details.
         </p>
       ) : null}
     </div>
