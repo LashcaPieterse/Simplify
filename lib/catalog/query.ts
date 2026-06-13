@@ -147,6 +147,15 @@ const CATALOG_PACKAGE_SELECT = {
       id: true,
       title: true,
       airaloOperatorId: true,
+      country: {
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          countryCode: true,
+          imageJson: true,
+        },
+      },
     },
   },
   state: {
@@ -264,6 +273,73 @@ function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
   };
 }
 
+function toCountrySummaryFromPackage(record: PackageRecord): CountrySummary | undefined {
+  const country = record.pkg.operator?.country;
+  if (!country) {
+    return undefined;
+  }
+
+  return {
+    _id: country.id,
+    title: country.title,
+    slug: country.slug,
+    coverImage: (country.imageJson as ImageLike | null) ?? undefined,
+    featured: false,
+  };
+}
+
+function toPackageProductSummary(record: PackageRecord): EsimProductSummary | null {
+  const packageInfo = createPackageInfo(record);
+  if (packageInfo.isActive === false) {
+    return null;
+  }
+
+  const price = createPriceFromPackage(record);
+  if (!price) {
+    return null;
+  }
+
+  const country = toCountrySummaryFromPackage(record);
+  const countryTitle = country?.title;
+  const provider = packageInfo.operator
+    ? {
+        title: packageInfo.operator.title,
+        slug: packageInfo.operator.slug,
+        badge: packageInfo.operator.badge ?? undefined,
+      }
+    : null;
+  const displayName = countryTitle ? `${countryTitle} ${record.pkg.title}` : record.pkg.title;
+  const shortDescription =
+    record.pkg.shortInfo ??
+    (countryTitle ? `${record.pkg.title} eSIM for ${countryTitle}.` : `${record.pkg.title} travel eSIM.`);
+
+  return {
+    _id: `package-${record.pkg.id}`,
+    displayName,
+    slug: record.pkg.airaloPackageId,
+    priceUSD: price.currency === "USD" ? price.amount : 0,
+    coverImage: country?.coverImage,
+    shortDescription,
+    status: "active",
+    keywords: [
+      country?.title,
+      country?.slug,
+      record.pkg.operator?.country?.countryCode,
+      record.pkg.operator?.title,
+      record.pkg.title,
+      record.pkg.airaloPackageId,
+    ].filter((keyword): keyword is string => Boolean(keyword)),
+    country,
+    price,
+    provider,
+    slugs: {
+      plan: record.pkg.airaloPackageId,
+      country: country?.slug,
+    },
+    package: packageInfo,
+  };
+}
+
 function buildProviderInfo(product: SanityCatalogProduct, pkg?: CatalogPackageInfo | null): ProviderInfo | null {
   const badge = product.providerBadge ?? undefined;
   const operator = pkg?.operator;
@@ -333,9 +409,17 @@ function applyPackageToProduct(
       ? (matchedRecord.pkg.state?.isActive ?? false) &&
         hasConfiguredSellingPrice(matchedRecord.pkg.state)
       : false;
+    const livePackageInfo = matchedRecord ? createPackageInfo(matchedRecord) : null;
     packageInfo = {
       ...packageInfoFromSanity,
+      priceCents: livePackageInfo?.priceCents ?? packageInfoFromSanity.priceCents,
+      currency: livePackageInfo?.currency ?? packageInfoFromSanity.currency,
       isActive: isSellable,
+      dataLimitMb: livePackageInfo?.dataLimitMb ?? packageInfoFromSanity.dataLimitMb,
+      validityDays: livePackageInfo?.validityDays ?? packageInfoFromSanity.validityDays,
+      lastSyncedAt: livePackageInfo?.lastSyncedAt ?? packageInfoFromSanity.lastSyncedAt,
+      metadata: livePackageInfo?.metadata ?? packageInfoFromSanity.metadata,
+      operator: packageInfoFromSanity.operator ?? livePackageInfo?.operator,
     };
   } else if (matchedRecord) {
     packageInfo = createPackageInfo(matchedRecord);
@@ -392,13 +476,24 @@ export async function getCatalogProductSummaries(
 
   const [products, packages] = await Promise.all([fetchProducts(), fetchPackages()]);
 
-  if (!products?.length) {
-    return [];
-  }
-
   const maps = buildPackageMaps(packages);
 
-  return products.map((product) => applyPackageToProduct(product, maps));
+  const productSummaries = (products ?? []).map((product) => applyPackageToProduct(product, maps));
+  const representedPackageKeys = new Set(
+    productSummaries
+      .filter((product) => product.status === "active")
+      .map((product) => normalizeKey(product.package?.externalId ?? product.slugs?.plan ?? product.package?.id ?? null))
+      .filter((key): key is string => Boolean(key)),
+  );
+  const packageSummaries = packages
+    .filter((pkg) => {
+      const packageKey = normalizeKey(pkg.airaloPackageId);
+      return packageKey ? !representedPackageKeys.has(packageKey) : false;
+    })
+    .map((pkg) => toPackageProductSummary({ pkg }))
+    .filter((product): product is EsimProductSummary => Boolean(product));
+
+  return [...productSummaries, ...packageSummaries];
 }
 
 export async function getCatalogProductSummariesMap(): Promise<Map<string, EsimProductSummary>> {

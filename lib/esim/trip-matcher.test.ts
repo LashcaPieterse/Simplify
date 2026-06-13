@@ -90,6 +90,76 @@ test("exact country match wins over unrelated cheaper products", () => {
   assert.equal(result.primary?.product._id, "kenya");
 });
 
+test("popular city destination resolves to its country plan", () => {
+  const result = matchTripPlans({
+    destination: "Cape Town",
+    durationDays: 7,
+    usageProfileId: "light",
+    products: [
+      product({ id: "kenya", name: "Kenya 2GB", country: "Kenya", price: 8, dataMb: 2048, validityDays: 7 }),
+      product({
+        id: "south-africa",
+        name: "South Africa 3GB",
+        country: "South Africa",
+        price: 12,
+        dataMb: 3072,
+        validityDays: 7,
+      }),
+    ],
+  });
+
+  assert.equal(result.primary?.product._id, "south-africa");
+});
+
+test("Sanity destination aliases resolve through referenced country", () => {
+  const result = matchTripPlans({
+    destination: "Marrakech",
+    durationDays: 7,
+    usageProfileId: "light",
+    tripDestinations: [
+      {
+        _id: "trip-marrakesh",
+        title: "Marrakesh",
+        slug: "marrakesh",
+        country: { title: "Morocco", slug: "morocco" },
+        aliases: ["Marrakech"],
+        active: true,
+      },
+    ],
+    products: [
+      product({ id: "egypt", name: "Egypt 2GB", country: "Egypt", price: 8, dataMb: 2048, validityDays: 7 }),
+      product({ id: "morocco", name: "Morocco 3GB", country: "Morocco", price: 12, dataMb: 3072, validityDays: 7 }),
+    ],
+  });
+
+  assert.equal(result.primary?.product._id, "morocco");
+});
+
+test("Sanity preferred packages boost ranking without bypassing sellability", () => {
+  const result = matchTripPlans({
+    destination: "Mombasa",
+    durationDays: 7,
+    usageProfileId: "light",
+    tripDestinations: [
+      {
+        _id: "trip-mombasa",
+        title: "Mombasa",
+        slug: "mombasa",
+        country: { title: "Kenya", slug: "kenya" },
+        active: true,
+        preferredPackageIds: ["airalo-premium"],
+      },
+    ],
+    products: [
+      product({ id: "budget", name: "Kenya Budget", country: "Kenya", price: 4, dataMb: 3072, validityDays: 7 }),
+      product({ id: "premium", name: "Kenya Preferred", country: "Kenya", price: 40, dataMb: 3072, validityDays: 7 }),
+      product({ id: "inactive-preferred", name: "Kenya Inactive Preferred", country: "Kenya", price: 2, dataMb: 5120, validityDays: 7, active: false }),
+    ],
+  });
+
+  assert.equal(result.primary?.product._id, "premium");
+});
+
 test("featured products rank first when no destination is entered", () => {
   const result = matchTripPlans({
     destination: "",

@@ -199,3 +199,135 @@ test("getCatalogProductSummaries marks active packages without selling price as 
   assert.equal(summaries[0]?.priceUSD, 0);
   assert.equal(summaries[0]?.package?.isActive, false);
 });
+
+test("getCatalogProductSummaries synthesizes active Airalo-backed packages without editorial products", async () => {
+  const dbPackages = [
+    {
+      id: "pkg-4",
+      airaloPackageId: "ke-1gb-7d",
+      title: "1 GB - 7 days",
+      amount: 1024,
+      day: 7,
+      isUnlimited: false,
+      price: 8,
+      netPrice: null,
+      pricesNetPrice: null,
+      pricesRecommendedRetailPrice: null,
+      shortInfo: "Starter Kenya data",
+      qrInstallation: null,
+      manualInstallation: null,
+      isFairUsagePolicy: null,
+      fairUsagePolicy: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      operator: {
+        id: "operator-4",
+        title: "Nakuru Mobile",
+        airaloOperatorId: 44,
+        country: {
+          id: "country-kenya",
+          title: "Kenya",
+          slug: "kenya",
+          countryCode: "KE",
+          imageJson: null,
+        },
+      },
+      state: {
+        isActive: true,
+        sellingPriceCents: 800,
+        basePriceCents: 600,
+        currencyCode: "USD",
+        lastSyncedAt: null,
+        updatedAt: new Date(),
+      },
+    } as TestPackage,
+  ] as unknown as FetchPackagesResult;
+
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => [],
+    fetchPackages: async () => dbPackages,
+  });
+
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0]?.country?.title, "Kenya");
+  assert.equal(summaries[0]?.package?.externalId, "ke-1gb-7d");
+  assert.equal(summaries[0]?.price?.amount, 8);
+});
+
+test("getCatalogProductSummaries lets live Prisma state override stale Sanity package mirror fields", async () => {
+  const sanityProducts = [
+    {
+      _id: "product-5",
+      displayName: "Kenya stale mirror",
+      slug: "kenya-stale",
+      priceUSD: 99,
+      shortDescription: "Kenya stale package data",
+      status: "active" as const,
+      package: {
+        _id: "sanity-pkg-5",
+        externalId: "ke-live-1gb",
+        title: "Stale 10GB",
+        dataAmountMb: 10240,
+        validityDays: 30,
+      },
+      country: {
+        _id: "country-kenya",
+        title: "Kenya",
+        slug: "kenya",
+      },
+    },
+  ];
+
+  const dbPackages = [
+    {
+      id: "pkg-5",
+      airaloPackageId: "ke-live-1gb",
+      title: "1 GB - 7 days",
+      amount: 1024,
+      day: 7,
+      isUnlimited: false,
+      price: 8,
+      netPrice: null,
+      pricesNetPrice: null,
+      pricesRecommendedRetailPrice: null,
+      shortInfo: "Live Kenya data",
+      qrInstallation: null,
+      manualInstallation: null,
+      isFairUsagePolicy: null,
+      fairUsagePolicy: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      operator: {
+        id: "operator-5",
+        title: "Nakuru Mobile",
+        airaloOperatorId: 45,
+        country: {
+          id: "country-kenya",
+          title: "Kenya",
+          slug: "kenya",
+          countryCode: "KE",
+          imageJson: null,
+        },
+      },
+      state: {
+        isActive: true,
+        sellingPriceCents: 800,
+        basePriceCents: 600,
+        currencyCode: "USD",
+        lastSyncedAt: null,
+        updatedAt: new Date(),
+      },
+    } as TestPackage,
+  ] as unknown as FetchPackagesResult;
+
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => sanityProducts,
+    fetchPackages: async () => dbPackages,
+  });
+
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0]?.price?.amount, 8);
+  assert.equal(summaries[0]?.package?.dataLimitMb, 1024);
+  assert.equal(summaries[0]?.package?.validityDays, 7);
+  assert.equal(summaries[0]?.package?.isActive, true);
+});

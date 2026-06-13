@@ -70,7 +70,7 @@ export default async function HomePage() {
       <div className="pointer-events-none absolute inset-0 -z-10 bg-radial-fade" aria-hidden />
       <SiteHeader settings={settings} />
       <main>
-        <div className="mx-auto w-full max-w-[90rem] px-5 sm:px-6 lg:px-10 xl:px-12">
+        <div className="mx-auto flex w-full max-w-[104rem] flex-col px-5 sm:px-6 lg:min-h-[calc(100svh-9.5rem)] lg:px-10 lg:pb-20 xl:px-12">
           {heroSection ? (
             <Hero
               hero={heroSection}

@@ -16,6 +16,7 @@
     "airalo:test": "tsx --test lib/airalo/*.test.ts lib/orders/*.test.ts lib/payments/*.test.ts lib/auth/*.test.ts",
     "airalo:recover-orders": "tsx scripts/recover-airalo-orders.ts",
     "checkouts:recover-paid": "tsx scripts/recover-paid-checkouts.ts",
+    "sanity:seed-trip-destinations": "tsx scripts/seed-trip-destinations.ts",
     "airalo:smoke-live": "tsx scripts/airalo-live-smoke.ts"
   },
   "dependencies": {

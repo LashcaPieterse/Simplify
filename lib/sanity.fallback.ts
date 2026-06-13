@@ -486,6 +486,42 @@ const heroStats: Stat[] = [
 
 const heroFeaturedProducts = fallbackEsimProductSummaries.slice(0, 3);
 const heroFeaturedProductIds = heroFeaturedProducts.map((product) => product._id);
+const fallbackTripCountry = (key: string, title: string, slug: string): CountrySummary =>
+  countrySummaries[key] ?? {
+    _id: `country-${slug}`,
+    title,
+    slug,
+    summary: null,
+    featured: false
+  };
+
+const fallbackTripDestinations = [
+  { title: "Cape Town", slug: "cape-town", country: fallbackTripCountry("south-africa", "South Africa", "south-africa") },
+  { title: "Zanzibar", slug: "zanzibar", country: fallbackTripCountry("tanzania", "Tanzania", "tanzania") },
+  { title: "Mombasa", slug: "mombasa", country: fallbackTripCountry("kenya", "Kenya", "kenya") },
+  { title: "Kampala", slug: "kampala", country: fallbackTripCountry("uganda", "Uganda", "uganda") },
+  { title: "Lagos", slug: "lagos", country: fallbackTripCountry("nigeria", "Nigeria", "nigeria") },
+  { title: "Cairo", slug: "cairo", country: fallbackTripCountry("egypt", "Egypt", "egypt") },
+  { title: "Kigali", slug: "kigali", country: fallbackTripCountry("rwanda", "Rwanda", "rwanda") },
+  { title: "Marrakesh", slug: "marrakesh", country: fallbackTripCountry("morocco", "Morocco", "morocco"), aliases: ["Marrakech"] },
+  { title: "Addis Ababa", slug: "addis-ababa", country: fallbackTripCountry("ethiopia", "Ethiopia", "ethiopia") },
+  { title: "Johannesburg", slug: "johannesburg", country: fallbackTripCountry("south-africa", "South Africa", "south-africa") },
+  { title: "Nairobi", slug: "nairobi", country: fallbackTripCountry("kenya", "Kenya", "kenya") },
+  { title: "Casablanca", slug: "casablanca", country: fallbackTripCountry("morocco", "Morocco", "morocco") },
+  { title: "Accra", slug: "accra", country: fallbackTripCountry("ghana", "Ghana", "ghana") }
+].map((destination, index) => ({
+  _id: `trip-destination-${destination.slug}`,
+  title: destination.title,
+  slug: destination.slug,
+  destinationType: "city" as const,
+  country: destination.country,
+  aliases: destination.aliases ?? [],
+  searchTerms: [],
+  active: true,
+  featured: true,
+  sortOrder: index + 1,
+  preferredPackageIds: []
+}));
 
 const heroSection: HeroSection = {
   _type: "heroSection",
@@ -498,7 +534,18 @@ const heroSection: HeroSection = {
   ],
   stats: heroStats,
   featuredProductIds: heroFeaturedProductIds,
-  featuredProducts: heroFeaturedProducts
+  featuredProducts: heroFeaturedProducts,
+  tripMatcherSettings: {
+    title: "Plan your African eSIM",
+    subtitle: "Match destination, stay length, and data needs.",
+    badgeLabel: "Live match",
+    placeholder: "City, country, or route",
+    noMatchTitle: "No active match for {destination}.",
+    noMatchBody: "Try one of the live African destinations below.",
+    regionalTripLabel: "Multi-country trip? Compare {bundle}.",
+    emptyStateMessage: "Live plans are syncing. Pick a destination to see the best available match.",
+    popularDestinations: fallbackTripDestinations
+  }
 };
 
 const countrySection: CountryGridSection = {

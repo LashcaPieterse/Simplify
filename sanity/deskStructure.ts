@@ -22,6 +22,7 @@ const previewableTypes = new Set([
   "siteSettings",
   "homePage",
   "catalogCountry",
+  "tripDestination",
   "eSimProduct",
   "regionBundle",
   "post"
@@ -42,6 +43,27 @@ export const structure = (S: StructureBuilder) =>
           )
       ),
       S.divider(),
+      S.listItem()
+        .title("Trip Matcher")
+        .icon(EarthGlobeIcon)
+        .child(
+          S.list()
+            .title("Trip Matcher")
+            .items([
+              S.listItem()
+                .title("Settings")
+                .icon(CogIcon)
+                .child(
+                  S.document()
+                    .schemaType("homePage")
+                    .documentId("homePage")
+                    .title("Trip Matcher Settings")
+                ),
+              S.documentTypeListItem("tripDestination")
+                .title("Destinations")
+                .icon(EarthGlobeIcon)
+            ])
+        ),
       S.documentTypeListItem("carrier").title("Carriers").icon(DocumentTextIcon),
       S.documentTypeListItem("catalogCountry")
         .title("Catalog Countries")

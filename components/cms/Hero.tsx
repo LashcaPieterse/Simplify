@@ -40,9 +40,9 @@ export function Hero({
   regionalBundle = null
 }: HeroProps) {
   return (
-    <section className="relative mb-24 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,34rem)] lg:items-start lg:gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(34rem,40rem)] xl:gap-16">
+    <section className="relative mb-24 grid gap-10 lg:mb-0 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,36rem)] lg:items-start lg:gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(38rem,40rem)] xl:gap-14 min-[1440px]:grid-cols-[minmax(36rem,1fr)_minmax(44rem,44rem)] min-[1440px]:gap-16 2xl:grid-cols-[minmax(38rem,1fr)_minmax(46rem,48rem)] 2xl:gap-20">
       <motion.div
-        className="max-w-3xl space-y-8"
+        className="max-w-[44rem] space-y-8 lg:pt-8 xl:pt-12 min-[1440px]:pt-16 2xl:max-w-[46rem] 2xl:pt-20"
         initial="initial"
         whileInView="whileInView"
         viewport={{ once: true, amount: 0.4 }}
@@ -53,8 +53,8 @@ export function Hero({
           <StarIcon className="h-4 w-4 text-sand-500" />
           {tagline}
         </span>
-        <h1 className="font-display text-4xl tracking-tight text-brand-900 sm:text-5xl lg:text-[3.35rem]">{hero.headline}</h1>
-        <p className="max-w-xl text-lg text-brand-700">{hero.subhead}</p>
+        <h1 className="font-display text-4xl tracking-tight text-brand-900 sm:text-5xl lg:text-[3.35rem] xl:text-[3.55rem] 2xl:text-[3.75rem]">{hero.headline}</h1>
+        <p className="max-w-2xl text-lg text-brand-700">{hero.subhead}</p>
         {hero.ctas?.length ? (
           <motion.div
             className="flex flex-col gap-3 sm:flex-row"
@@ -84,7 +84,7 @@ export function Hero({
         ) : null}
         {hero.stats?.length ? (
           <div className="pt-2">
-            <div className="flex flex-wrap gap-5">
+            <div className="flex flex-wrap gap-5 xl:gap-8">
               {hero.stats.map((stat) => (
                 <div key={stat.label} className="space-y-1">
                   <p className="text-2xl font-semibold text-brand-900">{stat.value}</p>
@@ -97,7 +97,7 @@ export function Hero({
       </motion.div>
 
       <motion.div
-        className="relative w-full lg:max-w-[34rem] lg:justify-self-end xl:max-w-[40rem]"
+        className="relative w-full lg:max-w-[36rem] lg:justify-self-end xl:max-w-[40rem] min-[1440px]:max-w-[44rem] 2xl:max-w-[48rem]"
         {...fadeIn}
         transition={{ ...fadeIn.transition, delay: 0.2 }}
       >
@@ -106,6 +106,7 @@ export function Hero({
           allProducts={allProducts}
           fallbackCountries={fallbackCountries}
           regionalBundle={regionalBundle}
+          settings={hero.tripMatcherSettings}
         />
       </motion.div>
     </section>

@@ -15,6 +15,7 @@ import { plan } from "./plan";
 import { post } from "./post";
 import { regionBundle } from "./regionBundle";
 import { siteSettings } from "./siteSettings";
+import { tripDestination } from "./tripDestination";
 import { eSimProduct } from "./eSimProduct";
 import { catalogCountry } from "./catalogCountry";
 import { catalogOperator } from "./catalogOperator";
@@ -26,6 +27,7 @@ export const schemaTypes = [
   country,
   carrier,
   plan,
+  tripDestination,
   eSimProduct,
   regionBundle,
   post,

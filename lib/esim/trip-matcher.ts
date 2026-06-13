@@ -1,4 +1,4 @@
-import type { CountrySummary, EsimProductSummary } from "../sanity.queries";
+import type { CountrySummary, EsimProductSummary, RegionBundle } from "../sanity.queries";
 
 export type UsageProfileId = "light" | "social" | "work" | "heavy";
 export type TripDurationDays = 3 | 7 | 15 | 30;
@@ -8,6 +8,19 @@ export type UsageProfile = {
   label: string;
   shortLabel: string;
   dataPerDayMb: number;
+};
+
+export type TripDestinationOption = {
+  _id?: string;
+  title: string;
+  slug: string;
+  destinationType?: "city" | "country" | "route";
+  country?: Pick<CountrySummary, "title" | "slug"> | string | null;
+  aliases?: readonly string[];
+  searchTerms?: readonly string[];
+  active?: boolean;
+  preferredPackageIds?: readonly string[];
+  regionalBundle?: RegionBundle | null;
 };
 
 export type TripRecommendation = {
@@ -34,6 +47,7 @@ export type TripMatchResult = {
   destinationTerms: string[];
   isMultiDestination: boolean;
   suggestedCountries: CountrySummary[];
+  matchedDestination: TripDestinationOption | null;
 };
 
 type ScoredProduct = TripRecommendation & {
@@ -47,6 +61,7 @@ type TripMatchOptions = {
   usageProfileId: UsageProfileId;
   products: EsimProductSummary[];
   highlightedProductIds?: string[];
+  tripDestinations?: readonly TripDestinationOption[];
   fallbackCountries?: CountrySummary[];
   maxSuggestions?: number;
 };
@@ -71,6 +86,24 @@ const STOP_WORDS = new Set([
 ]);
 
 export const TRIP_DURATION_OPTIONS: readonly TripDurationDays[] = [3, 7, 15, 30];
+
+export const FALLBACK_TRIP_DESTINATIONS: readonly TripDestinationOption[] = [
+  { title: "Cape Town", slug: "cape-town", destinationType: "city", country: "South Africa" },
+  { title: "Zanzibar", slug: "zanzibar", destinationType: "city", country: "Tanzania" },
+  { title: "Mombasa", slug: "mombasa", destinationType: "city", country: "Kenya" },
+  { title: "Kampala", slug: "kampala", destinationType: "city", country: "Uganda" },
+  { title: "Lagos", slug: "lagos", destinationType: "city", country: "Nigeria" },
+  { title: "Cairo", slug: "cairo", destinationType: "city", country: "Egypt" },
+  { title: "Kigali", slug: "kigali", destinationType: "city", country: "Rwanda" },
+  { title: "Marrakesh", slug: "marrakesh", destinationType: "city", country: "Morocco", aliases: ["Marrakech"] },
+  { title: "Addis Ababa", slug: "addis-ababa", destinationType: "city", country: "Ethiopia" },
+  { title: "Johannesburg", slug: "johannesburg", destinationType: "city", country: "South Africa" },
+  { title: "Nairobi", slug: "nairobi", destinationType: "city", country: "Kenya" },
+  { title: "Casablanca", slug: "casablanca", destinationType: "city", country: "Morocco" },
+  { title: "Accra", slug: "accra", destinationType: "city", country: "Ghana" },
+];
+
+export const POPULAR_AFRICAN_CITY_DESTINATIONS = FALLBACK_TRIP_DESTINATIONS;
 
 export const USAGE_PROFILES: readonly UsageProfile[] = [
   {
@@ -125,10 +158,15 @@ export function matchTripPlans(options: TripMatchOptions): TripMatchResult {
   const durationDays = normalizeDuration(options.durationDays);
   const requiredDataMb = Math.ceil(usageProfile.dataPerDayMb * durationDays);
   const destination = options.destination.trim();
-  const destinationTerms = getDestinationTerms(destination);
+  const tripDestinations = options.tripDestinations?.length ? options.tripDestinations : FALLBACK_TRIP_DESTINATIONS;
+  const destinationResolution = resolveTripDestination(getDestinationTerms(destination), tripDestinations);
+  const destinationTerms = destinationResolution.terms;
   const destinationWords = getSearchWords(destination);
   const isMultiDestination = isMultiDestinationQuery(destination);
   const featuredOrder = new Map((options.highlightedProductIds ?? []).map((id, index) => [id, index]));
+  const preferredPackageKeys = new Set(
+    (destinationResolution.matchedDestination?.preferredPackageIds ?? []).map(normalizeKey).filter(Boolean),
+  );
   const hasDestination = destinationTerms.length > 0 || destinationWords.length > 0;
 
   const scoredProducts = options.products
@@ -143,6 +181,7 @@ export function matchTripPlans(options: TripMatchOptions): TripMatchResult {
         destinationWords,
         hasDestination,
         featuredOrder,
+        preferredPackageKeys,
       }),
     )
     .filter((product): product is ScoredProduct => Boolean(product));
@@ -168,6 +207,7 @@ export function matchTripPlans(options: TripMatchOptions): TripMatchResult {
     destinationTerms,
     isMultiDestination,
     suggestedCountries: getSuggestedCountries(options.fallbackCountries ?? [], options.maxSuggestions ?? 5),
+    matchedDestination: destinationResolution.matchedDestination,
   };
 }
 
@@ -191,6 +231,10 @@ function normalize(value: string | null | undefined): string {
     .trim();
 }
 
+function normalizeKey(value: string | null | undefined): string {
+  return normalize(value).replace(/\s+/g, "-");
+}
+
 function getDestinationTerms(destination: string): string[] {
   return destination
     .split(/\s*(?:\+|,|;|&|\band\b|\bthen\b|\bto\b)\s*/i)
@@ -203,6 +247,64 @@ function getSearchWords(destination: string): string[] {
     .split(" ")
     .map((word) => word.trim())
     .filter((word) => word.length > 2 && !STOP_WORDS.has(word));
+}
+
+function resolveTripDestination(
+  terms: string[],
+  tripDestinations: readonly TripDestinationOption[],
+): { terms: string[]; matchedDestination: TripDestinationOption | null } {
+  const expandedTerms: string[] = [];
+  const seen = new Set<string>();
+  let matchedDestination: TripDestinationOption | null = null;
+
+  const addTerm = (term: string) => {
+    if (!term || seen.has(term)) {
+      return;
+    }
+
+    seen.add(term);
+    expandedTerms.push(term);
+  };
+
+  for (const term of terms) {
+    addTerm(term);
+
+    const matchingDestination = tripDestinations.find((destination) => {
+      if (destination.active === false) {
+        return false;
+      }
+
+      const destinationTerms = [
+        destination.title,
+        destination.slug,
+        ...(destination.aliases ?? []),
+        ...(destination.searchTerms ?? []),
+      ].map(normalize);
+
+      return destinationTerms.includes(term);
+    });
+
+    if (matchingDestination) {
+      matchedDestination ??= matchingDestination;
+      getDestinationCountryTerms(matchingDestination).forEach(addTerm);
+      (matchingDestination.aliases ?? []).map(normalize).forEach(addTerm);
+      (matchingDestination.searchTerms ?? []).map(normalize).forEach(addTerm);
+    }
+  }
+
+  return { terms: expandedTerms, matchedDestination };
+}
+
+function getDestinationCountryTerms(destination: TripDestinationOption): string[] {
+  if (!destination.country) {
+    return [];
+  }
+
+  if (typeof destination.country === "string") {
+    return [normalize(destination.country)];
+  }
+
+  return [normalize(destination.country.title), normalize(destination.country.slug)].filter(Boolean);
 }
 
 function isMultiDestinationQuery(destination: string): boolean {
@@ -280,6 +382,7 @@ function scoreProduct({
   destinationWords,
   hasDestination,
   featuredOrder,
+  preferredPackageKeys,
 }: {
   product: EsimProductSummary;
   durationDays: number;
@@ -289,6 +392,7 @@ function scoreProduct({
   destinationWords: string[];
   hasDestination: boolean;
   featuredOrder: Map<string, number>;
+  preferredPackageKeys: Set<string>;
 }): ScoredProduct | null {
   const packageId = getPackageId(product);
   if (!packageId) {
@@ -306,11 +410,12 @@ function scoreProduct({
   const priceScore = getPriceScore(priceAmount);
   const featuredIndex = featuredOrder.get(product._id) ?? Number.MAX_SAFE_INTEGER;
   const featuredScore = featuredIndex === Number.MAX_SAFE_INTEGER ? 0 : hasDestination ? 75 : 900 - featuredIndex;
+  const preferredPackageScore = getPreferredPackageScore(product, preferredPackageKeys);
 
   return {
     product,
     packageId,
-    score: destinationScore + dataScore + validityScore + priceScore + featuredScore,
+    score: destinationScore + dataScore + validityScore + priceScore + featuredScore + preferredPackageScore,
     destinationScore,
     featuredIndex,
     fitReason: getFitReason({ dataLimitMb, validityDays, requiredDataMb, durationDays, usageProfile }),
@@ -320,6 +425,22 @@ function scoreProduct({
     priceCurrency,
     providerName,
   };
+}
+
+function getPreferredPackageScore(product: EsimProductSummary, preferredPackageKeys: Set<string>): number {
+  if (preferredPackageKeys.size === 0) {
+    return 0;
+  }
+
+  const packageKeys = [
+    product.package?.id,
+    product.package?.externalId,
+    product.slugs?.plan,
+  ]
+    .map(normalizeKey)
+    .filter(Boolean);
+
+  return packageKeys.some((key) => preferredPackageKeys.has(key)) ? 420 : 0;
 }
 
 function getDestinationScore(

@@ -41,6 +41,7 @@ export type HeroSection = {
   stats: Stat[];
   featuredProductIds?: string[];
   featuredProducts?: EsimProductSummary[];
+  tripMatcherSettings?: TripMatcherSettings | null;
 };
 
 export type CountrySummary = {
@@ -251,6 +252,35 @@ export type RegionBundle = {
   featuredProductCard?: EsimProductCardData;
 };
 
+export type TripDestinationType = "city" | "country" | "route";
+
+export type TripDestinationSummary = {
+  _id: string;
+  title: string;
+  slug: string;
+  destinationType: TripDestinationType;
+  country?: CountrySummary | null;
+  aliases?: string[];
+  searchTerms?: string[];
+  active?: boolean;
+  featured?: boolean;
+  sortOrder?: number | null;
+  preferredPackageIds?: string[];
+  regionalBundle?: RegionBundle | null;
+};
+
+export type TripMatcherSettings = {
+  title?: string | null;
+  subtitle?: string | null;
+  badgeLabel?: string | null;
+  placeholder?: string | null;
+  noMatchTitle?: string | null;
+  noMatchBody?: string | null;
+  regionalTripLabel?: string | null;
+  emptyStateMessage?: string | null;
+  popularDestinations?: TripDestinationSummary[];
+};
+
 export type EsimProductStatus = "active" | "comingSoon" | "archived";
 
 export type EsimProductSummary = {
@@ -370,6 +400,25 @@ const REGION_BUNDLE_FIELDS = `
   ctaTarget
 `;
 
+const TRIP_DESTINATION_FIELDS = `
+  _id,
+  title,
+  "slug": slug.current,
+  destinationType,
+  aliases,
+  searchTerms,
+  active,
+  featured,
+  sortOrder,
+  country->{
+    ${CATALOG_COUNTRY_FIELDS}
+  },
+  "preferredPackageIds": preferredPackages[]->externalId,
+  regionalBundle->{
+    ${REGION_BUNDLE_FIELDS}
+  }
+`;
+
 const POST_SUMMARY_FIELDS = `
   _id,
   title,
@@ -429,6 +478,19 @@ const homePageQuery = groq`
         "featuredProductIds": featuredProducts[]._ref,
         "featuredProducts": featuredProducts[]->{
           ${ESIM_PRODUCT_CARD_FIELDS}
+        },
+        tripMatcherSettings{
+          title,
+          subtitle,
+          badgeLabel,
+          placeholder,
+          noMatchTitle,
+          noMatchBody,
+          regionalTripLabel,
+          emptyStateMessage,
+          "popularDestinations": popularDestinations[]->{
+            ${TRIP_DESTINATION_FIELDS}
+          }
         }
       },
       _type == "countryGridSection" => {
@@ -481,6 +543,12 @@ const homePageQuery = groq`
 const countriesQuery = groq`
   *[_type == "catalogCountry"] | order(title asc) {
     ${CATALOG_COUNTRY_FIELDS}
+  }
+`;
+
+const featuredTripDestinationsQuery = groq`
+  *[_type == "tripDestination" && active != false && featured == true] | order(sortOrder asc, title asc) [0...18] {
+    ${TRIP_DESTINATION_FIELDS}
   }
 `;
 
@@ -725,16 +793,53 @@ export async function getSiteSettings(): Promise<SiteSettings | null> {
   }
 }
 
+async function getFeaturedTripDestinations(): Promise<TripDestinationSummary[]> {
+  try {
+    const client = getSanityClient();
+    const destinations = await client.fetch<TripDestinationSummary[]>(featuredTripDestinationsQuery);
+    return (destinations ?? []).filter((destination) => destination.active !== false);
+  } catch (error) {
+    console.error("Failed to fetch trip matcher destinations from Sanity", error);
+    return [];
+  }
+}
+
+function withTripMatcherDefaults(
+  section: HeroSection,
+  fallbackDestinations: TripDestinationSummary[],
+): HeroSection {
+  const configuredDestinations = section.tripMatcherSettings?.popularDestinations?.filter(
+    (destination): destination is TripDestinationSummary => Boolean(destination && destination.active !== false),
+  );
+
+  return {
+    ...section,
+    tripMatcherSettings: {
+      ...section.tripMatcherSettings,
+      popularDestinations:
+        configuredDestinations && configuredDestinations.length > 0
+          ? configuredDestinations
+          : fallbackDestinations,
+    },
+  };
+}
+
 export async function getHomePage(): Promise<HomePagePayload | null> {
   try {
     const client = getSanityClient();
     const home = await client.fetch<HomePagePayload | null>(homePageQuery);
     if (!home) return null;
 
-    const countries = await getCountriesList();
+    const [countries, featuredTripDestinations] = await Promise.all([
+      getCountriesList(),
+      getFeaturedTripDestinations(),
+    ]);
     const sections = (home.sections ?? []).map((section) => {
       if (section?._type === "countryGridSection") {
         return { ...section, countries } as CountryGridSection;
+      }
+      if (section?._type === "heroSection") {
+        return withTripMatcherDefaults(section, featuredTripDestinations);
       }
       return section;
     });
