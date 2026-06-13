@@ -40,9 +40,9 @@ export function Hero({
   regionalBundle = null
 }: HeroProps) {
   return (
-    <section className="relative mb-24 grid gap-10 lg:grid-cols-[1.1fr,0.9fr] lg:items-center">
+    <section className="relative mb-24 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,34rem)] lg:items-start lg:gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(34rem,40rem)] xl:gap-16">
       <motion.div
-        className="space-y-8"
+        className="max-w-3xl space-y-8"
         initial="initial"
         whileInView="whileInView"
         viewport={{ once: true, amount: 0.4 }}
@@ -97,7 +97,7 @@ export function Hero({
       </motion.div>
 
       <motion.div
-        className="relative"
+        className="relative w-full lg:max-w-[34rem] lg:justify-self-end xl:max-w-[40rem]"
         {...fadeIn}
         transition={{ ...fadeIn.transition, delay: 0.2 }}
       >

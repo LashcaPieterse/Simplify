@@ -10,7 +10,7 @@ export function SiteHeader({ settings }: { settings: SiteSettings }) {
   const logoUrl = settings.logo ? urlForImage(settings.logo)?.width(384).height(192).fit("max").auto("format").url() : null;
 
   return (
-    <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-5 pb-7 pt-8 sm:px-6 sm:pb-8 sm:pt-10 lg:px-10">
+    <header className="relative z-20 mx-auto flex w-full max-w-[90rem] items-center justify-between gap-3 px-5 pb-7 pt-8 sm:px-6 sm:pb-8 sm:pt-10 lg:px-10 lg:pb-5 lg:pt-7 xl:px-12 xl:pb-6 xl:pt-8">
       <div className="flex min-w-0 flex-1 items-center gap-4">
         <Link href="/" aria-label={settings.title} className="flex h-16 min-w-0 shrink items-center lg:h-24">
           {logoUrl ? (
