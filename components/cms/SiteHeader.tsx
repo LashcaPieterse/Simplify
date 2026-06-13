@@ -10,13 +10,20 @@ export function SiteHeader({ settings }: { settings: SiteSettings }) {
   const logoUrl = settings.logo ? urlForImage(settings.logo)?.width(384).height(192).fit("max").auto("format").url() : null;
 
   return (
-    <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pb-8 pt-10 lg:px-10">
-      <div className="flex items-center gap-4">
-        <Link href="/" aria-label={settings.title} className="flex items-center">
+    <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-5 pb-7 pt-8 sm:px-6 sm:pb-8 sm:pt-10 lg:px-10">
+      <div className="flex min-w-0 flex-1 items-center gap-4">
+        <Link href="/" aria-label={settings.title} className="flex h-12 min-w-0 shrink items-center sm:h-16 lg:h-24">
           {logoUrl ? (
-            <Image src={logoUrl} alt="" width={178} height={96} className="h-24 w-auto object-contain" priority />
+            <Image
+              src={logoUrl}
+              alt=""
+              width={178}
+              height={96}
+              className="h-auto max-h-12 w-auto max-w-[7.75rem] object-contain object-left sm:max-h-16 sm:max-w-[10rem] lg:max-h-24 lg:max-w-none"
+              priority
+            />
           ) : (
-            <Wifi aria-hidden="true" className="h-16 w-16 text-brand-600" />
+            <Wifi aria-hidden="true" className="h-12 w-12 text-brand-600 sm:h-16 sm:w-16" />
           )}
         </Link>
         <nav className="hidden items-center gap-8 text-sm font-medium text-brand-700 lg:flex">

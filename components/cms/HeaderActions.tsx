@@ -26,20 +26,20 @@ export function HeaderActions() {
 
   if (status === "loading") {
     return (
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center justify-end gap-2">
         <div className="hidden h-9 w-20 animate-pulse rounded-full bg-brand-100 md:block" />
-        <div className="h-10 w-24 animate-pulse rounded-full bg-brand-100" />
+        <div className="h-11 w-28 animate-pulse rounded-full bg-brand-100 sm:h-10 sm:w-24" />
       </div>
     );
   }
 
   if (status !== "authenticated" || !session?.user) {
     return (
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
         <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
           <Link href="/auth/signin">Log in</Link>
         </Button>
-        <Button asChild size="sm">
+        <Button asChild size="sm" className="h-11 px-4 sm:h-9">
           <Link href="/auth/signup">Sign up</Link>
         </Button>
       </div>
@@ -56,15 +56,15 @@ export function HeaderActions() {
     : session.user.email?.slice(0, 2)?.toUpperCase() ?? "YO";
 
   return (
-    <div className="relative z-20 flex items-center gap-2">
-      <Button asChild size="sm" variant="secondary" className="text-brand-900">
+    <div ref={menuRef} className="relative z-20 flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
+      <Button asChild size="sm" variant="secondary" className="h-11 px-3.5 text-brand-900 sm:h-9 sm:px-4">
         <Link href={"/account/esims" as Route}>My eSIMs</Link>
       </Button>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-800 shadow-subtle transition hover:border-brand-300",
+          "flex h-11 items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-sm font-semibold text-brand-800 shadow-subtle transition hover:border-brand-300 sm:h-auto sm:gap-2 sm:px-3",
           open && "border-brand-300 bg-white"
         )}
         aria-expanded={open}
@@ -77,8 +77,7 @@ export function HeaderActions() {
       </button>
       {open ? (
         <div
-          ref={menuRef}
-          className="absolute right-0 top-12 w-64 rounded-2xl border border-brand-100 bg-white p-2 shadow-card z-40"
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-64 rounded-2xl border border-brand-100 bg-white p-2 shadow-card"
         >
           <DropdownLink href={"/account/esims" as Route} label="My eSIMs / Orders" primary />
           <DropdownLink href={"/account/receipts" as Route} label="Receipts & billing" />
