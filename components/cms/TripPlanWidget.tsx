@@ -103,8 +103,8 @@ export function TripPlanWidget({
   const hasDestination = destination.trim().length > 0;
 
   return (
-    <div className="relative rounded-3xl border border-brand-100/80 bg-white/75 p-5 shadow-card backdrop-blur-lg sm:p-6 lg:p-5">
-      <div className="mb-5 flex items-start justify-between gap-4 lg:mb-3">
+    <div className="relative rounded-3xl border border-brand-100/80 bg-white/75 p-5 shadow-card backdrop-blur-lg sm:p-6 lg:p-4">
+      <div className="mb-5 flex items-start justify-between gap-4 lg:mb-2.5">
         <div>
           <p className="text-sm font-semibold text-brand-800">{settings?.title ?? "Plan your African eSIM"}</p>
           <p className="mt-1 text-xs text-brand-500">
@@ -116,8 +116,8 @@ export function TripPlanWidget({
         </span>
       </div>
 
-      <div className="space-y-4 lg:space-y-3">
-        <label className="flex items-center gap-3 rounded-2xl border border-brand-200 bg-white px-4 py-3 shadow-inner lg:py-2.5">
+      <div className="space-y-4 lg:space-y-2.5">
+        <label className="flex items-center gap-3 rounded-2xl border border-brand-200 bg-white px-4 py-3 shadow-inner lg:py-2">
           <Search className="h-5 w-5 shrink-0 text-brand-500" />
           <input
             type="search"
@@ -131,13 +131,13 @@ export function TripPlanWidget({
         </label>
 
         {destinationChips.length ? (
-          <div className="flex flex-wrap gap-2 lg:gap-1.5">
+          <div className="flex flex-wrap gap-2 lg:gap-1.5 xl:gap-1">
             {destinationChips.map((chip) => (
               <button
                 key={chip.slug}
                 type="button"
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition lg:px-2.5 lg:py-1",
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition lg:px-2.5 lg:py-0.5",
                   destination.trim().toLowerCase() === chip.title.toLowerCase()
                     ? "border-brand-300 bg-brand-100 text-brand-800"
                     : "border-brand-100 bg-white text-brand-600 hover:border-brand-200 hover:text-brand-800",
@@ -156,7 +156,7 @@ export function TripPlanWidget({
               key={days}
               type="button"
               className={cn(
-                "flex h-10 items-center justify-center rounded-xl text-xs font-semibold transition lg:h-9",
+                "flex h-10 items-center justify-center rounded-xl text-xs font-semibold transition lg:h-8",
                 durationDays === days ? "bg-white text-brand-900 shadow-sm" : "text-brand-600 hover:text-brand-900",
               )}
               aria-pressed={durationDays === days}
@@ -177,7 +177,7 @@ export function TripPlanWidget({
                 key={profile.id}
                 type="button"
                 className={cn(
-                  "flex min-h-12 items-center gap-2 rounded-2xl border px-3 py-2 text-left text-xs font-semibold transition lg:min-h-10 lg:px-2.5 lg:py-1.5 xl:min-h-10",
+                  "flex min-h-12 items-center gap-2 rounded-2xl border px-3 py-2 text-left text-xs font-semibold transition lg:min-h-9 lg:px-2.5 lg:py-1.5 xl:min-h-9",
                   selected
                     ? "border-brand-300 bg-brand-100 text-brand-900"
                     : "border-brand-100 bg-white text-brand-600 hover:border-brand-200 hover:text-brand-800",
@@ -193,7 +193,7 @@ export function TripPlanWidget({
         </div>
       </div>
 
-      <div className="mt-5 space-y-3 lg:mt-4 lg:space-y-2.5">
+      <div className="mt-5 space-y-3 lg:mt-3 lg:space-y-2">
         {regionalHref ? (
           <a
             href={regionalHref}
@@ -250,9 +250,9 @@ function RecommendationCard({
   const validityLabel = recommendation.validityDays ? `${recommendation.validityDays} days` : "Validity varies";
 
   return (
-    <article className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm lg:p-3.5">
-      <div className="mb-3 flex items-center justify-between gap-3 lg:mb-2">
-        <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 text-[0.68rem] font-bold uppercase text-brand-700">
+    <article className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm lg:p-3">
+      <div className="mb-3 flex items-center justify-between gap-3 lg:mb-1.5">
+        <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 text-[0.68rem] font-bold uppercase text-brand-700 lg:py-0.5">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {label}
         </span>
@@ -262,14 +262,14 @@ function RecommendationCard({
       <div className="grid gap-4 lg:gap-3 xl:grid-cols-[minmax(0,1fr)_11rem] xl:items-stretch">
         <div className="min-w-0">
           <div className="flex gap-4 lg:gap-3">
-            <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-sand-100/70 xl:h-[4.5rem] xl:w-[5.75rem]">
+            <div className="relative h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-sand-100/70 xl:h-16 xl:w-20">
               {imageUrl ? (
                 <Image
                   src={imageUrl}
                   alt={`${product.displayName} cover`}
                   fill
                   className="object-cover"
-                  sizes="(min-width: 1280px) 92px, 80px"
+                  sizes="80px"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-brand-400">
@@ -285,25 +285,25 @@ function RecommendationCard({
               <p className="mt-1 text-xs text-brand-500">
                 {[product.country?.title, recommendation.providerName].filter(Boolean).join(" · ")}
               </p>
-              <p className="mt-2 text-sm text-brand-700 lg:mt-1.5 lg:line-clamp-2">
+              <p className="mt-2 text-sm text-brand-700 lg:mt-1 lg:line-clamp-2 xl:line-clamp-1">
                 {recommendation.fitReason}
               </p>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2 text-xs lg:mt-3">
+          <div className="mt-4 grid grid-cols-3 gap-2 text-xs lg:mt-2.5">
             <Metric icon={Database} label={formatDataAmount(recommendation.dataLimitMb)} />
             <Metric icon={CalendarDays} label={validityLabel} />
             <Metric icon={Wifi} label="Install before landing" />
           </div>
         </div>
 
-        <div className="hidden flex-col justify-end gap-2 xl:flex">
-          <OrderButton packageId={recommendation.packageId} label="Buy eSIM" pendingLabel="Opening checkout..." fullWidth />
+        <div className="hidden flex-col justify-end gap-1.5 xl:flex">
+          <OrderButton packageId={recommendation.packageId} label="Buy eSIM" pendingLabel="Opening checkout..." size="sm" fullWidth />
           {href ? (
             <Link
               href={href}
-              className="inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-semibold text-brand-700 transition hover:bg-brand-100 hover:text-brand-900"
+              className="inline-flex h-8 items-center justify-center rounded-full px-4 text-xs font-semibold text-brand-700 transition hover:bg-brand-100 hover:text-brand-900"
             >
               View details
             </Link>
@@ -342,20 +342,22 @@ function CompactAlternative({
   }
 
   return (
-    <article className="rounded-2xl border border-brand-100 bg-white px-4 py-3 shadow-sm lg:px-3.5 lg:py-2.5">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-bold uppercase text-brand-500">{label}</p>
-        <p className="text-sm font-semibold text-brand-900">
-          {formatMoneyAmount(recommendation.priceAmount, recommendation.priceCurrency, "")}
+    <article className="rounded-2xl border border-brand-100 bg-white px-4 py-3 shadow-sm lg:px-3.5 lg:py-2.5 xl:grid xl:grid-cols-[minmax(0,1fr)_4.75rem] xl:items-center xl:gap-3 xl:py-2">
+      <div className="min-w-0">
+        <div className="mb-2 flex items-center justify-between gap-2 xl:mb-1">
+          <p className="text-xs font-bold uppercase text-brand-500">{label}</p>
+          <p className="text-sm font-semibold text-brand-900">
+            {formatMoneyAmount(recommendation.priceAmount, recommendation.priceCurrency, "")}
+          </p>
+        </div>
+        <h4 className="line-clamp-2 min-h-9 text-sm font-semibold leading-snug text-brand-900 xl:min-h-0 xl:line-clamp-1">
+          {recommendation.product.displayName}
+        </h4>
+        <p className="mt-1 text-xs text-brand-500">
+          {formatDataAmount(recommendation.dataLimitMb)} · {recommendation.validityDays ?? "?"} days
         </p>
       </div>
-      <h4 className="line-clamp-2 min-h-9 text-sm font-semibold leading-snug text-brand-900 xl:min-h-0">
-        {recommendation.product.displayName}
-      </h4>
-      <p className="mt-1 text-xs text-brand-500">
-        {formatDataAmount(recommendation.dataLimitMb)} · {recommendation.validityDays ?? "?"} days
-      </p>
-      <div className="mt-3 lg:mt-2">
+      <div className="mt-3 lg:mt-2 xl:mt-0">
         <OrderButton
           packageId={recommendation.packageId}
           label="Buy"
@@ -371,7 +373,7 @@ function CompactAlternative({
 
 function Metric({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
   return (
-    <div className="flex min-h-14 flex-col justify-center rounded-xl bg-brand-50 px-3 py-2 text-brand-700 lg:min-h-12 lg:py-1.5">
+    <div className="flex min-h-14 flex-col justify-center rounded-xl bg-brand-50 px-3 py-2 text-brand-700 lg:min-h-11 lg:py-1.5">
       <Icon className="mb-1 h-4 w-4 text-brand-500" />
       <span className="break-words text-[0.7rem] font-semibold leading-tight">{label}</span>
     </div>
