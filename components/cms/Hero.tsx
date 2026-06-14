@@ -40,7 +40,7 @@ export function Hero({
   regionalBundle = null
 }: HeroProps) {
   return (
-    <section className="relative mb-24 grid gap-10 lg:mb-0 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,36rem)] lg:items-start lg:gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(38rem,40rem)] xl:gap-14 min-[1440px]:grid-cols-[minmax(36rem,1fr)_minmax(44rem,44rem)] min-[1440px]:gap-16 2xl:grid-cols-[minmax(38rem,1fr)_minmax(46rem,48rem)] 2xl:gap-20">
+    <section className="relative mb-24 grid gap-10 lg:mb-0 lg:grid-cols-[minmax(0,1fr)_minmax(28rem,36rem)] lg:items-start lg:gap-12 xl:grid-cols-[minmax(0,1fr)_minmax(38rem,40rem)] xl:gap-14 min-[1440px]:grid-cols-[minmax(36rem,1fr)_minmax(42rem,43rem)] min-[1440px]:gap-16 2xl:grid-cols-[minmax(38rem,1fr)_minmax(44rem,46rem)] 2xl:gap-20">
       <motion.div
         className="max-w-[44rem] space-y-8 lg:pt-8 xl:pt-12 min-[1440px]:pt-16 2xl:max-w-[46rem] 2xl:pt-20"
         initial="initial"
@@ -97,7 +97,7 @@ export function Hero({
       </motion.div>
 
       <motion.div
-        className="relative w-full lg:max-w-[36rem] lg:justify-self-end xl:max-w-[40rem] min-[1440px]:max-w-[44rem] 2xl:max-w-[48rem]"
+        className="relative w-full lg:max-w-[36rem] lg:justify-self-end xl:max-w-[40rem] min-[1440px]:max-w-[43rem] 2xl:max-w-[46rem]"
         {...fadeIn}
         transition={{ ...fadeIn.transition, delay: 0.2 }}
       >
