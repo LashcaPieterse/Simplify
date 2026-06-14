@@ -9,7 +9,7 @@ import type {
 } from "../airalo/client";
 import { OrderResponseSchema, type OrderResponse } from "../airalo/schemas";
 import type { CreateOrderOptions } from "../orders/service";
-import { finaliseOrderFromCheckout } from "./checkouts";
+import { createCheckout, finaliseOrderFromCheckout } from "./checkouts";
 import { prepareCheckoutRequestPayload } from "./checkout-request";
 import type { CheckoutRequestError } from "./checkout-request";
 
@@ -49,6 +49,67 @@ test("signed-in checkout requests default to the session email", () => {
   );
 
   assert.equal(payload.customerEmail, "traveler@example.com");
+});
+
+class FakeCreateCheckoutDb {
+  lastWhere: unknown = null;
+
+  readonly package = {
+    findFirst: async ({ where }: { where: unknown }) => {
+      this.lastWhere = where;
+      return null;
+    },
+  };
+}
+
+test("createCheckout purchase rejects top-up package IDs through public sim lookup", async () => {
+  const db = new FakeCreateCheckoutDb();
+
+  await assert.rejects(
+    () =>
+      createCheckout(
+        {
+          packageId: "ke-1gb-7d-topup",
+          customerEmail: "traveler@example.com",
+        },
+        {
+          prisma: db as unknown as PrismaClient,
+          baseUrl: "https://example.com",
+        },
+      ),
+    /Selected package is unavailable/,
+  );
+
+  const serializedWhere = JSON.stringify(db.lastWhere);
+  assert.match(serializedWhere, /"type":"sim"/);
+  assert.match(serializedWhere, /"sellingPriceCents"/);
+  assert.match(serializedWhere, /"countryCode"/);
+});
+
+test("createCheckout top-up intent uses top-up package lookup", async () => {
+  const db = new FakeCreateCheckoutDb();
+
+  await assert.rejects(
+    () =>
+      createCheckout(
+        {
+          packageId: "ke-1gb-7d-topup",
+          customerEmail: "traveler@example.com",
+          intent: "top-up",
+          topUpForOrderId: "order-1",
+          topUpForIccid: "8910300000005271146",
+        },
+        {
+          prisma: db as unknown as PrismaClient,
+          baseUrl: "https://example.com",
+        },
+      ),
+    /Selected package is unavailable/,
+  );
+
+  const serializedWhere = JSON.stringify(db.lastWhere);
+  assert.match(serializedWhere, /"type":"topup"/);
+  assert.doesNotMatch(serializedWhere, /"countryCode"/);
 });
 
 class FakeAiraloClient {

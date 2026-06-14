@@ -1,4 +1,11 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import {
+  andPackageWhere,
+  packageIdentifierWhere,
+  packageTypeWhere,
+  publicSellablePackageWhere,
+  type PackageTypeFilter,
+} from "./package-policy";
 
 export type PackageResolverDb = PrismaClient | Prisma.TransactionClient;
 
@@ -37,34 +44,49 @@ export type PackageLookupDiagnostics = {
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
+export type PackageLookupOptions = {
+  activeOnly?: boolean;
+  packageType?: PackageTypeFilter;
+  publicCatalogOnly?: boolean;
+};
+
 export function isUuid(value: string): boolean {
   return UUID_REGEX.test(value);
 }
 
 export function buildPackageIdentifierWhere(
   identifier: string,
-  options: { activeOnly?: boolean } = {},
+  options: PackageLookupOptions = {},
 ): Prisma.PackageWhereInput {
-  const identifierWhere: Prisma.PackageWhereInput = isUuid(identifier)
-    ? { OR: [{ id: identifier }, { airaloPackageId: identifier }] }
-    : { airaloPackageId: identifier };
+  const baseWhere = packageIdentifierWhere(identifier);
 
-  if (!options.activeOnly) {
-    return identifierWhere;
+  if (options.publicCatalogOnly) {
+    return andPackageWhere(baseWhere, publicSellablePackageWhere());
   }
 
-  return {
-    ...identifierWhere,
-    state: { is: { isActive: true } },
-  };
+  return andPackageWhere(
+    baseWhere,
+    options.activeOnly ? { state: { is: { isActive: true } } } : null,
+    packageTypeWhere(options.packageType),
+  );
 }
 
 export async function findActivePackageByIdentifier(
   db: PackageResolverDb,
   identifier: string,
+  options: PackageLookupOptions = {
+    activeOnly: true,
+    packageType: "sim",
+    publicCatalogOnly: true,
+  },
 ): Promise<PackageWithPrice | null> {
   return db.package.findFirst({
-    where: buildPackageIdentifierWhere(identifier, { activeOnly: true }),
+    where: buildPackageIdentifierWhere(identifier, {
+      activeOnly: true,
+      packageType: "sim",
+      publicCatalogOnly: true,
+      ...options,
+    }),
     include: PACKAGE_PRICE_INCLUDE,
   });
 }

@@ -11,6 +11,7 @@ type FetchPackagesResult = Awaited<ReturnType<FetchPackages>>;
 type TestPackage = {
   id: string;
   airaloPackageId: string;
+  type: string;
   title: string;
   amount: number;
   day: number;
@@ -26,7 +27,18 @@ type TestPackage = {
   fairUsagePolicy: string | null;
   createdAt: Date;
   updatedAt: Date;
-  operator: null | { id: string; title: string; airaloOperatorId: number | null };
+  operator: null | {
+    id: string;
+    title: string;
+    airaloOperatorId: number | null;
+    country?: {
+      id: string;
+      title: string;
+      slug: string;
+      countryCode: string;
+      imageJson: unknown;
+    };
+  };
   state: {
     isActive: boolean;
     sellingPriceCents: number | null;
@@ -36,6 +48,55 @@ type TestPackage = {
     updatedAt: Date;
   } | null;
 };
+
+function makeTestPackage(
+  overrides: Partial<TestPackage> & {
+    operator?: TestPackage["operator"];
+    state?: TestPackage["state"];
+  } = {},
+): TestPackage {
+  return {
+    id: "pkg-test",
+    airaloPackageId: "ke-1gb-7d",
+    type: "sim",
+    title: "1 GB - 7 days",
+    amount: 1024,
+    day: 7,
+    isUnlimited: false,
+    price: 8,
+    netPrice: null,
+    pricesNetPrice: null,
+    pricesRecommendedRetailPrice: null,
+    shortInfo: "Starter data",
+    qrInstallation: null,
+    manualInstallation: null,
+    isFairUsagePolicy: null,
+    fairUsagePolicy: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    operator: {
+      id: "operator-test",
+      title: "Test Mobile",
+      airaloOperatorId: 44,
+      country: {
+        id: "country-kenya",
+        title: "Kenya",
+        slug: "kenya",
+        countryCode: "KE",
+        imageJson: null,
+      },
+    },
+    state: {
+      isActive: true,
+      sellingPriceCents: 800,
+      basePriceCents: 600,
+      currencyCode: "USD",
+      lastSyncedAt: null,
+      updatedAt: new Date(),
+    },
+    ...overrides,
+  };
+}
 
 test("getCatalogProductSummaries returns unavailable when no DB match exists", async () => {
   const sanityProducts = [
@@ -104,6 +165,7 @@ test("getCatalogProductSummaries does not fall back to country matches", async (
       {
         id: "pkg-1",
         airaloPackageId: "some-other-package",
+        type: "sim",
         title: "Expensive package",
         amount: 1024,
         day: 7,
@@ -162,6 +224,7 @@ test("getCatalogProductSummaries marks active packages without selling price as 
     {
       id: "pkg-3",
       airaloPackageId: "ke-3gb-7d",
+      type: "sim",
       title: "Kenya 3GB",
       amount: 3072,
       day: 7,
@@ -205,6 +268,7 @@ test("getCatalogProductSummaries synthesizes active Airalo-backed packages witho
     {
       id: "pkg-4",
       airaloPackageId: "ke-1gb-7d",
+      type: "sim",
       title: "1 GB - 7 days",
       amount: 1024,
       day: 7,
@@ -254,6 +318,96 @@ test("getCatalogProductSummaries synthesizes active Airalo-backed packages witho
   assert.equal(summaries[0]?.price?.amount, 8);
 });
 
+test("getCatalogProductSummaries excludes active top-up packages from public discovery", async () => {
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => [],
+    fetchPackages: async () =>
+      [
+        makeTestPackage({
+          id: "pkg-topup",
+          airaloPackageId: "ke-1gb-7d-topup",
+          type: "topup",
+        }),
+      ] as unknown as FetchPackagesResult,
+  });
+
+  assert.equal(summaries.length, 0);
+});
+
+test("getCatalogProductSummaries includes African local sim packages", async () => {
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => [],
+    fetchPackages: async () => [makeTestPackage()] as unknown as FetchPackagesResult,
+  });
+
+  assert.equal(summaries.length, 1);
+  assert.equal(summaries[0]?.country?.title, "Kenya");
+});
+
+test("getCatalogProductSummaries includes Africa route and global fallback regions", async () => {
+  const regions = [
+    "africa",
+    "africa-safari",
+    "middle-east-and-north-africa",
+    "discover-global",
+  ];
+  const packages = regions.map((slug, index) =>
+    makeTestPackage({
+      id: `pkg-region-${index}`,
+      airaloPackageId: `${slug}-1gb-7d`,
+      operator: {
+        id: `operator-region-${index}`,
+        title: "Route Mobile",
+        airaloOperatorId: index,
+        country: {
+          id: `country-${slug}`,
+          title: slug,
+          slug,
+          countryCode: `AIRALO-${slug}`,
+          imageJson: null,
+        },
+      },
+    }),
+  );
+
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => [],
+    fetchPackages: async () => packages as unknown as FetchPackagesResult,
+  });
+
+  assert.deepEqual(
+    summaries.map((summary) => summary.country?.slug).sort(),
+    regions.sort(),
+  );
+});
+
+test("getCatalogProductSummaries excludes non-Africa local packages from public discovery", async () => {
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => [],
+    fetchPackages: async () =>
+      [
+        makeTestPackage({
+          id: "pkg-malaysia",
+          airaloPackageId: "my-1gb-7d",
+          operator: {
+            id: "operator-malaysia",
+            title: "Malaysia Mobile",
+            airaloOperatorId: 99,
+            country: {
+              id: "country-malaysia",
+              title: "Malaysia",
+              slug: "malaysia",
+              countryCode: "MY",
+              imageJson: null,
+            },
+          },
+        }),
+      ] as unknown as FetchPackagesResult,
+  });
+
+  assert.equal(summaries.length, 0);
+});
+
 test("getCatalogProductSummaries lets live Prisma state override stale Sanity package mirror fields", async () => {
   const sanityProducts = [
     {
@@ -282,6 +436,7 @@ test("getCatalogProductSummaries lets live Prisma state override stale Sanity pa
     {
       id: "pkg-5",
       airaloPackageId: "ke-live-1gb",
+      type: "sim",
       title: "1 GB - 7 days",
       amount: 1024,
       day: 7,

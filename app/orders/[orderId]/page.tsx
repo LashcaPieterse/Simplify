@@ -22,6 +22,7 @@ import { formatCurrency } from "@/lib/format";
 import {
   canAccessOwnerScopedRecord,
   canIssueScopedAccessTokens,
+  canStartTopUpCheckout,
   hasScopedAccessFromCookieStore,
   setScopedAccessCookie,
   type SessionLike,
@@ -93,13 +94,13 @@ async function purchaseTopUp(
     notFound();
   }
 
-  if (!canAccessOrder(order, session)) {
-    if (!session?.user?.id) {
-      redirect(
-        `/auth/signin?callbackUrl=${encodeURIComponent(`/orders/${order.id}`)}`,
-      );
-    }
+  if (!session?.user?.id) {
+    redirect(
+      `/auth/signin?callbackUrl=${encodeURIComponent(`/orders/${order.id}`)}`,
+    );
+  }
 
+  if (!canStartTopUpCheckout(order, session)) {
     notFound();
   }
 

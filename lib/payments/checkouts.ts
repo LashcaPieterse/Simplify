@@ -146,7 +146,17 @@ export async function createCheckout(
   });
 
   // Accept either the Prisma package id or the external id from catalog/Sanity.
-  const pkg = await findActivePackageByIdentifier(db, input.packageId);
+  const pkg = await findActivePackageByIdentifier(
+    db,
+    input.packageId,
+    input.intent === "top-up"
+      ? {
+          activeOnly: true,
+          packageType: "topup",
+          publicCatalogOnly: false,
+        }
+      : undefined,
+  );
 
   if (!pkg) {
     logOrderError("payments.checkout.package_not_found", {

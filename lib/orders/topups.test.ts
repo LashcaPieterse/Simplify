@@ -27,17 +27,20 @@ class FakeTopUpAiraloClient {
 
 class FakeTopUpDb {
   readonly package = {
-    findMany: async () => [
-      {
-        id: "local-package-1",
-        airaloPackageId: "bonbon-mobile-30days-3gb-topup",
-        state: {
-          basePriceCents: 1200,
-          sellingPriceCents: 1500,
-          currencyCode: "USD",
+    findMany: async ({ where }: { where: unknown }) => {
+      assert.match(JSON.stringify(where), /"type":"topup"/);
+      return [
+        {
+          id: "local-package-1",
+          airaloPackageId: "bonbon-mobile-30days-3gb-topup",
+          state: {
+            basePriceCents: 1200,
+            sellingPriceCents: 1500,
+            currencyCode: "USD",
+          },
         },
-      },
-    ],
+      ];
+    },
   };
 }
 

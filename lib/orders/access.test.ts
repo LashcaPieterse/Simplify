@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   canAccessOwnerScopedRecord,
+  canStartTopUpCheckout,
   createOrderAccessLink,
   createScopedAccessToken,
   hasScopedAccessFromCookieHeader,
@@ -66,6 +67,18 @@ test("owner-scoped records allow owners and scoped token holders only", () => {
     false,
   );
   assert.equal(canAccessOwnerScopedRecord({ userId: null }, null, true), true);
+});
+
+test("top-up checkout start requires an authenticated owner session", () => {
+  assert.equal(
+    canStartTopUpCheckout({ userId: "user-1" }, { user: { id: "user-1" } }),
+    true,
+  );
+  assert.equal(
+    canStartTopUpCheckout({ userId: "user-1" }, { user: { id: "user-2" } }),
+    false,
+  );
+  assert.equal(canStartTopUpCheckout({ userId: "user-1" }, null), false);
 });
 
 test("cookie-header helper validates the scoped cookie value", () => {

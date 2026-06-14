@@ -214,3 +214,10 @@ export function canAccessOwnerScopedRecord(
 ): boolean {
   return isSessionOwner(record, session) || hasScopedToken;
 }
+
+export function canStartTopUpCheckout(
+  record: OwnerScopedRecord,
+  session: SessionLike,
+): boolean {
+  return isSessionOwner(record, session);
+}

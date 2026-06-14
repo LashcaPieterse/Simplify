@@ -10,7 +10,8 @@ import {
   type WhyChooseUsSection,
   getHomePage,
   getSiteSettings,
-  getEsimProducts
+  getEsimProducts,
+  getCatalogPackageId,
 } from "@/lib/sanity.queries";
 import { Hero } from "@/components/cms/Hero";
 import { CountryGrid } from "@/components/cms/CountryGrid";
@@ -51,19 +52,26 @@ export default async function HomePage() {
   const articlesSection = sections.find((section): section is ArticlesSection => section._type === "articlesSection");
 
   const allProducts = products ?? [];
+  const featuredProductIds =
+    heroSection?.featuredProductIds?.length
+      ? heroSection.featuredProductIds
+      : heroSection?.featuredProducts?.map((product) => product._id) ?? [];
 
-  const highlightedProducts: EsimProductSummary[] = heroSection?.featuredProductIds?.length
-    ? heroSection.featuredProductIds
+  const highlightedProducts: EsimProductSummary[] = featuredProductIds.length
+    ? featuredProductIds
         .map((id) => {
-          const fromAll = allProducts.find((product) => product._id === id);
-          if (fromAll) {
-            return fromAll;
-          }
-
-          return heroSection.featuredProducts?.find((product) => product._id === id) ?? null;
+          return allProducts.find((product) => product._id === id) ?? null;
         })
-        .filter((product): product is EsimProductSummary => Boolean(product))
-    : heroSection?.featuredProducts ?? [];
+        .filter(
+          (product): product is EsimProductSummary =>
+            Boolean(
+              product &&
+                product.status === "active" &&
+                product.package?.isActive !== false &&
+                getCatalogPackageId(product.package),
+            ),
+        )
+    : [];
 
   return (
     <div className="relative isolate overflow-hidden">

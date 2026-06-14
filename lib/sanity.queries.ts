@@ -1,6 +1,10 @@
 import { groq } from "next-sanity";
 import { getSanityClient } from "./sanity.client";
 import { getCatalogProductSummaries } from "./catalog/query";
+import {
+  isPublicSellablePackageRecord,
+  publicSellablePackageWhere,
+} from "./catalog/package-policy";
 import { prisma } from "./db/client";
 
 export { prisma } from "./db/client";
@@ -658,7 +662,9 @@ function mapCatalogPackageToPlan(pkg: CatalogPackageDoc): PlanSummary {
 
 type LivePackageSnapshot = {
   airaloPackageId: string;
+  type: string;
   isActive: boolean;
+  isPublicSellable: boolean;
   updatedAt: Date;
   sellingPriceCents: number | null;
   currencyCode: string;
@@ -681,9 +687,20 @@ async function getLivePackageSnapshots(
     where: { airaloPackageId: { in: externalIds } },
     select: {
       airaloPackageId: true,
+      type: true,
       amount: true,
       day: true,
       updatedAt: true,
+      operator: {
+        select: {
+          country: {
+            select: {
+              countryCode: true,
+              slug: true,
+            },
+          },
+        },
+      },
       state: {
         select: {
           isActive: true,
@@ -700,7 +717,9 @@ async function getLivePackageSnapshots(
       record.airaloPackageId,
       {
         airaloPackageId: record.airaloPackageId,
+        type: record.type,
         isActive: record.state?.isActive ?? false,
+        isPublicSellable: isPublicSellablePackageRecord(record),
         updatedAt: record.state?.updatedAt ?? record.updatedAt,
         sellingPriceCents: record.state?.sellingPriceCents ?? null,
         currencyCode: record.state?.currencyCode ?? "USD",
@@ -728,7 +747,7 @@ function applyLivePackageSnapshot(
 
   const liveCurrencyCode = snapshot.currencyCode.toUpperCase();
 
-  if (!snapshot.isActive || typeof snapshot.sellingPriceCents !== "number") {
+  if (!snapshot.isPublicSellable || typeof snapshot.sellingPriceCents !== "number") {
     return {
       ...basePlan,
       dataGB:
@@ -780,6 +799,36 @@ function applyLivePackageSnapshot(
         }
       : basePlan.package,
   };
+}
+
+async function getPublicCatalogCountrySlugs(): Promise<Set<string>> {
+  const packages = await prisma.package.findMany({
+    where: publicSellablePackageWhere(),
+    select: {
+      operator: {
+        select: {
+          country: {
+            select: { slug: true },
+          },
+        },
+      },
+    },
+  });
+
+  return new Set(
+    packages
+      .map((pkg) => pkg.operator.country.slug)
+      .filter((slug): slug is string => Boolean(slug)),
+  );
+}
+
+async function getPublicCatalogPackageIds(): Promise<Set<string>> {
+  const packages = await prisma.package.findMany({
+    where: publicSellablePackageWhere(),
+    select: { airaloPackageId: true },
+  });
+
+  return new Set(packages.map((pkg) => pkg.airaloPackageId).filter(Boolean));
 }
 
 export async function getSiteSettings(): Promise<SiteSettings | null> {
@@ -854,14 +903,23 @@ export async function getHomePage(): Promise<HomePagePayload | null> {
 export async function getCountriesList(): Promise<CountrySummary[]> {
   try {
     const client = getSanityClient();
-    const results = await client.fetch<CatalogCountryDoc[]>(countriesQuery);
-    const allPackages = (results ?? []).flatMap((country) => [country.primaryPackage, ...(country.packages ?? [])]);
+    const [results, publicCountrySlugs] = await Promise.all([
+      client.fetch<CatalogCountryDoc[]>(countriesQuery),
+      getPublicCatalogCountrySlugs(),
+    ]);
+    const publicResults = (results ?? []).filter((country) =>
+      publicCountrySlugs.has(country.slug?.current ?? ""),
+    );
+    const allPackages = publicResults.flatMap((country) => [
+      country.primaryPackage,
+      ...(country.packages ?? []),
+    ]);
     const snapshots = await getLivePackageSnapshots(
       allPackages.filter((pkg): pkg is CatalogPackageDoc => Boolean(pkg)),
     );
 
     return (
-      results
+      publicResults
         // Ignore countries that do not have a slug to avoid generating invalid paths like "/country".
         ?.filter((country) => country.slug?.current)
         .map((country) => {
@@ -894,6 +952,11 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
 
 export async function getCountryBySlug(slug: string): Promise<CountryDetail | null> {
   try {
+    const publicCountrySlugs = await getPublicCatalogCountrySlugs();
+    if (!publicCountrySlugs.has(slug)) {
+      return null;
+    }
+
     const client = getSanityClient();
     const country = await client.fetch<CatalogCountryDoc | null>(countryBySlugQuery, { slug });
     if (!country) return null;
@@ -937,6 +1000,11 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
 
 export async function getPlansForCountry(slug: string): Promise<PlanDetail[]> {
   try {
+    const publicCountrySlugs = await getPublicCatalogCountrySlugs();
+    if (!publicCountrySlugs.has(slug)) {
+      return [];
+    }
+
     const client = getSanityClient();
     const packages = await client.fetch<CatalogPackageDoc[]>(plansForCountryQuery, { slug });
     const snapshots = await getLivePackageSnapshots(packages ?? []);
@@ -973,8 +1041,13 @@ export async function getPlanBySlug(slug: string): Promise<PlanDetail | null> {
 export async function getPlanSlugs(): Promise<string[]> {
   try {
     const client = getSanityClient();
-    const slugs = await client.fetch<{ slug: string }[]>(planSlugsQuery);
-    return (slugs ?? []).map((entry) => entry.slug).filter(Boolean);
+    const [slugs, publicPackageIds] = await Promise.all([
+      client.fetch<{ slug: string }[]>(planSlugsQuery),
+      getPublicCatalogPackageIds(),
+    ]);
+    return (slugs ?? [])
+      .map((entry) => entry.slug)
+      .filter((slug): slug is string => Boolean(slug && publicPackageIds.has(slug)));
   } catch (error) {
     console.error("Failed to fetch plan slugs from Sanity", error);
     return [];

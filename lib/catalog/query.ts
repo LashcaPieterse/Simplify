@@ -14,6 +14,10 @@ import type {
 } from "../sanity.queries";
 import type { ImageLike } from "../image";
 import type { Package } from "../airalo/schemas";
+import {
+  isPublicSellablePackageRecord,
+  publicSellablePackageWhere,
+} from "./package-policy";
 
 // Featured products now reference Catalog Countries and Catalog Packages directly.
 const COUNTRY_REFERENCE_FIELDS = `
@@ -127,6 +131,7 @@ type PackageRecord = {
 const CATALOG_PACKAGE_SELECT = {
   id: true,
   airaloPackageId: true,
+  type: true,
   title: true,
   amount: true,
   day: true,
@@ -469,7 +474,7 @@ export async function getCatalogProductSummaries(
     options.fetchPackages ??
     (() =>
       prisma.package.findMany({
-        where: { state: { is: { isActive: true } } },
+        where: publicSellablePackageWhere(),
         select: CATALOG_PACKAGE_SELECT,
         orderBy: [{ updatedAt: "desc" }],
       }));
@@ -487,6 +492,9 @@ export async function getCatalogProductSummaries(
   );
   const packageSummaries = packages
     .filter((pkg) => {
+      if (!isPublicSellablePackageRecord(pkg)) {
+        return false;
+      }
       const packageKey = normalizeKey(pkg.airaloPackageId);
       return packageKey ? !representedPackageKeys.has(packageKey) : false;
     })

@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import type { AiraloClient } from "../airalo/client";
 import type { AiraloTopUpPackage } from "../airalo/schemas";
+import { andPackageWhere, topUpPackageWhere } from "../catalog/package-policy";
 import prismaClient from "../db/client";
 import { resolveAiraloClient } from "./service";
 
@@ -82,14 +83,14 @@ export async function getTopUpPackages(
   const db = options.prisma ?? prismaClient;
 
   const localPackages = await db.package.findMany({
-    where: {
-      airaloPackageId: {
-        in: packages.map((pkg) => pkg.id),
+    where: andPackageWhere(
+      topUpPackageWhere(),
+      {
+        airaloPackageId: {
+          in: packages.map((pkg) => pkg.id),
+        },
       },
-      state: {
-        is: { isActive: true },
-      },
-    },
+    ),
     select: {
       id: true,
       airaloPackageId: true,

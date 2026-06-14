@@ -40,6 +40,8 @@ export default async function NewCheckoutPage({
     prisma.package.findFirst({
       where: buildPackageIdentifierWhere(requestedPackageId, {
         activeOnly: true,
+        packageType: "sim",
+        publicCatalogOnly: true,
       }),
       include: {
         state: true,
