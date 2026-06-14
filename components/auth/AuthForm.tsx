@@ -4,10 +4,9 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Route } from "next";
 import { signIn } from "next-auth/react";
-import { ArrowRight, Loader2, Lock, Mail, ShieldCheck } from "lucide-react";
+import { ArrowRight, Loader2, Lock, Mail, ShieldCheck, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { cn } from "@/components/utils";
 import { registerWithPassword } from "@/app/auth/signup/actions";
 
 export type ProviderInfo = {
@@ -24,7 +23,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
 
   const oauthProviders = useMemo(() => providers.filter((provider) => provider.type === "oauth"), [providers]);
   const googleProvider = useMemo(() => oauthProviders.find((provider) => provider.id === "google"), [oauthProviders]);
-  const emailProvider = useMemo(() => providers.find((provider) => provider.type === "email"), [providers]);
+  const extraOauthProviders = useMemo(() => oauthProviders.filter((provider) => provider.id !== "google"), [oauthProviders]);
   const hasCredentials = useMemo(() => providers.some((provider) => provider.id === "credentials"), [providers]);
 
   const [email, setEmail] = useState(initialEmail);
@@ -34,25 +33,6 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  async function handleEmail(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!emailProvider) return;
-    setPendingId(emailProvider.id);
-    setMessage(null);
-    setError(null);
-    const result = await signIn(emailProvider.id, {
-      email,
-      callbackUrl,
-      redirect: false,
-    });
-    if (result?.error) {
-      setError("We couldn't send the sign-in link. Try again in a moment.");
-    } else {
-      setMessage("Check your inbox for a secure sign-in link.");
-    }
-    setPendingId(null);
-  }
 
   async function handleOAuth(providerId: string) {
     setPendingId(providerId);
@@ -200,149 +180,120 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
     );
   }
 
+  const googleIsPending = googleProvider ? pendingId === googleProvider.id : false;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <button
+        type="button"
+        className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-brand-100 bg-white px-5 text-base font-semibold text-brand-900 shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-70"
+        onClick={handleGoogle}
+        disabled={googleIsPending || isPending}
+      >
+        {googleIsPending ? <Loader2 className="h-5 w-5 animate-spin text-brand-600" /> : <GoogleIcon className="h-5 w-5" />}
+        <span>Continue with Google</span>
+      </button>
+
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-brand-100" />
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">or continue with email</p>
+        <div className="h-px flex-1 bg-brand-100" />
+      </div>
+
       {hasCredentials ? (
-        <form onSubmit={handlePasswordSubmit} className="space-y-4 rounded-2xl border border-brand-100 bg-white/90 p-5 shadow-card">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
-                {mode === "signup" ? "Create with password" : "Log in with password"}
-              </p>
-              <p className="text-sm text-brand-700">
-                {mode === "signup"
-                  ? "Set a password for quick access without Google."
-                  : "Use your email and password to sign in."}
-              </p>
-            </div>
-            <Lock className="h-4 w-4 text-brand-500" />
-          </div>
-          {mode === "signup" ? (
-            <label className="block text-sm font-semibold text-brand-900">
-              Name
+        <form onSubmit={handlePasswordSubmit} className="space-y-5">
+          <label className="block text-sm font-semibold text-brand-900">
+            Name
+            <span className="relative mt-2 block">
+              <User className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-500" />
               <input
                 name="name"
                 type="text"
-                className="mt-2 w-full rounded-xl border border-brand-100 bg-white px-3 py-2 text-sm text-brand-900 shadow-inner focus:border-brand-400 focus:outline-none"
+                autoComplete="name"
+                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={isPending}
               />
-            </label>
-          ) : null}
+            </span>
+          </label>
+
           <label className="block text-sm font-semibold text-brand-900">
             Email
-            <input
-              name="email"
-              type="email"
-              required
-              className="mt-2 w-full rounded-xl border border-brand-100 bg-white px-3 py-2 text-sm text-brand-900 shadow-inner focus:border-brand-400 focus:outline-none"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isPending}
-            />
+            <span className="relative mt-2 block">
+              <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-500" />
+              <input
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isPending}
+              />
+            </span>
           </label>
+
           <label className="block text-sm font-semibold text-brand-900">
             Password
-            <input
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              className="mt-2 w-full rounded-xl border border-brand-100 bg-white px-3 py-2 text-sm text-brand-900 shadow-inner focus:border-brand-400 focus:outline-none"
-              placeholder="At least 8 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isPending}
-            />
+            <span className="relative mt-2 block">
+              <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-500" />
+              <input
+                name="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                placeholder="At least 8 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isPending}
+              />
+            </span>
           </label>
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-brand-700">You can still use Google later.</p>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {mode === "signup" ? "Creating..." : "Signing in..."}
-                </>
-              ) : mode === "signup" ? (
-                <>
-                  Create account
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              ) : (
-                <>
-                  Log in
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </div>
-          {message ? <p className="text-sm text-brand-700">{message}</p> : null}
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        </form>
-      ) : null}
 
-      {emailProvider ? (
-        <form onSubmit={handleEmail} className="space-y-4 rounded-2xl border border-brand-100 bg-brand-50/60 p-5">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">Email link</p>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 space-y-1">
-                <label className="text-sm font-semibold text-brand-900" htmlFor="auth-email">
-                  Email address
-                </label>
-                <p className="text-sm text-brand-700">
-                  {mode === "signup" ? "We'll create your account when you verify the link." : "We'll email you a secure link to log in."}
-                </p>
-              </div>
-              <Mail className="h-5 w-5 text-brand-500" />
-            </div>
-          </div>
-          <input
-            id="auth-email"
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            className="w-full rounded-xl border border-brand-100 bg-white px-3.5 py-2.5 text-sm text-brand-900 shadow-inner focus:border-brand-400 focus:outline-none"
-            disabled={pendingId === emailProvider.id}
-          />
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-brand-700">You will stay signed in on this device after verification.</p>
-            <Button type="submit" disabled={pendingId === emailProvider.id || !email}>
-              {pendingId === emailProvider.id ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Sending link...
-                </>
-              ) : (
-                <>
-                  Send magic link
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-          </div>
-          {message ? <p className="text-sm text-brand-700">{message}</p> : null}
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <Button type="submit" size="lg" className="h-[52px] w-full text-base" disabled={isPending}>
+            {isPending ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                Create account
+                <ArrowRight className="h-5 w-5" />
+              </>
+            )}
+          </Button>
         </form>
-      ) : null}
+      ) : (
+        <p className="rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-800">
+          Password account creation is not available right now. Use Google to continue.
+        </p>
+      )}
 
-      {oauthProviders.length ? (
+      {message ? <p className="text-sm font-medium text-brand-700">{message}</p> : null}
+      {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
+
+      <div className="flex items-center justify-center gap-2 rounded-2xl bg-brand-50/70 px-4 py-3 text-center text-sm text-brand-700">
+        <ShieldCheck className="h-4 w-4 shrink-0 text-brand-500" />
+        <span>Secure account setup. We&apos;ll never share your personal details.</span>
+      </div>
+
+      {extraOauthProviders.length ? (
         <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">One-tap access</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">More sign-in options</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {oauthProviders.map((provider) => (
+            {extraOauthProviders.map((provider) => (
               <Button
                 key={provider.id}
                 type="button"
                 variant="secondary"
-                className={cn("w-full justify-between border border-brand-200 bg-white text-brand-900 shadow-sm")}
+                className="w-full justify-between border border-brand-200 bg-white text-brand-900 shadow-sm"
                 onClick={() => handleOAuth(provider.id)}
                 disabled={pendingId === provider.id}
               >
@@ -352,12 +303,6 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
             ))}
           </div>
         </div>
-      ) : null}
-
-      {!hasCredentials && !emailProvider && !oauthProviders.length ? (
-        <p className="rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm text-brand-800">
-          Secure sign-in. We&apos;ll never share your personal details.
-        </p>
       ) : null}
     </div>
   );
