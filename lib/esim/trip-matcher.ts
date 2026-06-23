@@ -87,7 +87,17 @@ const STOP_WORDS = new Set([
 
 export const TRIP_DURATION_OPTIONS: readonly TripDurationDays[] = [3, 7, 15, 30];
 
+export const EAST_AFRICA_TRIP_DESTINATION: TripDestinationOption = {
+  title: "East-Africa",
+  slug: "east-africa",
+  destinationType: "route",
+  country: "Africa Safari",
+  aliases: ["East Africa"],
+  searchTerms: ["Safarilink"],
+};
+
 export const FALLBACK_TRIP_DESTINATIONS: readonly TripDestinationOption[] = [
+  EAST_AFRICA_TRIP_DESTINATION,
   { title: "Cape Town", slug: "cape-town", destinationType: "city", country: "South Africa" },
   { title: "Zanzibar", slug: "zanzibar", destinationType: "city", country: "Tanzania" },
   { title: "Mombasa", slug: "mombasa", destinationType: "city", country: "Kenya" },

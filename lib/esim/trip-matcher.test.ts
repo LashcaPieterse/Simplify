@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { EsimProductSummary } from "../sanity.queries";
-import { matchTripPlans } from "./trip-matcher";
+import { EAST_AFRICA_TRIP_DESTINATION, matchTripPlans } from "./trip-matcher";
 
 function product({
   id,
@@ -109,6 +109,29 @@ test("popular city destination resolves to its country plan", () => {
   });
 
   assert.equal(result.primary?.product._id, "south-africa");
+});
+
+test("East Africa destination resolves to the Africa Safari package", () => {
+  const result = matchTripPlans({
+    destination: "East-Africa",
+    durationDays: 7,
+    usageProfileId: "light",
+    tripDestinations: [EAST_AFRICA_TRIP_DESTINATION],
+    products: [
+      product({ id: "kenya", name: "Kenya 2GB", country: "Kenya", price: 8, dataMb: 2048, validityDays: 7 }),
+      product({
+        id: "africa-safari",
+        name: "Africa Safari 3GB",
+        country: "Africa Safari",
+        price: 13,
+        dataMb: 3072,
+        validityDays: 30,
+      }),
+    ],
+  });
+
+  assert.equal(result.primary?.product._id, "africa-safari");
+  assert.equal(result.matchedDestination?.slug, "east-africa");
 });
 
 test("Sanity destination aliases resolve through referenced country", () => {

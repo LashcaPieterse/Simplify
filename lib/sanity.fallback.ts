@@ -496,6 +496,14 @@ const fallbackTripCountry = (key: string, title: string, slug: string): CountryS
   };
 
 const fallbackTripDestinations = [
+  {
+    title: "East-Africa",
+    slug: "east-africa",
+    destinationType: "route" as const,
+    country: fallbackTripCountry("africa-safari", "Africa Safari", "africa-safari"),
+    aliases: ["East Africa"],
+    searchTerms: ["Safarilink"]
+  },
   { title: "Cape Town", slug: "cape-town", country: fallbackTripCountry("south-africa", "South Africa", "south-africa") },
   { title: "Zanzibar", slug: "zanzibar", country: fallbackTripCountry("tanzania", "Tanzania", "tanzania") },
   { title: "Mombasa", slug: "mombasa", country: fallbackTripCountry("kenya", "Kenya", "kenya") },
@@ -513,10 +521,10 @@ const fallbackTripDestinations = [
   _id: `trip-destination-${destination.slug}`,
   title: destination.title,
   slug: destination.slug,
-  destinationType: "city" as const,
+  destinationType: destination.destinationType ?? ("city" as const),
   country: destination.country,
   aliases: destination.aliases ?? [],
-  searchTerms: [],
+  searchTerms: destination.searchTerms ?? [],
   active: true,
   featured: true,
   sortOrder: index + 1,

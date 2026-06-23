@@ -27,6 +27,7 @@ import {
   DEFAULT_USAGE_PROFILE_ID,
   TRIP_DURATION_OPTIONS,
   USAGE_PROFILES,
+  EAST_AFRICA_TRIP_DESTINATION,
   FALLBACK_TRIP_DESTINATIONS,
   formatDataAmount,
   matchTripPlans,
@@ -66,12 +67,17 @@ export function TripPlanWidget({
 
   const products = allProducts.length ? allProducts : highlightedProducts;
   const highlightedProductIds = useMemo(() => highlightedProducts.map((product) => product._id), [highlightedProducts]);
-  const destinationChips = useMemo(
-    () =>
-      (settings?.popularDestinations?.length ? settings.popularDestinations : FALLBACK_TRIP_DESTINATIONS)
-        .filter((destination) => destination.active !== false),
-    [settings?.popularDestinations],
-  );
+  const destinationChips = useMemo(() => {
+    const configuredDestinations = settings?.popularDestinations?.length
+      ? settings.popularDestinations
+      : FALLBACK_TRIP_DESTINATIONS;
+    const activeDestinations = configuredDestinations.filter((destination) => destination.active !== false);
+
+    return [
+      EAST_AFRICA_TRIP_DESTINATION,
+      ...activeDestinations.filter((destination) => destination.slug !== EAST_AFRICA_TRIP_DESTINATION.slug),
+    ];
+  }, [settings?.popularDestinations]);
 
   const match = useMemo(
     () =>
