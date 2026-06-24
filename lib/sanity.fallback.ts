@@ -504,6 +504,18 @@ const fallbackTripDestinations = [
     aliases: ["East Africa"],
     searchTerms: ["Safarilink"]
   },
+  {
+    title: "MENA",
+    slug: "mena",
+    destinationType: "route" as const,
+    country: fallbackTripCountry(
+      "middle-east-and-north-africa",
+      "Middle East and North Africa",
+      "middle-east-and-north-africa"
+    ),
+    aliases: ["North Africa", "Middle East and North Africa"],
+    searchTerms: ["Menalink"]
+  },
   { title: "Cape Town", slug: "cape-town", country: fallbackTripCountry("south-africa", "South Africa", "south-africa") },
   { title: "Zanzibar", slug: "zanzibar", country: fallbackTripCountry("tanzania", "Tanzania", "tanzania") },
   { title: "Mombasa", slug: "mombasa", country: fallbackTripCountry("kenya", "Kenya", "kenya") },

@@ -27,8 +27,8 @@ import {
   DEFAULT_USAGE_PROFILE_ID,
   TRIP_DURATION_OPTIONS,
   USAGE_PROFILES,
-  EAST_AFRICA_TRIP_DESTINATION,
   FALLBACK_TRIP_DESTINATIONS,
+  PINNED_ROUTE_TRIP_DESTINATIONS,
   formatDataAmount,
   matchTripPlans,
   type TripRecommendation,
@@ -73,9 +73,11 @@ export function TripPlanWidget({
       : FALLBACK_TRIP_DESTINATIONS;
     const activeDestinations = configuredDestinations.filter((destination) => destination.active !== false);
 
+    const pinnedSlugs = new Set(PINNED_ROUTE_TRIP_DESTINATIONS.map((destination) => destination.slug));
+
     return [
-      EAST_AFRICA_TRIP_DESTINATION,
-      ...activeDestinations.filter((destination) => destination.slug !== EAST_AFRICA_TRIP_DESTINATION.slug),
+      ...PINNED_ROUTE_TRIP_DESTINATIONS,
+      ...activeDestinations.filter((destination) => !pinnedSlugs.has(destination.slug)),
     ];
   }, [settings?.popularDestinations]);
 

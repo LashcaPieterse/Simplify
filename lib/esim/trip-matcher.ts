@@ -96,8 +96,22 @@ export const EAST_AFRICA_TRIP_DESTINATION: TripDestinationOption = {
   searchTerms: ["Safarilink"],
 };
 
-export const FALLBACK_TRIP_DESTINATIONS: readonly TripDestinationOption[] = [
+export const MENA_TRIP_DESTINATION: TripDestinationOption = {
+  title: "MENA",
+  slug: "mena",
+  destinationType: "route",
+  country: "Middle East and North Africa",
+  aliases: ["North Africa", "Middle East and North Africa"],
+  searchTerms: ["Menalink"],
+};
+
+export const PINNED_ROUTE_TRIP_DESTINATIONS: readonly TripDestinationOption[] = [
   EAST_AFRICA_TRIP_DESTINATION,
+  MENA_TRIP_DESTINATION,
+];
+
+export const FALLBACK_TRIP_DESTINATIONS: readonly TripDestinationOption[] = [
+  ...PINNED_ROUTE_TRIP_DESTINATIONS,
   { title: "Cape Town", slug: "cape-town", destinationType: "city", country: "South Africa" },
   { title: "Zanzibar", slug: "zanzibar", destinationType: "city", country: "Tanzania" },
   { title: "Mombasa", slug: "mombasa", destinationType: "city", country: "Kenya" },
