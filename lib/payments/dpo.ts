@@ -128,6 +128,7 @@ export class DpoClient {
       `<CompanyRef>${escapeXml(input.reference)}</CompanyRef>`,
       `<CompanyRefUnique>0</CompanyRefUnique>`,
       `<PTL>${escapeXml(ptl)}</PTL>`,
+      `<PTLtype>minutes</PTLtype>`,
       input.customerEmail ? `<CustomerEmail>${escapeXml(input.customerEmail)}</CustomerEmail>` : "",
       `<RedirectURL>${escapeXml(input.redirectUrl)}</RedirectURL>`,
       `<BackURL>${escapeXml(input.cancelUrl)}</BackURL>`,
@@ -215,7 +216,9 @@ export class DpoClient {
       resultExplanation: extractTag(responseXml, "ResultExplanation"),
       approval: extractTag(responseXml, "TransactionApproval"),
       fraudAlert: extractTag(responseXml, "FraudAlert"),
-      fraudExplanation: extractTag(responseXml, "FraudExplanation"),
+      fraudExplanation:
+        extractTag(responseXml, "FraudExplanation") ??
+        extractTag(responseXml, "FraudExplnation"),
       amount: amountStr ? Number(amountStr) : undefined,
       currency,
       netAmount: extractTag(responseXml, "TransactionNetAmount")

@@ -33,7 +33,11 @@ import type {
   ReservedOrderSnapshot,
 } from "../orders/service";
 import { appendStatusHistory, createStatusHistory, serialise } from "./status-history";
-import { resolveDpoClient } from "./dpo";
+import {
+  resolveDpoClient,
+  type DpoClient,
+  type VerifyDpoTransactionResult,
+} from "./dpo";
 
 const checkoutInputSchema = z.object({
   packageId: z.string().min(1, "A package selection is required."),
@@ -84,6 +88,7 @@ const STATUS_PAID = "paid";
 const STATUS_FAILED = "failed";
 const STATUS_APPROVED = "approved";
 const STATUS_FINALIZING = "finalizing";
+const STATUS_VERIFICATION_MISMATCH = "verification_mismatch";
 const PROVIDER = "dpo";
 const RESERVED_ORDER_FAILED_STATUS = "airalo_failed";
 
@@ -206,8 +211,7 @@ export async function createCheckout(
 
   const successUrl = `${options.baseUrl}/checkout/${checkout.id}/return`;
   const cancelUrl = `${options.baseUrl}/checkout/${checkout.id}`;
-  // No IPN/webhook flow; use the return URL for callback and verify on return.
-  const callbackUrl = successUrl;
+  const callbackUrl = `${options.baseUrl}/api/payments/dpo/push`;
 
   const dpoClient = resolveDpoClient();
   const amount = centsToMajorUnits(totalCents);
@@ -330,6 +334,60 @@ type FinaliseOptions = {
   forceStatus?: string;
 };
 
+type VerifyCheckoutRecord = Prisma.CheckoutSessionGetPayload<{
+  include: {
+    payments: true;
+  };
+}>;
+
+type VerifyCheckoutPaymentRecord = VerifyCheckoutRecord["payments"][number];
+
+export type VerifyPaymentTransactionResult = {
+  paymentStatus: string;
+  orderId?: string | null;
+  redirectOrderId?: string | null;
+  message?: string;
+};
+
+function amountToCents(amount: number | undefined): number | null {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) {
+    return null;
+  }
+
+  return Math.round(amount * 100);
+}
+
+function normalizeCurrencyCode(value: string | null | undefined): string | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized ? normalized : null;
+}
+
+function validateApprovedDpoVerification(
+  payment: VerifyCheckoutPaymentRecord,
+  verification: VerifyDpoTransactionResult,
+): string | null {
+  const verifiedAmountCents = amountToCents(verification.amount);
+  if (verifiedAmountCents === null) {
+    return "DPO verification did not include a transaction amount.";
+  }
+
+  if (verifiedAmountCents !== payment.amountCents) {
+    return `DPO amount mismatch. Expected ${payment.amountCents} cents but received ${verifiedAmountCents} cents.`;
+  }
+
+  const verifiedCurrency = normalizeCurrencyCode(verification.currency);
+  const expectedCurrency = normalizeCurrencyCode(payment.currency);
+  if (!verifiedCurrency) {
+    return "DPO verification did not include a transaction currency.";
+  }
+
+  if (verifiedCurrency !== expectedCurrency) {
+    return `DPO currency mismatch. Expected ${expectedCurrency} but received ${verifiedCurrency}.`;
+  }
+
+  return null;
+}
+
 async function markCheckoutStatus(
   checkoutId: string,
   status: string,
@@ -345,12 +403,7 @@ async function markCheckoutStatus(
 export async function verifyCheckoutPayment(
   checkoutId: string,
   options: { prisma?: PrismaClient } = {},
-): Promise<{
-  paymentStatus: string;
-  orderId?: string | null;
-  redirectOrderId?: string | null;
-  message?: string;
-}> {
+): Promise<VerifyPaymentTransactionResult> {
   const db = options.prisma ?? prismaClient;
 
   const checkout = await db.checkoutSession.findUnique({
@@ -372,6 +425,23 @@ export async function verifyCheckoutPayment(
   if (!payment?.transactionToken) {
     throw new Error("Checkout has no associated payment token.");
   }
+
+  return verifyCheckoutPaymentRecord(checkout, payment, {
+    prisma: db,
+    source: "verify",
+  });
+}
+
+async function verifyCheckoutPaymentRecord(
+  checkout: VerifyCheckoutRecord,
+  payment: VerifyCheckoutPaymentRecord,
+  options: {
+    prisma: PrismaClient;
+    source: string;
+    dpoClient?: Pick<DpoClient, "verifyTransaction">;
+  },
+): Promise<VerifyPaymentTransactionResult> {
+  const db = options.prisma;
 
   if (payment.status === STATUS_APPROVED) {
     try {
@@ -402,14 +472,19 @@ export async function verifyCheckoutPayment(
     }
   }
 
-  const dpoClient = resolveDpoClient();
+  const dpoClient = options.dpoClient ?? resolveDpoClient();
+  if (!payment.transactionToken) {
+    throw new Error("Payment transaction has no DPO transaction token.");
+  }
+
   let verification;
   try {
     verification = await dpoClient.verifyTransaction(payment.transactionToken, payment.providerReference ?? undefined);
-    // Log key verification fields to help debug DPO responses in non-IPN flow.
+    // Log key verification fields to help debug DPO responses in callback and return flows.
     console.info("dpo.verifyTransaction", {
-      checkoutId,
+      checkoutId: checkout.id,
       transactionToken: payment.transactionToken,
+      source: options.source,
       resultCode: verification.resultCode ?? verification.status,
       resultExplanation: verification.resultExplanation,
       status: verification.status,
@@ -417,8 +492,9 @@ export async function verifyCheckoutPayment(
     });
   } catch (error) {
     console.error("dpo.verifyTransaction failed", {
-      checkoutId,
+      checkoutId: checkout.id,
       transactionToken: payment.transactionToken,
+      source: options.source,
       error: error instanceof Error ? error.message : String(error),
     });
     return {
@@ -437,6 +513,52 @@ export async function verifyCheckoutPayment(
     STATUS_PENDING;
   const verificationMessage = !isPaid && verification.resultExplanation ? verification.resultExplanation : undefined;
 
+  if (isPaid) {
+    const mismatchMessage = validateApprovedDpoVerification(payment, verification);
+    if (mismatchMessage) {
+      const updated = await db.paymentTransaction.update({
+        where: { id: payment.id },
+        data: {
+          status: STATUS_VERIFICATION_MISMATCH,
+          metadata: serialise({
+            reason: mismatchMessage,
+            verification: verification.rawResponse,
+          }),
+          statusHistory: appendStatusHistory(payment.statusHistory, {
+            status: STATUS_VERIFICATION_MISMATCH,
+            at: new Date().toISOString(),
+            source: options.source,
+          }),
+        },
+      });
+
+      await db.paymentTransactionEvent.create({
+        data: {
+          transactionId: payment.id,
+          eventType: `${options.source}-mismatch`,
+          payload: serialise({
+            reason: mismatchMessage,
+            verification: verification.rawResponse,
+          }),
+        },
+      });
+
+      logOrderError("payments.checkout.verification_mismatch", {
+        checkoutId: checkout.id,
+        paymentId: payment.id,
+        message: mismatchMessage,
+      });
+
+      return {
+        paymentStatus: updated.status,
+        orderId: checkout.orderId ?? null,
+        redirectOrderId:
+          checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId,
+        message: mismatchMessage,
+      };
+    }
+  }
+
   const updated = await db.paymentTransaction.update({
     where: { id: payment.id },
     data: {
@@ -445,7 +567,7 @@ export async function verifyCheckoutPayment(
       statusHistory: appendStatusHistory(payment.statusHistory, {
         status: normalizedStatus,
         at: new Date().toISOString(),
-        source: "verify",
+        source: options.source,
       }),
     },
   });
@@ -492,6 +614,49 @@ export async function verifyCheckoutPayment(
   }
 
   return { paymentStatus: updated.status, orderId, redirectOrderId, message: verificationMessage };
+}
+
+export async function verifyPaymentTransaction(
+  transactionId: string,
+  options: {
+    prisma?: PrismaClient;
+    source?: string;
+    dpoClient?: Pick<DpoClient, "verifyTransaction">;
+  } = {},
+): Promise<VerifyPaymentTransactionResult> {
+  const db = options.prisma ?? prismaClient;
+
+  const payment = await db.paymentTransaction.findUnique({
+    where: { id: transactionId },
+    include: {
+      checkout: {
+        include: {
+          payments: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+
+  if (!payment) {
+    throw new Error("Payment transaction not found.");
+  }
+
+  if (!payment.checkout) {
+    throw new Error("Payment transaction is not linked to a checkout.");
+  }
+
+  if (!payment.transactionToken) {
+    throw new Error("Payment transaction has no DPO transaction token.");
+  }
+
+  return verifyCheckoutPaymentRecord(payment.checkout, payment, {
+    prisma: db,
+    source: options.source ?? "verify",
+    dpoClient: options.dpoClient,
+  });
 }
 
 type FinaliseCheckoutRecord = Prisma.CheckoutSessionGetPayload<{

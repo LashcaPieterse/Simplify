@@ -17,4 +17,4 @@ When a Simplify doc appears to conflict with the Airalo API exports, update the 
 - [`operations/airalo-runbooks.md`](operations/airalo-runbooks.md): Airalo operational runbooks and observability.
 - [`operations/airalo-submit-order.md`](operations/airalo-submit-order.md): Simplify-specific order submission contract and implementation notes.
 - [`operations/dependency-security.md`](operations/dependency-security.md): current dependency advisory triage.
-- [`operations/dpo-payments.md`](operations/dpo-payments.md): DPO checkout/IPN runbook.
+- [`operations/dpo-payments.md`](operations/dpo-payments.md): DPO checkout and Push Payments Callback runbook.

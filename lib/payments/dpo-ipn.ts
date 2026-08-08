@@ -1,16 +1,58 @@
-import crypto from "node:crypto";
-import { z } from "zod";
+import type { VerifyPaymentTransactionResult } from "./checkouts";
 
-const DpoIpnPayloadSchema = z.record(z.unknown());
-const DpoTokenSchema = z.string().trim().min(1, "Transaction token missing");
+export const DPO_PUSH_EVENT_TYPE = "dpo-push";
+export const DPO_PUSH_OK_XML =
+  '<?xml version="1.0" encoding="utf-8"?><API3G><Response>OK</Response></API3G>';
 
-type DpoIpnTransaction = {
-  id: string;
-  checkoutId: string | null;
+const STATUS_FAILED = "failed";
+const STATUS_PENDING = "pending";
+const STATUS_VERIFICATION_MISMATCH = "verification_mismatch";
+
+const DPO_PUSH_FIELDS = [
+  "Result",
+  "ResultExplanation",
+  "TransactionToken",
+  "TransactionRef",
+  "CustomerName",
+  "CustomerCredit",
+  "CustomerCreditType",
+  "TransactionApproval",
+  "TransactionCurrency",
+  "TransactionAmount",
+  "FraudAlert",
+  "FraudExplnation",
+  "FraudExplanation",
+  "TransactionNetAmount",
+  "TransactionSettlementDate",
+  "TransactionRollingReserveAmount",
+  "TransactionRollingReserveDate",
+  "CustomerPhone",
+  "CustomerCountry",
+  "CustomerAddress",
+  "CustomerCity",
+  "CustomerZip",
+  "MobilePaymentRequest",
+  "AccRef",
+] as const;
+
+export type DpoPushPayload = Partial<Record<(typeof DPO_PUSH_FIELDS)[number], string>> & {
+  rawXml: string;
 };
 
-type DpoIpnDeps = {
-  findPaymentTransaction: (token: string) => Promise<DpoIpnTransaction | null>;
+type DpoPushPaymentTransaction = {
+  id: string;
+  checkoutId: string | null;
+  amountCents: number;
+  currency: string;
+};
+
+type DpoPushDeps = {
+  findPaymentTransactionByToken: (
+    token: string,
+  ) => Promise<DpoPushPaymentTransaction | null>;
+  findPaymentTransactionByReference: (
+    reference: string,
+  ) => Promise<DpoPushPaymentTransaction | null>;
   recordPaymentEvent: (
     transactionId: string,
     eventType: string,
@@ -21,206 +63,236 @@ type DpoIpnDeps = {
     status: string,
     options: { metadata?: Record<string, unknown> },
   ) => Promise<void>;
-  finaliseOrderFromCheckout: (
-    checkoutId: string,
-    options: { forceStatus: string },
-  ) => Promise<unknown>;
+  verifyPaymentTransaction: (
+    transactionId: string,
+  ) => Promise<VerifyPaymentTransactionResult>;
   setCheckoutStatus: (checkoutId: string, status: string) => Promise<void>;
 };
 
-export type DpoIpnResult = {
+export type DpoPushResult = {
   status: number;
-  body: Record<string, unknown>;
+  body: string;
 };
 
-function apiError(
-  status: number,
-  code: string,
-  message: string,
-  details?: Record<string, unknown>,
-): DpoIpnResult {
+function xmlError(status: number, code: string): DpoPushResult {
   return {
     status,
-    body: {
-      error: {
-        code,
-        message,
-        ...(details ? { details } : {}),
-      },
-    },
+    body: `<?xml version="1.0" encoding="utf-8"?><API3G><Response>ERROR</Response><Result>${escapeXml(
+      code,
+    )}</Result></API3G>`,
   };
 }
 
-function timingSafeEqualString(a: string, b: string): boolean {
-  const bufferA = Buffer.from(a);
-  const bufferB = Buffer.from(b);
-
-  if (bufferA.length !== bufferB.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(bufferA, bufferB);
-}
-
-export function verifyDpoIpnSignature(options: {
-  body: string;
-  signature: string | null;
-  secret?: string | null;
-  allowMissingSecret: boolean;
-}): boolean {
-  const secret = options.secret?.trim();
-
-  if (!secret) {
-    return options.allowMissingSecret;
-  }
-
-  const signature = options.signature?.trim().replace(/^sha256=/i, "");
-  if (!signature) {
-    return false;
-  }
-
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(options.body)
-    .digest("hex");
-
-  return timingSafeEqualString(expected, signature);
-}
-
-export function parseDpoIpnPayload(
-  body: string,
-  contentType: string | null,
-): unknown {
-  if (contentType?.includes("application/json")) {
-    return JSON.parse(body);
-  }
-
-  if (contentType?.includes("application/x-www-form-urlencoded")) {
-    const params = new URLSearchParams(body);
-    return Object.fromEntries(params.entries());
-  }
-
-  if (!body) {
-    return {};
-  }
-
-  return JSON.parse(body);
-}
-
-export function normaliseDpoStatus(value: unknown): string {
-  if (typeof value !== "string") {
-    return "unknown";
-  }
-
-  return value.trim().toLowerCase();
-}
-
-function zodIssueDetails(error: z.ZodError): Record<string, unknown> {
+function xmlOk(): DpoPushResult {
   return {
-    issues: error.issues.map((issue) => ({
-      code: issue.code,
-      message: issue.message,
-      path: issue.path.map((segment) => String(segment)).join("."),
-    })),
+    status: 200,
+    body: DPO_PUSH_OK_XML,
   };
 }
 
-export async function handleDpoIpn(options: {
-  rawBody: string;
-  signature: string | null;
-  contentType: string | null;
-  secret?: string | null;
-  nodeEnv?: string;
-  deps: DpoIpnDeps;
-}): Promise<DpoIpnResult> {
-  const hasValidSignature = verifyDpoIpnSignature({
-    body: options.rawBody,
-    signature: options.signature,
-    secret: options.secret,
-    allowMissingSecret: options.nodeEnv !== "production",
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/[<>&'"]/g, (character) => {
+    switch (character) {
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "&":
+        return "&amp;";
+      case "'":
+        return "&apos;";
+      case "\"":
+        return "&quot;";
+      default:
+        return character;
+    }
   });
+}
 
-  if (!hasValidSignature) {
-    return apiError(401, "invalid_signature", "Invalid signature");
-  }
+function decodeXml(value: string): string {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, "\"")
+    .replace(/&amp;/g, "&");
+}
 
-  let parsedPayload: unknown;
-  try {
-    parsedPayload = parseDpoIpnPayload(options.rawBody, options.contentType);
-  } catch {
-    return apiError(400, "invalid_json", "Invalid payload.");
-  }
-
-  const payloadResult = DpoIpnPayloadSchema.safeParse(parsedPayload);
-  if (!payloadResult.success) {
-    return apiError(
-      422,
-      "validation_error",
-      "Request validation failed.",
-      zodIssueDetails(payloadResult.error),
-    );
-  }
-  const payload = payloadResult.data;
-
-  const tokenCandidate =
-    payload.TransactionToken ??
-    payload.transactionToken ??
-    payload.TransactionRef ??
-    payload.transactionRef;
-  const tokenResult = DpoTokenSchema.safeParse(tokenCandidate);
-  if (!tokenResult.success) {
-    return apiError(
-      422,
-      "validation_error",
-      "Request validation failed.",
-      zodIssueDetails(tokenResult.error),
-    );
-  }
-  const token = tokenResult.data;
-
-  const status = normaliseDpoStatus(
-    payload.Result ?? payload.result ?? payload.Status ?? payload.status,
+function extractXmlTag(xml: string, tag: string): string | undefined {
+  const escaped = escapeRegExp(tag);
+  const match = xml.match(
+    new RegExp(`<${escaped}\\b[^>]*>([\\s\\S]*?)</${escaped}>`, "i"),
   );
 
-  const transaction = await options.deps.findPaymentTransaction(token);
+  return match?.[1] === undefined ? undefined : decodeXml(match[1].trim());
+}
 
-  if (!transaction) {
-    return apiError(
-      404,
-      "payment_transaction_not_found",
-      "Transaction not found",
-    );
+export function parseDpoPushPayload(body: string): DpoPushPayload {
+  const rawXml = body.trim();
+
+  if (!rawXml || !/<API3G\b/i.test(rawXml)) {
+    throw new Error("DPO push payload must be XML with an API3G root.");
   }
 
-  await options.deps.recordPaymentEvent(transaction.id, "ipn", payload);
-  await options.deps.updatePaymentStatus(transaction.id, status, {
-    metadata: payload,
-  });
+  const payload: DpoPushPayload = { rawXml };
 
-  if (transaction.checkoutId) {
-    if (status === "approved") {
-      try {
-        await options.deps.finaliseOrderFromCheckout(transaction.checkoutId, {
-          forceStatus: status,
-        });
-      } catch {
-        return {
-          status: 200,
-          body: { ok: true, warning: "checkout_finalization_failed" },
-        };
-      }
-    } else if (
-      status === "failed" ||
-      status === "declined" ||
-      status === "cancelled"
-    ) {
-      await options.deps.setCheckoutStatus(transaction.checkoutId, "failed");
+  for (const field of DPO_PUSH_FIELDS) {
+    const value = extractXmlTag(rawXml, field);
+    if (value !== undefined) {
+      payload[field] = value;
     }
   }
 
-  return {
-    status: 200,
-    body: { ok: true },
-  };
+  if (!payload.Result && !payload.TransactionToken && !payload.TransactionRef) {
+    throw new Error("DPO push payload did not contain transaction fields.");
+  }
+
+  return payload;
 }
 
+function normalizeResultCode(value: string | undefined): string {
+  return value?.trim() ?? "";
+}
+
+function normalizeCurrency(value: string | undefined): string | null {
+  const normalized = value?.trim().toUpperCase();
+  return normalized ? normalized : null;
+}
+
+function parseMajorAmountToCents(value: string | undefined): number | null {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  const normalized = Number(value.trim());
+  if (!Number.isFinite(normalized)) {
+    return null;
+  }
+
+  return Math.round(normalized * 100);
+}
+
+function validatePushAmountAndCurrency(
+  transaction: DpoPushPaymentTransaction,
+  payload: DpoPushPayload,
+): string | null {
+  const amountCents = parseMajorAmountToCents(payload.TransactionAmount);
+  if (amountCents === null) {
+    return "DPO push payload did not include a valid transaction amount.";
+  }
+
+  if (amountCents !== transaction.amountCents) {
+    return `DPO push amount mismatch. Expected ${transaction.amountCents} cents but received ${amountCents} cents.`;
+  }
+
+  const currency = normalizeCurrency(payload.TransactionCurrency);
+  const expectedCurrency = normalizeCurrency(transaction.currency);
+  if (!currency) {
+    return "DPO push payload did not include a transaction currency.";
+  }
+
+  if (currency !== expectedCurrency) {
+    return `DPO push currency mismatch. Expected ${expectedCurrency} but received ${currency}.`;
+  }
+
+  return null;
+}
+
+async function findPaymentTransaction(
+  payload: DpoPushPayload,
+  deps: DpoPushDeps,
+): Promise<DpoPushPaymentTransaction | null> {
+  const token = payload.TransactionToken?.trim();
+  if (token) {
+    const transaction = await deps.findPaymentTransactionByToken(token);
+    if (transaction) {
+      return transaction;
+    }
+  }
+
+  const reference = payload.TransactionRef?.trim();
+  if (reference) {
+    return deps.findPaymentTransactionByReference(reference);
+  }
+
+  return null;
+}
+
+export async function handleDpoPushPayment(options: {
+  rawBody: string;
+  contentType: string | null;
+  deps: DpoPushDeps;
+}): Promise<DpoPushResult> {
+  const contentType = options.contentType?.toLowerCase() ?? "";
+  if (
+    contentType &&
+    !contentType.includes("xml") &&
+    !contentType.includes("text/plain")
+  ) {
+    return xmlError(415, "unsupported_content_type");
+  }
+
+  let payload: DpoPushPayload;
+  try {
+    payload = parseDpoPushPayload(options.rawBody);
+  } catch {
+    return xmlError(400, "invalid_xml");
+  }
+
+  const transaction = await findPaymentTransaction(payload, options.deps);
+  if (!transaction) {
+    return xmlError(404, "payment_transaction_not_found");
+  }
+
+  await options.deps.recordPaymentEvent(
+    transaction.id,
+    DPO_PUSH_EVENT_TYPE,
+    payload,
+  );
+
+  const resultCode = normalizeResultCode(payload.Result);
+  if (resultCode !== "000") {
+    await options.deps.updatePaymentStatus(transaction.id, STATUS_FAILED, {
+      metadata: { source: DPO_PUSH_EVENT_TYPE, payload },
+    });
+    if (transaction.checkoutId) {
+      await options.deps.setCheckoutStatus(transaction.checkoutId, STATUS_FAILED);
+    }
+    return xmlOk();
+  }
+
+  const mismatch = validatePushAmountAndCurrency(transaction, payload);
+  if (mismatch) {
+    await options.deps.updatePaymentStatus(
+      transaction.id,
+      STATUS_VERIFICATION_MISMATCH,
+      {
+        metadata: { source: DPO_PUSH_EVENT_TYPE, reason: mismatch, payload },
+      },
+    );
+    return xmlOk();
+  }
+
+  try {
+    await options.deps.verifyPaymentTransaction(transaction.id);
+  } catch (error) {
+    await options.deps.updatePaymentStatus(transaction.id, STATUS_PENDING, {
+      metadata: {
+        source: DPO_PUSH_EVENT_TYPE,
+        payload,
+        warning:
+          error instanceof Error
+            ? error.message
+            : "DPO verification failed after push callback.",
+      },
+    });
+  }
+
+  return xmlOk();
+}
+
+export const handleDpoIpn = handleDpoPushPayment;

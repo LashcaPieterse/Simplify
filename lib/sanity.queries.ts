@@ -1,10 +1,12 @@
 import { groq } from "next-sanity";
+import type { Prisma } from "@prisma/client";
 import { getSanityClient } from "./sanity.client";
 import { getCatalogProductSummaries } from "./catalog/query";
 import {
   isPublicSellablePackageRecord,
   publicSellablePackageWhere,
 } from "./catalog/package-policy";
+import { isProductionBuildPhase } from "./build-phase";
 import { prisma } from "./db/client";
 
 export { prisma } from "./db/client";
@@ -670,7 +672,104 @@ type LivePackageSnapshot = {
   currencyCode: string;
   dataAmountMb: number | null;
   validityDays: number | null;
+  countrySlug: string | null;
 };
+
+const PUBLIC_CATALOG_SNAPSHOT_SELECT = {
+  airaloPackageId: true,
+  type: true,
+  amount: true,
+  day: true,
+  updatedAt: true,
+  operator: {
+    select: {
+      country: {
+        select: {
+          countryCode: true,
+          slug: true,
+        },
+      },
+    },
+  },
+  state: {
+    select: {
+      isActive: true,
+      sellingPriceCents: true,
+      currencyCode: true,
+      updatedAt: true,
+    },
+  },
+} as const satisfies Prisma.PackageSelect;
+
+type PublicCatalogSnapshotRecord = Prisma.PackageGetPayload<{
+  select: typeof PUBLIC_CATALOG_SNAPSHOT_SELECT;
+}>;
+
+let buildPublicCatalogSnapshotPromise:
+  | Promise<Map<string, LivePackageSnapshot>>
+  | null = null;
+
+function mapPackageRecordToLiveSnapshot(
+  record: PublicCatalogSnapshotRecord,
+): LivePackageSnapshot {
+  return {
+    airaloPackageId: record.airaloPackageId,
+    type: record.type,
+    isActive: record.state?.isActive ?? false,
+    isPublicSellable: isPublicSellablePackageRecord(record),
+    updatedAt: record.state?.updatedAt ?? record.updatedAt,
+    sellingPriceCents: record.state?.sellingPriceCents ?? null,
+    currencyCode: record.state?.currencyCode ?? "USD",
+    dataAmountMb: record.amount,
+    validityDays: record.day,
+    countrySlug: record.operator.country.slug ?? null,
+  };
+}
+
+function mapPackageRecordsToLiveSnapshots(
+  records: PublicCatalogSnapshotRecord[],
+): Map<string, LivePackageSnapshot> {
+  return new Map(
+    records.map((record) => [
+      record.airaloPackageId,
+      mapPackageRecordToLiveSnapshot(record),
+    ]),
+  );
+}
+
+async function getBuildPublicCatalogSnapshotMap(): Promise<
+  Map<string, LivePackageSnapshot> | null
+> {
+  if (!isProductionBuildPhase()) {
+    return null;
+  }
+
+  // Static generation fans out across many pages; reuse one public package snapshot per worker.
+  buildPublicCatalogSnapshotPromise ??= prisma.package
+    .findMany({
+      where: publicSellablePackageWhere(),
+      select: PUBLIC_CATALOG_SNAPSHOT_SELECT,
+    })
+    .then(mapPackageRecordsToLiveSnapshots);
+
+  return buildPublicCatalogSnapshotPromise;
+}
+
+function pickLivePackageSnapshots(
+  externalIds: string[],
+  snapshots: Map<string, LivePackageSnapshot>,
+): Map<string, LivePackageSnapshot> {
+  const picked = new Map<string, LivePackageSnapshot>();
+
+  for (const externalId of externalIds) {
+    const snapshot = snapshots.get(externalId);
+    if (snapshot) {
+      picked.set(externalId, snapshot);
+    }
+  }
+
+  return picked;
+}
 
 async function getLivePackageSnapshots(
   packageDocs: CatalogPackageDoc[],
@@ -683,51 +782,17 @@ async function getLivePackageSnapshots(
     return new Map();
   }
 
+  const buildSnapshotMap = await getBuildPublicCatalogSnapshotMap();
+  if (buildSnapshotMap) {
+    return pickLivePackageSnapshots(externalIds, buildSnapshotMap);
+  }
+
   const records = await prisma.package.findMany({
     where: { airaloPackageId: { in: externalIds } },
-    select: {
-      airaloPackageId: true,
-      type: true,
-      amount: true,
-      day: true,
-      updatedAt: true,
-      operator: {
-        select: {
-          country: {
-            select: {
-              countryCode: true,
-              slug: true,
-            },
-          },
-        },
-      },
-      state: {
-        select: {
-          isActive: true,
-          sellingPriceCents: true,
-          currencyCode: true,
-          updatedAt: true,
-        },
-      },
-    },
+    select: PUBLIC_CATALOG_SNAPSHOT_SELECT,
   });
 
-  return new Map(
-    records.map((record) => [
-      record.airaloPackageId,
-      {
-        airaloPackageId: record.airaloPackageId,
-        type: record.type,
-        isActive: record.state?.isActive ?? false,
-        isPublicSellable: isPublicSellablePackageRecord(record),
-        updatedAt: record.state?.updatedAt ?? record.updatedAt,
-        sellingPriceCents: record.state?.sellingPriceCents ?? null,
-        currencyCode: record.state?.currencyCode ?? "USD",
-        dataAmountMb: record.amount,
-        validityDays: record.day,
-      } satisfies LivePackageSnapshot,
-    ]),
-  );
+  return mapPackageRecordsToLiveSnapshots(records);
 }
 
 function applyLivePackageSnapshot(
@@ -802,6 +867,15 @@ function applyLivePackageSnapshot(
 }
 
 async function getPublicCatalogCountrySlugs(): Promise<Set<string>> {
+  const buildSnapshotMap = await getBuildPublicCatalogSnapshotMap();
+  if (buildSnapshotMap) {
+    return new Set(
+      Array.from(buildSnapshotMap.values())
+        .map((snapshot) => snapshot.countrySlug)
+        .filter((slug): slug is string => Boolean(slug)),
+    );
+  }
+
   const packages = await prisma.package.findMany({
     where: publicSellablePackageWhere(),
     select: {
@@ -823,6 +897,11 @@ async function getPublicCatalogCountrySlugs(): Promise<Set<string>> {
 }
 
 async function getPublicCatalogPackageIds(): Promise<Set<string>> {
+  const buildSnapshotMap = await getBuildPublicCatalogSnapshotMap();
+  if (buildSnapshotMap) {
+    return new Set(buildSnapshotMap.keys());
+  }
+
   const packages = await prisma.package.findMany({
     where: publicSellablePackageWhere(),
     select: { airaloPackageId: true },

@@ -2,6 +2,7 @@ import { groq } from "next-sanity";
 import type { Prisma } from "@prisma/client";
 
 import prisma from "../db/client";
+import { isProductionBuildPhase } from "../build-phase";
 import { getSanityClient } from "../sanity.client";
 import type {
   CatalogPackageInfo,
@@ -463,6 +464,22 @@ export interface CatalogProductSummaryOptions {
   fetchPackages?: () => Promise<PackageRecord["pkg"][]>;
 }
 
+let buildCatalogPackagesPromise: Promise<PackageRecord["pkg"][]> | null = null;
+
+function fetchPublicCatalogPackages(): Promise<PackageRecord["pkg"][]> {
+  return prisma.package.findMany({
+    where: publicSellablePackageWhere(),
+    select: CATALOG_PACKAGE_SELECT,
+    orderBy: [{ updatedAt: "desc" }],
+  });
+}
+
+function fetchBuildCatalogPackages(): Promise<PackageRecord["pkg"][]> {
+  // next build can render many static pages in one worker; reuse the public catalog read there.
+  buildCatalogPackagesPromise ??= fetchPublicCatalogPackages();
+  return buildCatalogPackagesPromise;
+}
+
 export async function getCatalogProductSummaries(
   options: CatalogProductSummaryOptions = {},
 ): Promise<EsimProductSummary[]> {
@@ -472,12 +489,9 @@ export async function getCatalogProductSummaries(
 
   const fetchPackages =
     options.fetchPackages ??
-    (() =>
-      prisma.package.findMany({
-        where: publicSellablePackageWhere(),
-        select: CATALOG_PACKAGE_SELECT,
-        orderBy: [{ updatedAt: "desc" }],
-      }));
+    (isProductionBuildPhase()
+      ? fetchBuildCatalogPackages
+      : fetchPublicCatalogPackages);
 
   const [products, packages] = await Promise.all([fetchProducts(), fetchPackages()]);
 

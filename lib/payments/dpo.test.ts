@@ -47,6 +47,8 @@ test("DpoClient escapes interpolated XML values when creating transactions", asy
   assert.match(requestBody, /<CompanyToken>company&lt;&amp;&quot;&apos;&gt;<\/CompanyToken>/);
   assert.match(requestBody, /<PaymentCurrency>U&amp;G<\/PaymentCurrency>/);
   assert.match(requestBody, /<CompanyRef>ref&lt;&amp;&quot;&apos;&gt;<\/CompanyRef>/);
+  assert.match(requestBody, /<PTL>15<\/PTL>/);
+  assert.match(requestBody, /<PTLtype>minutes<\/PTLtype>/);
   assert.match(requestBody, /<CustomerEmail>a&amp;b&lt;test@example.com<\/CustomerEmail>/);
   assert.match(
     requestBody,
@@ -86,4 +88,65 @@ test("DpoClient escapes interpolated XML values when verifying transactions", as
   assert.match(requestBody, /<CompanyToken>company&lt;&amp;&quot;&apos;&gt;<\/CompanyToken>/);
   assert.match(requestBody, /<TransactionToken>token&lt;&amp;&quot;&apos;&gt;<\/TransactionToken>/);
   assert.match(requestBody, /<CompanyRef>ref&lt;&amp;&quot;&apos;&gt;<\/CompanyRef>/);
+});
+
+test("DpoClient parses documented v6 verifyToken payment fields", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    xmlResponse(`
+      <API3G>
+        <Result>000</Result>
+        <ResultExplanation>Transaction Paid</ResultExplanation>
+        <CustomerName>Cons Connie</CustomerName>
+        <CustomerCredit>4432</CustomerCredit>
+        <CustomerCreditType>Mobile</CustomerCreditType>
+        <TransactionApproval>RHP2ZIGD5U</TransactionApproval>
+        <TransactionCurrency>KES</TransactionCurrency>
+        <TransactionAmount>1.00</TransactionAmount>
+        <FraudAlert>001</FraudAlert>
+        <FraudExplnation>Low Risk (Not checked)</FraudExplnation>
+        <TransactionNetAmount>0.99</TransactionNetAmount>
+        <TransactionSettlementDate>2023/09/04</TransactionSettlementDate>
+        <TransactionRollingReserveAmount>0.00</TransactionRollingReserveAmount>
+        <TransactionRollingReserveDate>2023/08/25</TransactionRollingReserveDate>
+        <CustomerPhone>706527126</CustomerPhone>
+        <CustomerCountry>Kenya</CustomerCountry>
+        <CustomerAddress>Nairobi Road</CustomerAddress>
+        <CustomerCity>Mombasa</CustomerCity>
+        <CustomerZip>80100</CustomerZip>
+        <AccRef>ACC-1</AccRef>
+      </API3G>
+    `);
+
+  try {
+    const client = new DpoClient({
+      companyToken: "company",
+      serviceUrl: "https://dpo.example/API/v6",
+      paymentUrl: "https://pay.example",
+      serviceType: "service",
+    });
+
+    const result = await client.verifyTransaction("token-1", "checkout-1");
+
+    assert.equal(result.resultCode, "000");
+    assert.equal(result.resultExplanation, "Transaction Paid");
+    assert.equal(result.approval, "RHP2ZIGD5U");
+    assert.equal(result.currency, "KES");
+    assert.equal(result.amount, 1);
+    assert.equal(result.fraudAlert, "001");
+    assert.equal(result.fraudExplanation, "Low Risk (Not checked)");
+    assert.equal(result.netAmount, 0.99);
+    assert.equal(result.settlementDate, "2023/09/04");
+    assert.equal(result.rollingReserveAmount, 0);
+    assert.equal(result.rollingReserveDate, "2023/08/25");
+    assert.equal(result.customerPhone, "706527126");
+    assert.equal(result.customerCountry, "Kenya");
+    assert.equal(result.customerAddress, "Nairobi Road");
+    assert.equal(result.customerCity, "Mombasa");
+    assert.equal(result.customerZip, "80100");
+    assert.equal(result.accRef, "ACC-1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

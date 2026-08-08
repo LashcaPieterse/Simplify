@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { isProductionBuildPhase } from '../build-phase';
 
 type GlobalPrisma = typeof globalThis & {
   prisma?: PrismaClient;
@@ -19,8 +20,13 @@ function resolvePrismaDatasourceUrl(): string | undefined {
       return rawUrl;
     }
 
-    const connectionLimit =
-      process.env.PRISMA_CONNECTION_LIMIT ?? (process.env.NODE_ENV === 'production' ? '1' : undefined);
+    // next build is not the production runtime; give static generation a small build-only pool.
+    const defaultConnectionLimit = isProductionBuildPhase()
+      ? (process.env.PRISMA_BUILD_CONNECTION_LIMIT ?? '3')
+      : process.env.NODE_ENV === 'production'
+        ? '1'
+        : undefined;
+    const connectionLimit = process.env.PRISMA_CONNECTION_LIMIT ?? defaultConnectionLimit;
     if (connectionLimit) {
       url.searchParams.set('connection_limit', connectionLimit);
     }

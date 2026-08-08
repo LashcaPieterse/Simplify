@@ -9,7 +9,11 @@ import type {
 } from "../airalo/client";
 import { OrderResponseSchema, type OrderResponse } from "../airalo/schemas";
 import type { CreateOrderOptions } from "../orders/service";
-import { createCheckout, finaliseOrderFromCheckout } from "./checkouts";
+import {
+  createCheckout,
+  finaliseOrderFromCheckout,
+  verifyPaymentTransaction,
+} from "./checkouts";
 import { prepareCheckoutRequestPayload } from "./checkout-request";
 import type { CheckoutRequestError } from "./checkout-request";
 
@@ -136,6 +140,7 @@ class FakeAiraloClient {
 
 class FakeCheckoutDb {
   readonly orders: Array<Record<string, unknown>> = [];
+  readonly paymentEvents: Array<Record<string, unknown>> = [];
   readonly profiles: Array<Record<string, unknown>> = [];
   readonly installationPayloads: Array<Record<string, unknown>> = [];
   readonly snapshots: Array<Record<string, unknown>> = [];
@@ -300,8 +305,29 @@ class FakeCheckoutDb {
   };
 
   readonly paymentTransaction = {
-    findUnique: async ({ where }: { where: { id: string } }) => {
-      return where.id === this.payment.id ? this.payment : null;
+    findUnique: async ({
+      where,
+      include,
+    }: {
+      where: { id: string };
+      include?: { checkout?: unknown };
+      select?: unknown;
+    }) => {
+      if (where.id !== this.payment.id) {
+        return null;
+      }
+
+      if (include?.checkout) {
+        return {
+          ...this.payment,
+          checkout: {
+            ...this.checkout,
+            payments: [this.payment],
+          },
+        };
+      }
+
+      return this.payment;
     },
     update: async ({
       where,
@@ -313,6 +339,14 @@ class FakeCheckoutDb {
       assert.equal(where.id, this.payment.id);
       Object.assign(this.payment, data);
       return this.payment;
+    },
+  };
+
+  readonly paymentTransactionEvent = {
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      const record = { id: `payment-event-${this.paymentEvents.length + 1}`, ...data };
+      this.paymentEvents.push(record);
+      return record;
     },
   };
 
@@ -587,4 +621,31 @@ test("finaliseOrderFromCheckout rejects invalid top-up checkout context before A
   assert.equal(airalo.syncPayloads.length, 0);
   assert.equal(airalo.topUpPayloads.length, 0);
   assert.equal(db.orders.length, 0);
+});
+
+test("verifyPaymentTransaction rejects verified DPO amount mismatches before Airalo", async () => {
+  const db = new FakeCheckoutDb();
+  db.payment.status = "pending";
+  db.checkout.status = "pending";
+
+  const result = await verifyPaymentTransaction("payment-1", {
+    prisma: db as unknown as PrismaClient,
+    source: "dpo-push",
+    dpoClient: {
+      verifyTransaction: async () => ({
+        status: "000",
+        resultCode: "000",
+        resultExplanation: "Transaction Paid",
+        amount: 26,
+        currency: "UGX",
+        rawResponse: "<API3G><Result>000</Result></API3G>",
+      }),
+    },
+  });
+
+  assert.equal(result.paymentStatus, "verification_mismatch");
+  assert.match(result.message ?? "", /amount mismatch/i);
+  assert.equal(db.checkout.orderId, null);
+  assert.equal(db.orders.length, 0);
+  assert.equal(db.paymentEvents[0]?.eventType, "dpo-push-mismatch");
 });
