@@ -59,7 +59,13 @@ function buildDeps(options: {
       },
       findPaymentTransactionByReference: async (reference: string) => {
         calls.push(`find-reference:${reference}`);
-        return reference === "checkout-1" ? payment : null;
+        return reference === "checkout-1" || reference === "R84690953"
+          ? payment
+          : null;
+      },
+      findPaymentTransactionByCheckoutId: async (checkoutId: string) => {
+        calls.push(`find-checkout:${checkoutId}`);
+        return checkoutId === "checkout-1" ? payment : null;
       },
       recordPaymentEvent: async (
         transactionId: string,
@@ -133,6 +139,48 @@ test("handleDpoPushPayment processes duplicate pushes without duplicate fulfilme
   );
 });
 
+test("handleDpoPushPayment matches DPO TransRef references when token fields are blank", async () => {
+  const state = buildDeps();
+
+  const result = await handleDpoPushPayment({
+    rawBody: pushXml({
+      TransactionToken: "",
+      TransactionRef: "",
+      TransRef: "R84690953",
+    }),
+    contentType: "application/xml",
+    deps: state.deps,
+  });
+
+  assert.equal(result.body, DPO_PUSH_OK_XML);
+  assert.deepEqual(state.calls, [
+    "find-reference:R84690953",
+    `record:payment-1:${DPO_PUSH_EVENT_TYPE}`,
+    "verify:payment-1",
+  ]);
+});
+
+test("handleDpoPushPayment matches local CompanyRef when DPO reference is absent", async () => {
+  const state = buildDeps();
+
+  const result = await handleDpoPushPayment({
+    rawBody: pushXml({
+      TransactionToken: "",
+      TransactionRef: "",
+      CompanyRef: "checkout-1",
+    }),
+    contentType: "application/xml",
+    deps: state.deps,
+  });
+
+  assert.equal(result.body, DPO_PUSH_OK_XML);
+  assert.deepEqual(state.calls, [
+    "find-checkout:checkout-1",
+    `record:payment-1:${DPO_PUSH_EVENT_TYPE}`,
+    "verify:payment-1",
+  ]);
+});
+
 test("handleDpoPushPayment rejects unknown transaction references before mutation", async () => {
   const state = buildDeps({ knownPayment: false });
 
@@ -147,6 +195,8 @@ test("handleDpoPushPayment rejects unknown transaction references before mutatio
   assert.deepEqual(state.calls, [
     "find-token:token-1",
     "find-reference:checkout-1",
+    "find-checkout:checkout-1",
+    "find-checkout:ACC-1",
   ]);
 });
 

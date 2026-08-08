@@ -255,7 +255,7 @@ export async function createCheckout(
     data: {
       user: checkoutUserId ? { connect: { id: checkoutUserId } } : undefined,
       provider: PROVIDER,
-      providerReference: response.reference ?? null,
+      providerReference: response.transactionRef ?? response.reference ?? null,
       transactionToken: response.token,
       redirectUrl: response.redirectUrl,
       status: STATUS_PENDING,
@@ -479,7 +479,7 @@ async function verifyCheckoutPaymentRecord(
 
   let verification;
   try {
-    verification = await dpoClient.verifyTransaction(payment.transactionToken, payment.providerReference ?? undefined);
+    verification = await dpoClient.verifyTransaction(payment.transactionToken, checkout.id);
     // Log key verification fields to help debug DPO responses in callback and return flows.
     console.info("dpo.verifyTransaction", {
       checkoutId: checkout.id,

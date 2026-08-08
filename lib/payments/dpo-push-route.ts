@@ -35,6 +35,16 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
             currency: true,
           },
         }),
+      findPaymentTransactionByCheckoutId: (checkoutId) =>
+        prismaClient.paymentTransaction.findFirst({
+          where: { checkoutId },
+          select: {
+            id: true,
+            checkoutId: true,
+            amountCents: true,
+            currency: true,
+          },
+        }),
       recordPaymentEvent: (transactionId, eventType, payload) =>
         recordPaymentEvent(transactionId, eventType, payload, {
           prisma: prismaClient,

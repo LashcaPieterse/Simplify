@@ -63,6 +63,39 @@ test("DpoClient escapes interpolated XML values when creating transactions", asy
   assert.match(requestBody, /<ServiceTypeName>Name &lt;&amp;&quot;&apos;&gt;<\/ServiceTypeName>/);
 });
 
+test("DpoClient parses DPO transaction references from createToken responses", async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    xmlResponse(
+      "<API3G><Result>000</Result><TransToken>token-123</TransToken><TransRef>R84690953</TransRef></API3G>",
+    );
+
+  try {
+    const client = new DpoClient({
+      companyToken: "company",
+      serviceUrl: "https://dpo.example/API/v6",
+      paymentUrl: "https://pay.example",
+      serviceType: "service",
+    });
+
+    const result = await client.createTransaction({
+      amount: 12.5,
+      currency: "USD",
+      reference: "checkout-1",
+      redirectUrl: "https://example.com/return",
+      cancelUrl: "https://example.com/cancel",
+      callbackUrl: "https://example.com/callback",
+    });
+
+    assert.equal(result.token, "token-123");
+    assert.equal(result.reference, "checkout-1");
+    assert.equal(result.transactionRef, "R84690953");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("DpoClient escapes interpolated XML values when verifying transactions", async () => {
   const originalFetch = globalThis.fetch;
   let requestBody = "";

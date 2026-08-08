@@ -25,6 +25,7 @@ export type CreateDpoTransactionResult = {
   token: string;
   redirectUrl: string;
   reference?: string;
+  transactionRef?: string;
   resultCode?: string;
   resultExplanation?: string;
   allocationId?: string;
@@ -176,6 +177,9 @@ export class DpoClient {
       token,
       redirectUrl,
       reference: input.reference,
+      transactionRef:
+        extractTag(responseXml, "TransRef") ??
+        extractTag(responseXml, "TransactionRef"),
       resultCode: result,
       resultExplanation,
       allocationId: extractTag(responseXml, "AllocationID"),

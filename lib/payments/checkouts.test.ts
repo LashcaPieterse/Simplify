@@ -626,23 +626,32 @@ test("finaliseOrderFromCheckout rejects invalid top-up checkout context before A
 test("verifyPaymentTransaction rejects verified DPO amount mismatches before Airalo", async () => {
   const db = new FakeCheckoutDb();
   db.payment.status = "pending";
+  db.payment.providerReference = "R84690953";
   db.checkout.status = "pending";
+  let verifiedToken: string | undefined;
+  let verifiedCompanyRef: string | undefined;
 
   const result = await verifyPaymentTransaction("payment-1", {
     prisma: db as unknown as PrismaClient,
     source: "dpo-push",
     dpoClient: {
-      verifyTransaction: async () => ({
-        status: "000",
-        resultCode: "000",
-        resultExplanation: "Transaction Paid",
-        amount: 26,
-        currency: "UGX",
-        rawResponse: "<API3G><Result>000</Result></API3G>",
-      }),
+      verifyTransaction: async (token, companyRef) => {
+        verifiedToken = token;
+        verifiedCompanyRef = companyRef;
+        return {
+          status: "000",
+          resultCode: "000",
+          resultExplanation: "Transaction Paid",
+          amount: 26,
+          currency: "UGX",
+          rawResponse: "<API3G><Result>000</Result></API3G>",
+        };
+      },
     },
   });
 
+  assert.equal(verifiedToken, "token-1");
+  assert.equal(verifiedCompanyRef, "checkout-1");
   assert.equal(result.paymentStatus, "verification_mismatch");
   assert.match(result.message ?? "", /amount mismatch/i);
   assert.equal(db.checkout.orderId, null);

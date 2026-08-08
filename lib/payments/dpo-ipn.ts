@@ -12,7 +12,10 @@ const DPO_PUSH_FIELDS = [
   "Result",
   "ResultExplanation",
   "TransactionToken",
+  "TransToken",
   "TransactionRef",
+  "TransRef",
+  "CompanyRef",
   "CustomerName",
   "CustomerCredit",
   "CustomerCreditType",
@@ -52,6 +55,9 @@ type DpoPushDeps = {
   ) => Promise<DpoPushPaymentTransaction | null>;
   findPaymentTransactionByReference: (
     reference: string,
+  ) => Promise<DpoPushPaymentTransaction | null>;
+  findPaymentTransactionByCheckoutId: (
+    checkoutId: string,
   ) => Promise<DpoPushPaymentTransaction | null>;
   recordPaymentEvent: (
     transactionId: string,
@@ -147,7 +153,14 @@ export function parseDpoPushPayload(body: string): DpoPushPayload {
     }
   }
 
-  if (!payload.Result && !payload.TransactionToken && !payload.TransactionRef) {
+  if (
+    !payload.Result &&
+    !payload.TransactionToken &&
+    !payload.TransToken &&
+    !payload.TransactionRef &&
+    !payload.TransRef &&
+    !payload.CompanyRef
+  ) {
     throw new Error("DPO push payload did not contain transaction fields.");
   }
 
@@ -161,6 +174,19 @@ function normalizeResultCode(value: string | undefined): string {
 function normalizeCurrency(value: string | undefined): string | null {
   const normalized = value?.trim().toUpperCase();
   return normalized ? normalized : null;
+}
+
+function firstNonEmpty(
+  ...values: Array<string | undefined>
+): string | undefined {
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return undefined;
 }
 
 function parseMajorAmountToCents(value: string | undefined): number | null {
@@ -206,7 +232,7 @@ async function findPaymentTransaction(
   payload: DpoPushPayload,
   deps: DpoPushDeps,
 ): Promise<DpoPushPaymentTransaction | null> {
-  const token = payload.TransactionToken?.trim();
+  const token = firstNonEmpty(payload.TransactionToken, payload.TransToken);
   if (token) {
     const transaction = await deps.findPaymentTransactionByToken(token);
     if (transaction) {
@@ -214,9 +240,23 @@ async function findPaymentTransaction(
     }
   }
 
-  const reference = payload.TransactionRef?.trim();
+  const reference = firstNonEmpty(payload.TransactionRef, payload.TransRef);
   if (reference) {
-    return deps.findPaymentTransactionByReference(reference);
+    const transaction = await deps.findPaymentTransactionByReference(reference);
+    if (transaction) {
+      return transaction;
+    }
+
+    const checkoutTransaction =
+      await deps.findPaymentTransactionByCheckoutId(reference);
+    if (checkoutTransaction) {
+      return checkoutTransaction;
+    }
+  }
+
+  const localReference = firstNonEmpty(payload.CompanyRef, payload.AccRef);
+  if (localReference) {
+    return deps.findPaymentTransactionByCheckoutId(localReference);
   }
 
   return null;
