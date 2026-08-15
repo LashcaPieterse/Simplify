@@ -99,6 +99,7 @@ Set these payment and delivery variables before enabling checkout:
 
 ```
 NEXT_PUBLIC_APP_URL=https://<your-domain>
+NEXTAUTH_URL=https://<your-domain>
 NEXTAUTH_SECRET=<long-random-string>
 ORDER_ACCESS_SECRET=<long-random-string>
 DPO_COMPANY_TOKEN=<dpo-company-token>
@@ -110,6 +111,24 @@ RESEND_API_KEY=<resend-api-key>
 RECEIPT_EMAIL_FROM=receipts@<your-domain>
 METRICS_BEARER_TOKEN=<long-random-string>
 ```
+
+## Customer OAuth
+
+NextAuth and the Google OAuth client must use the same canonical production
+origin. For the production site, configure both `NEXT_PUBLIC_APP_URL` and
+`NEXTAUTH_URL` as `https://sim.africa`, then register this exact authorized
+redirect URI on the Google OAuth 2.0 Web client:
+
+```
+https://sim.africa/api/auth/callback/google
+```
+
+For local Google sign-in, register
+`http://localhost:3000/api/auth/callback/google` as a second redirect URI.
+Google compares redirect URIs exactly, including the scheme, hostname, port,
+path, and trailing slash. See
+[`docs/operations/google-oauth.md`](docs/operations/google-oauth.md) for the
+deployment checklist and production verification procedure.
 
 ## Airalo catalog sync
 
