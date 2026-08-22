@@ -314,8 +314,44 @@ test("getCatalogProductSummaries synthesizes active Airalo-backed packages witho
 
   assert.equal(summaries.length, 1);
   assert.equal(summaries[0]?.country?.title, "Kenya");
+  assert.equal(summaries[0]?.country?.countryCode, "KE");
   assert.equal(summaries[0]?.package?.externalId, "ke-1gb-7d");
   assert.equal(summaries[0]?.price?.amount, 8);
+});
+
+test("getCatalogProductSummaries excludes zero-priced packages from public discovery", async () => {
+  const summaries = await getCatalogProductSummaries({
+    fetchProducts: async () => [],
+    fetchPackages: async () =>
+      [
+        makeTestPackage({
+          id: "pkg-zero",
+          airaloPackageId: "mg-20gb-30d",
+          operator: {
+            id: "operator-madagascar",
+            title: "Madacom",
+            airaloOperatorId: 55,
+            country: {
+              id: "country-madagascar",
+              title: "Madagascar",
+              slug: "madagascar",
+              countryCode: "MG",
+              imageJson: null,
+            },
+          },
+          state: {
+            isActive: true,
+            sellingPriceCents: 0,
+            basePriceCents: 5750,
+            currencyCode: "USD",
+            lastSyncedAt: null,
+            updatedAt: new Date(),
+          },
+        }),
+      ] as unknown as FetchPackagesResult,
+  });
+
+  assert.equal(summaries.length, 0);
 });
 
 test("getCatalogProductSummaries excludes active top-up packages from public discovery", async () => {

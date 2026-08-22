@@ -94,11 +94,23 @@ export default async function CountryPage({ params }: CountryPageProps) {
             Browse all plans
           </Link>
         </div>
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {plans.map((plan) => (
-            <PlanCard key={plan._id} plan={plan} />
-          ))}
-        </div>
+        {plans.length ? (
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
+            {plans.map((plan) => (
+              <PlanCard key={plan._id} plan={plan} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 rounded-3xl border border-dashed border-brand-200 bg-brand-50 px-6 py-12 text-center">
+            <h3 className="text-lg font-semibold text-brand-900">Plans are temporarily unavailable</h3>
+            <p className="mx-auto mt-2 max-w-xl text-sm text-brand-600">
+              Live eSIM packages for {country.title} are currently syncing. Browse another destination or check back shortly.
+            </p>
+            <Button asChild variant="secondary" size="sm" className="mt-6">
+              <Link href="/#store">Browse African destinations</Link>
+            </Button>
+          </div>
+        )}
       </section>
     </div>
   );

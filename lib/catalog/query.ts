@@ -25,6 +25,7 @@ const COUNTRY_REFERENCE_FIELDS = `
   _id,
   title,
   "slug": slug.current,
+  countryCode,
   badge,
   summary,
   "coverImage": image,
@@ -94,6 +95,7 @@ type CatalogCountryDoc = {
   _id: string;
   title: string;
   slug: string;
+  countryCode?: string;
   badge?: string | null;
   summary?: string | null;
   coverImage?: ImageLike;
@@ -219,7 +221,11 @@ function hasConfiguredSellingPrice(
     return false;
   }
 
-  return typeof state.sellingPriceCents === "number";
+  return (
+    typeof state.sellingPriceCents === "number" &&
+    Number.isFinite(state.sellingPriceCents) &&
+    state.sellingPriceCents > 0
+  );
 }
 
 function createPriceFromPackage(record: PackageRecord): MoneyValue | null {
@@ -289,6 +295,7 @@ function toCountrySummaryFromPackage(record: PackageRecord): CountrySummary | un
     _id: country.id,
     title: country.title,
     slug: country.slug,
+    countryCode: country.countryCode,
     coverImage: (country.imageJson as ImageLike | null) ?? undefined,
     featured: false,
   };
@@ -440,6 +447,7 @@ function applyPackageToProduct(
         _id: product.country._id,
         title: product.country.title,
         slug: product.country.slug,
+        countryCode: product.country.countryCode,
         badge: product.country.badge ?? undefined,
         summary: product.country.summary ?? undefined,
         coverImage: product.country.coverImage,

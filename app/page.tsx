@@ -14,7 +14,7 @@ import {
   getCatalogPackageId,
 } from "@/lib/sanity.queries";
 import { Hero } from "@/components/cms/Hero";
-import { CountryGrid } from "@/components/cms/CountryGrid";
+import { AfricaCountryBrowser } from "@/components/cms/AfricaCountryBrowser";
 import { WhyChooseUs } from "@/components/cms/WhyChooseUs";
 import { Steps } from "@/components/cms/Steps";
 import { BundleSpotlight } from "@/components/cms/BundleSpotlight";
@@ -23,7 +23,7 @@ import { Newsletter } from "@/components/cms/Newsletter";
 import { Articles } from "@/components/cms/Articles";
 import { SiteHeader } from "@/components/cms/SiteHeader";
 import { SiteFooter } from "@/components/cms/SiteFooter";
-import { AfricaCoverageMap } from "@/components/AfricaCoverageMap";
+import { buildAfricaCountryDirectory } from "@/lib/catalog/africa-directory";
 
 export const dynamic = "force-static";
 export const revalidate = 60;
@@ -52,6 +52,7 @@ export default async function HomePage() {
   const articlesSection = sections.find((section): section is ArticlesSection => section._type === "articlesSection");
 
   const allProducts = products ?? [];
+  const africaCountries = buildAfricaCountryDirectory(allProducts);
   const featuredProductIds =
     heroSection?.featuredProductIds?.length
       ? heroSection.featuredProductIds
@@ -90,8 +91,7 @@ export default async function HomePage() {
             />
           ) : null}
         </div>
-        <AfricaCoverageMap />
-        {countrySection ? <CountryGrid section={countrySection} /> : null}
+        <AfricaCountryBrowser countries={africaCountries} title={countrySection?.title} />
         {whySection ? <WhyChooseUs section={whySection} /> : null}
         {stepsSection ? <Steps section={stepsSection} /> : null}
         {bundleSection ? <BundleSpotlight section={bundleSection} /> : null}

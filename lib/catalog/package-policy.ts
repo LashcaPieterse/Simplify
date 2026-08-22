@@ -149,7 +149,7 @@ export function packageTypeWhere(
 }
 
 export function configuredSellingPriceWhere(): Prisma.PackageWhereInput {
-  return { state: { is: { sellingPriceCents: { not: null } } } };
+  return { state: { is: { sellingPriceCents: { gt: 0 } } } };
 }
 
 export function africaPackageScopeWhere(): Prisma.PackageWhereInput {
@@ -220,6 +220,7 @@ export function isPublicSellablePackageRecord(
     record.state?.isActive === true &&
     typeof record.state.sellingPriceCents === "number" &&
     Number.isFinite(record.state.sellingPriceCents) &&
+    record.state.sellingPriceCents > 0 &&
     Boolean(record.operator?.country && isAfricaCatalogCountry(record.operator.country))
   );
 }

@@ -4,6 +4,7 @@
 */
 import { createClient, type Mutation } from "@sanity/client";
 import prisma from "../db/client";
+import { NEW_ESIM_PACKAGE_TYPE } from "../catalog/package-policy";
 
 const BATCH_SIZE = 50;
 
@@ -20,6 +21,24 @@ type SyncDocument = {
   _type: string;
   [key: string]: unknown;
 };
+
+type PrimaryPackageCandidate = {
+  type?: string | null;
+  state?: {
+    isActive?: boolean | null;
+    sellingPriceCents?: number | null;
+  } | null;
+};
+
+export function isPrimaryPackageCandidate(pkg: PrimaryPackageCandidate): boolean {
+  return (
+    pkg.type === NEW_ESIM_PACKAGE_TYPE &&
+    pkg.state?.isActive === true &&
+    typeof pkg.state.sellingPriceCents === "number" &&
+    Number.isFinite(pkg.state.sellingPriceCents) &&
+    pkg.state.sellingPriceCents > 0
+  );
+}
 
 const imageRefCache = new Map<string, SanityImageValue>();
 let sanity: ReturnType<typeof createClient> | null = null;
@@ -387,11 +406,9 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
       (await uploadPlaceholderImage("catalog-package-placeholder.png"));
 
     const pkgDocId = `catalog-package-${sanitizeDocumentId(pkg.airaloPackageId)}`;
-    const currentPriceCents =
-      pkg.state?.sellingPriceCents ??
-      Math.round(Number(pkg.price) * 100);
+    const currentPriceCents = pkg.state?.sellingPriceCents;
 
-    if (typeof currentPriceCents === "number") {
+    if (isPrimaryPackageCandidate(pkg) && typeof currentPriceCents === "number") {
       const current = primaryCandidateByCountryId.get(pkg.operator.countryId);
       if (!current || currentPriceCents <= current.priceCents) {
         primaryCandidateByCountryId.set(pkg.operator.countryId, { priceCents: currentPriceCents, docId: pkgDocId });

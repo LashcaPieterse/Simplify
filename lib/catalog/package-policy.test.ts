@@ -1,0 +1,36 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { configuredSellingPriceWhere, isPublicSellablePackageRecord } from "./package-policy";
+
+function makeRecord(sellingPriceCents: number | null, overrides: { type?: string; active?: boolean } = {}) {
+  return {
+    type: overrides.type ?? "sim",
+    state: {
+      isActive: overrides.active ?? true,
+      sellingPriceCents,
+    },
+    operator: {
+      country: {
+        countryCode: "MG",
+        slug: "madagascar",
+      },
+    },
+  };
+}
+
+test("configuredSellingPriceWhere requires a positive storefront price", () => {
+  assert.match(JSON.stringify(configuredSellingPriceWhere()), /"gt":0/);
+});
+
+test("public package policy rejects zero and missing prices", () => {
+  assert.equal(isPublicSellablePackageRecord(makeRecord(0)), false);
+  assert.equal(isPublicSellablePackageRecord(makeRecord(-100)), false);
+  assert.equal(isPublicSellablePackageRecord(makeRecord(null)), false);
+  assert.equal(isPublicSellablePackageRecord(makeRecord(700)), true);
+});
+
+test("public package policy rejects inactive and top-up packages", () => {
+  assert.equal(isPublicSellablePackageRecord(makeRecord(700, { active: false })), false);
+  assert.equal(isPublicSellablePackageRecord(makeRecord(700, { type: "topup" })), false);
+});

@@ -38,6 +38,7 @@ class FakePackageResolverDb {
       const wantsTopup = serializedWhere.includes('"type":"topup"');
       const wantsActive = serializedWhere.includes('"isActive":true');
       const wantsSellingPrice = serializedWhere.includes('"sellingPriceCents"');
+      const wantsPositiveSellingPrice = serializedWhere.includes('"gt":0');
       const wantsAfricaScope =
         serializedWhere.includes('"countryCode":{"in"') ||
         serializedWhere.includes('"slug":{"in"');
@@ -57,6 +58,9 @@ class FakePackageResolverDb {
             return false;
           }
           if (wantsSellingPrice && typeof pkg.state?.sellingPriceCents !== "number") {
+            return false;
+          }
+          if (wantsPositiveSellingPrice && (pkg.state?.sellingPriceCents ?? 0) <= 0) {
             return false;
           }
           if (wantsAfricaScope && !["KE", "UG"].includes(pkg.operator.country.countryCode)) {
@@ -189,4 +193,3 @@ test("display lookup can still resolve historical top-up packages", async () => 
 
   assert.equal(pkg?.airaloPackageId, "ke-1gb-7d-topup");
 });
-

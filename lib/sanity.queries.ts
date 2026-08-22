@@ -54,6 +54,7 @@ export type CountrySummary = {
   _id: string;
   title: string;
   slug: string;
+  countryCode?: string;
   badge?: string | null;
   summary?: string | null;
   coverImage?: ImageLike;
@@ -142,12 +143,12 @@ type CatalogPackageDoc = {
 type CatalogCountryDoc = {
   _id: string;
   title: string;
-  slug: { current?: string };
+  slug?: string;
   countryCode?: string;
   badge?: string | null;
   summary?: string | null;
   featured?: boolean | null;
-  image?: ImageLike;
+  coverImage?: ImageLike;
   primaryPackage?: CatalogPackageDoc | null;
   packages?: CatalogPackageDoc[];
 };
@@ -866,6 +867,24 @@ function applyLivePackageSnapshot(
   };
 }
 
+function isLiveSellablePlan(plan: PlanSummary): boolean {
+  return (
+    plan.package?.isActive === true &&
+    plan.price?.source === "airalo" &&
+    typeof plan.price.amount === "number" &&
+    Number.isFinite(plan.price.amount) &&
+    plan.price.amount > 0
+  );
+}
+
+function sortPlansByLivePrice<T extends PlanSummary>(plans: T[]): T[] {
+  return [...plans].sort((left, right) => {
+    const priceDifference = (left.price?.amount ?? Number.POSITIVE_INFINITY) -
+      (right.price?.amount ?? Number.POSITIVE_INFINITY);
+    return priceDifference || left.title.localeCompare(right.title, "en", { sensitivity: "base" });
+  });
+}
+
 async function getPublicCatalogCountrySlugs(): Promise<Set<string>> {
   const buildSnapshotMap = await getBuildPublicCatalogSnapshotMap();
   if (buildSnapshotMap) {
@@ -987,7 +1006,7 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
       getPublicCatalogCountrySlugs(),
     ]);
     const publicResults = (results ?? []).filter((country) =>
-      publicCountrySlugs.has(country.slug?.current ?? ""),
+      publicCountrySlugs.has(country.slug ?? ""),
     );
     const allPackages = publicResults.flatMap((country) => [
       country.primaryPackage,
@@ -1000,7 +1019,7 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
     return (
       publicResults
         // Ignore countries that do not have a slug to avoid generating invalid paths like "/country".
-        ?.filter((country) => country.slug?.current)
+        ?.filter((country) => country.slug)
         .map((country) => {
           const primaryPlan = country.primaryPackage
             ? applyLivePackageSnapshot(
@@ -1014,10 +1033,11 @@ export async function getCountriesList(): Promise<CountrySummary[]> {
           return {
             _id: country._id,
             title: country.title,
-            slug: country.slug?.current ?? "",
+            slug: country.slug ?? "",
+            countryCode: country.countryCode,
             badge: country.badge ?? null,
             summary: country.summary ?? null,
-            coverImage: country.image,
+            coverImage: country.coverImage,
             featured: country.featured ?? false,
             plan: primaryPlan?.package?.isActive === false ? undefined : primaryPlan,
           };
@@ -1045,9 +1065,9 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
       ...(country.primaryPackage ? [country.primaryPackage] : []),
     ]);
 
-    const plans = (country.packages ?? [])
+    const plans = sortPlansByLivePrice((country.packages ?? [])
       .map((pkg) => applyLivePackageSnapshot(pkg, pkg.externalId ? snapshots.get(pkg.externalId) : undefined))
-      .filter((plan) => plan.package?.isActive !== false);
+      .filter(isLiveSellablePlan));
 
     const primaryPlan = country.primaryPackage
       ? applyLivePackageSnapshot(
@@ -1061,10 +1081,11 @@ export async function getCountryBySlug(slug: string): Promise<CountryDetail | nu
     return {
       _id: country._id,
       title: country.title,
-      slug: country.slug?.current ?? "",
+      slug: country.slug ?? "",
+      countryCode: country.countryCode,
       badge: country.badge ?? null,
       summary: country.summary ?? null,
-      coverImage: country.image,
+      coverImage: country.coverImage,
       featured: country.featured ?? false,
       carriers: [],
       plans,
@@ -1088,9 +1109,9 @@ export async function getPlansForCountry(slug: string): Promise<PlanDetail[]> {
     const packages = await client.fetch<CatalogPackageDoc[]>(plansForCountryQuery, { slug });
     const snapshots = await getLivePackageSnapshots(packages ?? []);
 
-    return (packages ?? [])
+    return sortPlansByLivePrice((packages ?? [])
       .map((pkg) => applyLivePackageSnapshot(pkg, pkg.externalId ? snapshots.get(pkg.externalId) : undefined))
-      .filter((plan) => plan.package?.isActive !== false) as PlanDetail[];
+      .filter(isLiveSellablePlan) as PlanDetail[]);
   } catch (error) {
     console.error(`Failed to fetch plans for country '${slug}' from Sanity`, error);
     return [];
