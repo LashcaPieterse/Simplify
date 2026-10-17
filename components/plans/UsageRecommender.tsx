@@ -31,12 +31,12 @@ export function UsageRecommender({
   const recommendation = recommendPlanForUsage(plans, days, profileId);
 
   return (
-    <section className="rounded-[2rem] border border-brand-100 bg-brand-50 p-5 sm:p-7" aria-labelledby="usage-recommender-title">
+    <section className="rounded-2xl border border-brand-100 bg-brand-50 p-5 sm:p-7" aria-labelledby="usage-recommender-title">
       <div className="max-w-3xl">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-brand-700 shadow-subtle">
           <Calculator className="h-5 w-5" aria-hidden />
         </div>
-        <h2 id="usage-recommender-title" className="mt-5 text-2xl font-black text-brand-900 sm:text-3xl">
+        <h2 id="usage-recommender-title" className="mt-5 text-2xl font-medium text-brand-900 sm:text-3xl">
           How much data might you need?
         </h2>
         <p className="mt-3 text-sm leading-6 text-brand-600">
@@ -58,7 +58,7 @@ export function UsageRecommender({
               }}
               className={`min-h-24 rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 ${
                 profileId === profile.id
-                  ? "border-brand-500 bg-white shadow-subtle"
+                  ? "border-brand-600 bg-accent-100 shadow-subtle"
                   : "border-brand-100 bg-white/70 hover:border-brand-300"
               }`}
             >
@@ -86,7 +86,7 @@ export function UsageRecommender({
         </label>
         <Button
           type="button"
-          className="w-full sm:w-auto"
+          className="w-full sm:w-auto sm:justify-self-start"
           onClick={() => {
             trackEvent("recommendation_started", { destination: country, days, usage: profileId });
             setSubmitted(true);

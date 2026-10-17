@@ -1,14 +1,15 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Route as NextRoute } from "next";
 import {
-  ArrowRight,
   Briefcase,
   CheckCircle2,
+  ArrowUpRight,
+  Signal,
   Globe2,
   Headphones,
   Luggage,
   MapPinned,
-  Plane,
   Route,
   ShieldCheck,
   Smartphone,
@@ -16,8 +17,9 @@ import {
 } from "lucide-react";
 
 import { DestinationSearch, type DestinationSearchOption } from "@/components/search/DestinationSearch";
+import { DestinationCard } from "@/components/destinations/DestinationCard";
+import { Button } from "@/components/ui/button";
 import { StorefrontPlanCard } from "@/components/plans/StorefrontPlanCard";
-import { formatMoneyAmount } from "@/lib/format";
 import { citySearchTermsForCountry } from "@/lib/content/destination-search";
 import { purchaseFaqs } from "@/lib/content/faqs";
 import {
@@ -39,11 +41,6 @@ const popularCountryNames = [
   "Mauritius",
   "Uganda",
 ];
-
-function countryFlag(code: string): string {
-  if (!/^[A-Z]{2}$/.test(code.toUpperCase())) return "🌍";
-  return String.fromCodePoint(...Array.from(code.toUpperCase()).map((letter) => 127397 + letter.charCodeAt(0)));
-}
 
 function orderPopularCountries(countries: StorefrontCountry[]): StorefrontCountry[] {
   const popular = popularCountryNames
@@ -99,152 +96,80 @@ export default async function HomePage() {
   };
 
   return (
-    <div className="overflow-hidden">
-      <section className="relative isolate border-b border-brand-100">
-        <div className="absolute inset-0 -z-10 bg-radial-fade" aria-hidden />
-        <div className="mx-auto grid max-w-7xl gap-12 px-5 py-16 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.7fr)] lg:items-center lg:px-8 lg:py-24">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white px-4 py-2 text-sm font-bold text-brand-700 shadow-subtle">
-              <Plane className="h-4 w-4 text-sand-500" aria-hidden />
-              The eSIM specialist for Africa
+    <div>
+      <section className="page-container pb-12 pt-10 sm:pb-16 sm:pt-14 lg:pb-16 lg:pt-16">
+        <div className="grid items-center gap-10 lg:grid-cols-[1.12fr_1fr] lg:gap-16">
+          <div className="relative z-10 py-3 lg:py-6">
+            <p className="eyebrow flex items-center gap-2.5"><span className="h-1.5 w-1.5 rounded-full bg-brand-600" />Less roaming. More exploring.</p>
+            <h1 className="mt-7 text-[3.4rem] font-semibold leading-[1.04] tracking-[-0.065em] text-brand-900 sm:text-[4.5rem] lg:text-[4.7rem] xl:text-[5rem]">Africa is calling.<br /><span className="editorial text-brand-700">Stay connected.</span></h1>
+            <p className="mt-7 max-w-md text-[15px] leading-7 text-brand-600 sm:text-base">From your first safari to your next city escape. Find prepaid eSIM data for your African journey, ready to install before you fly.</p>
+            <div className="mt-8 max-w-xl">
+              <DestinationSearch options={[...countryOptions, ...regionalOptions]} popular={["South Africa", "Kenya", "Namibia"]} />
             </div>
-            <h1 className="mt-7 max-w-4xl font-display text-5xl font-black tracking-[-0.045em] text-brand-900 sm:text-6xl lg:text-7xl">
-              Stay connected across Africa. <span className="text-brand-600">Before you land.</span>
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-brand-700 sm:text-xl">
-              Affordable eSIM data for holidays, safaris, and business trips across Africa. Choose your destination, install before departure, and connect according to your plan&apos;s activation instructions.
-            </p>
-            <div className="mt-9 max-w-3xl">
-              <p className="mb-3 text-sm font-black text-brand-900">Where are you travelling?</p>
-              <DestinationSearch options={[...countryOptions, ...regionalOptions]} popular={["South Africa", "Kenya", "Namibia", "Tanzania"]} />
-            </div>
+            <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-brand-600"><span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden />No physical SIM</span><span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden />No roaming surprises</span></div>
           </div>
-
-          <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-            <div className="rounded-[2rem] border border-brand-200 bg-brand-900 p-7 text-white shadow-card sm:p-9">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10"><MapPinned className="h-7 w-7 text-brand-200" aria-hidden /></div>
-              <h2 className="mt-8 text-2xl font-black">Built for African journeys</h2>
-              <p className="mt-3 text-sm leading-6 text-brand-100">Country and regional plans are shown only when they are active, priced, and available in the current supplier catalogue.</p>
-              <div className="mt-8 grid gap-3 text-sm">
-                {["Country-specific plan discovery", "Exact regional coverage checks", "Package-specific activation guidance"].map((item) => <div key={item} className="flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3"><CheckCircle2 className="h-5 w-5 shrink-0 text-sand-300" aria-hidden />{item}</div>)}
-              </div>
+          <div className="relative isolate mx-auto w-full max-w-xl">
+            <div className="relative aspect-[1.15] overflow-hidden rounded-2xl bg-sand-200 sm:aspect-[1.2] lg:aspect-[0.94]">
+              <Image src="/images/namibia-portrait.jpg" alt="Sweeping orange sand dunes in Namibia's Namib Desert" fill preload sizes="(max-width: 1023px) 100vw, 50vw" className="object-cover object-[56%_center]" />
+              <div className="absolute inset-0 bg-gradient-to-t from-brand-950/65 via-transparent to-transparent" aria-hidden />
+              <div className="absolute bottom-20 left-7 right-7 text-white"><p className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/80">Somewhere you&apos;d rather be</p><p className="mt-2 text-[2.5rem] leading-none"><span className="editorial">Namib Desert.</span></p><p className="mt-2 flex items-center gap-1.5 text-xs"><MapPinned className="h-3.5 w-3.5" aria-hidden />Namibia, Africa</p></div>
             </div>
+            <div className="absolute -right-2 top-6 flex h-[86px] w-[86px] rotate-[9deg] items-center justify-center rounded-full border-[5px] border-canvas bg-accent-200 text-center sm:-right-4 sm:top-8 sm:h-[100px] sm:w-[100px]"><div><Globe2 className="mx-auto h-6 w-6" strokeWidth={1.3} aria-hidden /><p className="mt-1.5 text-[9px] font-bold uppercase leading-3 tracking-widest">Made for<br />the journey</p></div></div>
+            <div className="absolute -bottom-5 left-5 right-5 flex items-center gap-3 rounded-xl border border-brand-100 bg-white px-4 py-3.5 shadow-card sm:left-7 sm:right-auto sm:min-w-64"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50"><Signal className="h-5 w-5 text-brand-700" aria-hidden /></span><div><p className="text-xs font-semibold text-brand-900">Big adventures. Simple connections.</p><p className="mt-1 text-[11px] text-brand-500">Your travel data, sorted.</p></div><span className="ml-2 h-2 w-2 rounded-full bg-brand-500" aria-hidden /></div>
           </div>
         </div>
       </section>
 
-      <section aria-label="Purchase benefits" className="border-b border-brand-100 bg-white">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px bg-brand-100 px-5 sm:px-6 lg:grid-cols-4 lg:px-8">
+      <section aria-label="Purchase benefits" className="mt-6 border-y border-brand-100">
+        <div className="page-container grid grid-cols-2 gap-x-5 gap-y-6 py-7 lg:grid-cols-4">
           <TrustItem icon={Wifi} text="Digital eSIM delivery" />
           <TrustItem icon={ShieldCheck} text="Secure online payment" />
           <TrustItem icon={Smartphone} text="Keep your existing SIM" />
-          <TrustItem icon={Headphones} text="Human email support" />
+          <TrustItem icon={Headphones} text="Real people. Real support." />
         </div>
       </section>
 
-      <section id="destinations" className="scroll-mt-24 py-20 sm:py-24">
-        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Popular destinations" title="Start with where you’re going" body="Starting prices come from currently sellable catalogue packages, never from promotional placeholder data." />
-          {popularCountries.length ? (
-            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {popularCountries.map((country) => (
-                <Link key={country.id} href={`/country/${country.slug}`} className="group rounded-3xl border border-brand-100 bg-white p-5 shadow-subtle transition hover:-translate-y-1 hover:border-brand-300 hover:shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 motion-reduce:transform-none">
-                  <span className="text-3xl" aria-hidden>{countryFlag(country.countryCode)}</span>
-                  <h3 className="mt-8 text-xl font-black text-brand-900">{country.title}</h3>
-                  <p className="mt-1 text-sm text-brand-500">{country.planCount} plan{country.planCount === 1 ? "" : "s"} available</p>
-                  <div className="mt-5 flex items-end justify-between gap-4 border-t border-brand-100 pt-4">
-                    <div><span className="block text-[0.65rem] font-bold uppercase tracking-wide text-brand-500">From</span><span className="text-lg font-black text-brand-900">{formatMoneyAmount(country.minimumPrice.amount, country.minimumPrice.currency)}</span></div>
-                    <ArrowRight className="h-5 w-5 text-brand-500 transition group-hover:translate-x-1 motion-reduce:transform-none" aria-hidden />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : <CatalogUnavailable />}
-          <div className="mt-8 text-center"><Link href="/destinations" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 bg-white px-6 text-sm font-bold text-brand-800 hover:border-brand-300">View all destinations <ArrowRight className="h-4 w-4" aria-hidden /></Link></div>
+      <section id="destinations" className="section-space scroll-mt-24">
+        <div className="page-container">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><SectionHeading eyebrow="Find your next connection" title="Where will Africa take you?" body="A little adventure, a little discovery. A data plan for wherever you’re headed." /><Link href="/destinations" className="text-link shrink-0">All destinations <ArrowUpRight className="h-4 w-4" aria-hidden /></Link></div>
+          {popularCountries.length ? <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{popularCountries.map((country, index) => <DestinationCard key={country.id} country={country} photograph={index < 4} />)}</div> : <CatalogUnavailable />}
         </div>
       </section>
 
-      <section className="bg-brand-50 py-20 sm:py-24">
-        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Choose by travel style" title="Data that fits the way you travel" />
-          <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            <TravelCard icon={Luggage} title="Holiday & Safari" body="Maps, WhatsApp, social media, and bookings while you explore." href="/#destinations" cta="Find a travel plan" />
-            <TravelCard icon={Briefcase} title="Business Travel" body="Compare higher-data and hotspot information for work trips." href="/business" cta="Find a business plan" />
-            <TravelCard icon={Route} title="Multi-country Africa" body="Select every country on your itinerary and validate exact coverage." href="/route-builder" cta="Build my route" />
-          </div>
+      <section id="how-it-works" className="section-space scroll-mt-24 border-y border-brand-100 bg-white">
+        <div className="page-container">
+          <div className="grid gap-10 lg:grid-cols-[0.85fr_1.4fr] lg:gap-20"><div><SectionHeading eyebrow="Less admin. More adventure." title="Get connected. Get going." body="Sort your travel data before takeoff. Spend your arrival enjoying the view." /><Link href="/help/installation" className="text-link mt-5">Your installation guide <ArrowUpRight className="h-4 w-4" aria-hidden /></Link></div><ol className="grid gap-8 sm:grid-cols-3 lg:pt-1"><Step number="01" icon={MapPinned} title="Pick your place" body="Find a country or regional plan that fits your itinerary." /><Step number="02" icon={Smartphone} title="Make it yours" body="Buy online and follow your order’s eSIM installation guide." /><Step number="03" icon={Wifi} title="You’re connected" body="Follow your plan’s activation instructions and start exploring." /></ol></div>
         </div>
       </section>
 
-      <section id="how-it-works" className="scroll-mt-24 py-20 sm:py-24">
-        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="How it works" title="Three steps to travel data" body="Activation behaviour can vary, so your package page and order instructions remain the authority." />
-          <ol className="mt-12 grid gap-6 lg:grid-cols-3">
-            <Step number="1" icon={MapPinned} title="Choose your destination" body="Compare only active plans that cover the country or route you selected." />
-            <Step number="2" icon={Smartphone} title="Install your eSIM" body="Use the QR or manual instructions supplied with your fulfilled order." />
-            <Step number="3" icon={Wifi} title="Connect when you arrive" body="Follow the package-specific activation and roaming instructions." />
-          </ol>
-          <p className="mt-8 text-center"><Link href="/help/installation" className="font-bold text-brand-700 underline underline-offset-4 hover:text-brand-900">Read the detailed installation guide</Link></p>
-        </div>
+      <section className="section-space">
+        <div className="page-container"><SectionHeading eyebrow="Your trip. Your way." title="For every kind of explorer." /><div className="mt-9 grid gap-4 lg:grid-cols-3"><TravelCard icon={Luggage} title="Out-of-office adventures" body="Maps, bookings, and moments worth sharing. Data for the good kind of getting lost." href="/destinations" cta="Explore travel plans" /><TravelCard icon={Briefcase} title="Business, without borders" body="Keep work moving. Compare data and hotspot options for your next business trip." href="/business" cta="Explore business travel" /><TravelCard icon={Route} title="One trip. More Africa." body="Cross a few borders. Find the right combination of plans for your whole route." href="/route-builder" cta="Build your route" /></div></div>
       </section>
 
-      <section className="bg-brand-900 py-20 text-white sm:py-24">
-        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div><p className="text-xs font-black uppercase tracking-[0.2em] text-brand-300">Regional eSIMs</p><h2 className="mt-3 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">One plan for more of your trip—when the coverage actually fits.</h2><p className="mt-4 max-w-2xl leading-7 text-brand-100">Every plan below maps to a currently purchasable regional supplier package. Check its named destinations before buying.</p></div>
-            <Link href="/regional-esims" className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-white px-6 font-bold text-brand-900">Compare regional plans <ArrowRight className="h-4 w-4" aria-hidden /></Link>
-          </div>
-          {regionalPlans.length ? <div className="mt-12 grid gap-6 lg:grid-cols-3 text-brand-900">{regionalPlans.slice(0, 3).map((plan) => <StorefrontPlanCard key={plan.id} plan={plan} compact />)}</div> : <div className="mt-10 rounded-3xl border border-white/20 bg-white/10 p-6 text-sm text-brand-100">No regional package can be displayed from the current catalogue. Country plans remain available above.</div>}
-        </div>
+      <section className="bg-brand-900 text-white">
+        <div className="page-container py-16 sm:py-20"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="eyebrow text-accent-200">Go a little further</p><h2 className="mt-4 max-w-2xl text-4xl font-medium leading-[1.12] sm:text-5xl">More countries.<br /><span className="editorial text-accent-200">One beautiful journey.</span></h2><p className="mt-5 max-w-lg text-sm leading-7 text-brand-200">Making a few stops? Explore regional eSIMs and check the named destinations to find a plan that covers your trip.</p></div><Button asChild variant="accent"><Link href="/regional-esims">Explore regional plans <ArrowUpRight className="h-4 w-4" aria-hidden /></Link></Button></div>{regionalPlans.length ? <div className="mt-10 grid gap-5 text-brand-900 lg:grid-cols-3">{regionalPlans.slice(0, 3).map((plan) => <StorefrontPlanCard key={plan.id} plan={plan} compact />)}</div> : <p className="mt-8 border-t border-white/15 pt-6 text-sm text-brand-200">Regional plans are currently unavailable. Explore individual country plans for your journey.</p>}</div>
       </section>
 
-      <section className="py-20 sm:py-24">
-        <div className="mx-auto grid max-w-7xl gap-6 px-5 sm:px-6 lg:grid-cols-2 lg:px-8">
-          <div className="rounded-[2rem] border border-brand-100 bg-brand-50 p-7 sm:p-10">
-            <Smartphone className="h-9 w-9 text-brand-600" aria-hidden />
-            <h2 className="mt-6 text-3xl font-black text-brand-900">Will an eSIM work on my phone?</h2>
-            <p className="mt-3 leading-7 text-brand-600">Search a curated compatibility list, then confirm the eSIM option in your device settings. Your phone generally also needs to be carrier unlocked.</p>
-            <Link href="/compatibility" className="mt-7 inline-flex min-h-12 items-center gap-2 rounded-full bg-brand-700 px-6 font-bold text-white">Check my phone <ArrowRight className="h-4 w-4" aria-hidden /></Link>
-          </div>
-          <div className="rounded-[2rem] border border-brand-100 bg-white p-7 shadow-subtle sm:p-10">
-            <ShieldCheck className="h-9 w-9 text-brand-600" aria-hidden />
-            <h2 className="mt-6 text-3xl font-black text-brand-900">Why SIM.Africa?</h2>
-            <ul className="mt-6 grid gap-4 text-sm text-brand-700">
-              {["Africa-focused destination discovery", "Prices and availability from the current catalogue", "Country and regional coverage kept distinct", "Secure guest checkout and order access"].map((item) => <li key={item} className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" aria-hidden />{item}</li>)}
-            </ul>
-          </div>
-        </div>
-      </section>
+      <section className="section-space"><div className="page-container"><div className="grid overflow-hidden rounded-2xl border border-brand-100 bg-accent-100 md:grid-cols-[1fr_0.8fr]"><div className="p-7 sm:p-10 lg:p-12"><p className="eyebrow">A quick check before you go</p><h2 className="mt-4 max-w-lg text-3xl font-medium leading-tight sm:text-4xl">Your next adventure.<br /><span className="editorial">Your favourite phone.</span></h2><p className="mt-5 max-w-md text-sm leading-7 text-brand-700">Check that your phone supports eSIM and is carrier unlocked. A little peace of mind before the packing begins.</p><Button asChild className="mt-7"><Link href="/compatibility">Check my phone <ArrowUpRight className="h-4 w-4" aria-hidden /></Link></Button></div><div className="flex min-h-60 items-center justify-center border-t border-brand-900/10 p-8 md:border-l md:border-t-0"><div className="relative flex h-48 w-32 rotate-[8deg] items-center justify-center rounded-[1.7rem] border-[5px] border-brand-900 bg-canvas shadow-card"><span className="absolute left-1/2 top-2 h-1 w-9 -translate-x-1/2 rounded-full bg-brand-900" /><div className="text-center"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-900 text-accent-200"><Globe2 className="h-8 w-8" strokeWidth={1.4} aria-hidden /></span><p className="mt-3 text-[11px] font-semibold">Hello, Africa.</p><span className="mt-1 block text-[9px] text-brand-500">Ready for the journey.</span></div><span className="absolute -right-10 bottom-7 flex h-14 w-14 items-center justify-center rounded-full border-4 border-accent-100 bg-brand-900 text-accent-200"><CheckCircle2 className="h-7 w-7" aria-hidden /></span></div></div></div></div></section>
 
-      <section className="bg-brand-50 py-20 sm:py-24">
-        <div className="mx-auto max-w-4xl px-5 sm:px-6 lg:px-8">
-          <SectionHeading eyebrow="Questions before you buy" title="Travel eSIM FAQ" />
-          <div className="mt-10 divide-y divide-brand-100 overflow-hidden rounded-3xl border border-brand-100 bg-white">
-            {purchaseFaqs.map((faq) => <details key={faq.question} className="group p-5 sm:p-6"><summary className="cursor-pointer list-none pr-8 font-bold text-brand-900 marker:hidden">{faq.question}</summary><p className="mt-3 max-w-3xl text-sm leading-6 text-brand-600">{faq.answer}</p></details>)}
-          </div>
-        </div>
-      </section>
-
+      <section className="section-space border-t border-brand-100 bg-white"><div className="page-container grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20"><div><SectionHeading eyebrow="Good questions. Simple answers." title="A few things to know." /><p className="mt-5 text-sm leading-7 text-brand-600">A little clarity goes a long way.<br />We&apos;re here to help you get connected.</p><Link href="/help" className="text-link mt-5">Visit the help centre <ArrowUpRight className="h-4 w-4" aria-hidden /></Link></div><div className="divide-y divide-brand-100 border-y border-brand-100">{purchaseFaqs.map((faq) => <details key={faq.question} className="faq-item py-5"><summary className="list-none text-sm font-semibold leading-6 text-brand-900">{faq.question}</summary><p className="mt-3 pr-6 text-sm leading-7 text-brand-600">{faq.answer}</p></details>)}</div></div></section>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema).replace(/</g, "\\u003c") }} />
     </div>
   );
 }
 
 function SectionHeading({ eyebrow, title, body }: { eyebrow: string; title: string; body?: string }) {
-  return <div className="max-w-3xl"><p className="text-xs font-black uppercase tracking-[0.2em] text-brand-600">{eyebrow}</p><h2 className="mt-3 text-4xl font-black tracking-tight text-brand-900 sm:text-5xl">{title}</h2>{body ? <p className="mt-4 text-base leading-7 text-brand-600">{body}</p> : null}</div>;
+  return <div className="max-w-2xl"><p className="eyebrow">{eyebrow}</p><h2 className="mt-4 text-[2rem] font-medium leading-[1.15] tracking-[-0.045em] text-brand-900 sm:text-[2.6rem]">{title}</h2>{body ? <p className="mt-4 max-w-lg text-sm leading-7 text-brand-600">{body}</p> : null}</div>;
 }
-
 function TrustItem({ icon: Icon, text }: { icon: typeof Wifi; text: string }) {
-  return <div className="flex min-h-24 items-center gap-3 bg-white px-3 py-5 sm:px-5"><Icon className="h-5 w-5 shrink-0 text-brand-600" aria-hidden /><span className="text-sm font-bold text-brand-800">{text}</span></div>;
+  return <div className="flex items-center gap-2.5"><Icon className="h-[18px] w-[18px] shrink-0 text-brand-600" strokeWidth={1.5} aria-hidden /><span className="text-[11px] font-medium text-brand-700 sm:text-xs">{text}</span></div>;
 }
-
 function TravelCard({ icon: Icon, title, body, href, cta }: { icon: typeof Luggage; title: string; body: string; href: NextRoute; cta: string }) {
-  return <article className="rounded-3xl border border-brand-100 bg-white p-7 shadow-subtle"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-100"><Icon className="h-6 w-6 text-brand-700" aria-hidden /></div><h3 className="mt-6 text-2xl font-black text-brand-900">{title}</h3><p className="mt-3 min-h-12 text-sm leading-6 text-brand-600">{body}</p><Link href={href} className="mt-6 inline-flex min-h-11 items-center gap-2 font-bold text-brand-700">{cta} <ArrowRight className="h-4 w-4" aria-hidden /></Link></article>;
+  return <article className="flex flex-col rounded-2xl border border-brand-100 bg-white p-7 sm:p-8"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-50"><Icon className="h-5 w-5 text-brand-700" strokeWidth={1.5} aria-hidden /></span><h3 className="mt-6 text-xl font-semibold text-brand-900">{title}</h3><p className="mb-5 mt-3 text-sm leading-7 text-brand-600">{body}</p><Link href={href} className="text-link mt-auto">{cta} <ArrowUpRight className="h-4 w-4" aria-hidden /></Link></article>;
 }
-
 function Step({ number, icon: Icon, title, body }: { number: string; icon: typeof MapPinned; title: string; body: string }) {
-  return <li className="relative rounded-3xl border border-brand-100 bg-white p-7 shadow-subtle"><span className="absolute right-6 top-5 text-5xl font-black text-brand-100" aria-hidden>{number}</span><Icon className="h-8 w-8 text-brand-600" aria-hidden /><h3 className="mt-7 text-xl font-black text-brand-900">{title}</h3><p className="mt-3 text-sm leading-6 text-brand-600">{body}</p></li>;
+  return <li><div className="flex items-center justify-between border-b border-brand-100 pb-5"><span className="font-editorial text-3xl italic text-brand-400">{number}</span><Icon className="h-5 w-5 text-brand-600" strokeWidth={1.5} aria-hidden /></div><h3 className="mt-6 text-base font-semibold text-brand-900">{title}</h3><p className="mt-3 text-sm leading-7 text-brand-600">{body}</p></li>;
 }
-
 function CatalogUnavailable() {
-  return <div className="mt-10 rounded-3xl border border-dashed border-brand-200 bg-brand-50 p-8 text-center"><Globe2 className="mx-auto h-8 w-8 text-brand-500" aria-hidden /><h3 className="mt-4 font-black text-brand-900">Destinations are temporarily unavailable</h3><p className="mt-2 text-sm text-brand-600">The catalogue could not be loaded safely. Please try again shortly or contact support.</p></div>;
+  return <div className="mt-10 rounded-2xl border border-dashed border-brand-200 bg-brand-50 p-8 text-center"><Globe2 className="mx-auto h-8 w-8 text-brand-500" aria-hidden /><h3 className="mt-4 font-semibold text-brand-900">Destinations are temporarily unavailable</h3><p className="mt-2 text-sm text-brand-600">Please try again shortly or contact support for help finding your plan.</p></div>;
 }

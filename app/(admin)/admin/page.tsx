@@ -114,7 +114,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
     <div className="space-y-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-600">Sales & Analytics</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Sales & Analytics</p>
           <h1 className="text-3xl font-bold text-slate-900">Performance overview</h1>
           <p className="text-sm text-slate-600">Aggregated from Airalo-powered eSIM orders.</p>
         </div>

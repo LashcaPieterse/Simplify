@@ -50,7 +50,7 @@ export default async function SyncRunsPage({ searchParams }: { searchParams: Pro
               const duration = run.finishedAt ? Math.round((run.finishedAt.getTime() - run.startedAt.getTime()) / 1000) : null;
               return (
                 <tr key={run.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2"><Link className="text-teal-700 underline" href={`/admin/sync-runs/${run.id}` as Route}>{run.id.slice(0, 8)}</Link></td>
+                  <td className="px-3 py-2"><Link className="text-brand-700 underline" href={`/admin/sync-runs/${run.id}` as Route}>{run.id.slice(0, 8)}</Link></td>
                   <td className="px-3 py-2">{run.status}</td>
                   <td className="px-3 py-2">{formatDate(run.startedAt)}</td>
                   <td className="px-3 py-2">{duration === null ? "-" : `${duration}s`}</td>
@@ -61,7 +61,7 @@ export default async function SyncRunsPage({ searchParams }: { searchParams: Pro
           </tbody>
         </table>
       </div>
-      {nextCursor ? <Link className="text-sm text-teal-700 underline" href={`/admin/sync-runs?${new URLSearchParams({ ...(status ? { status } : {}), cursor: nextCursor }).toString()}` as Route}>Next page →</Link> : null}
+      {nextCursor ? <Link className="text-sm text-brand-700 underline" href={`/admin/sync-runs?${new URLSearchParams({ ...(status ? { status } : {}), cursor: nextCursor }).toString()}` as Route}>Next page →</Link> : null}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import type { Route } from "next";
 import { ReactNode } from "react";
 import { LogoutButton } from "./LogoutButton";
+import { Brand } from "@/components/site/Brand";
 
 const navItems = [
   { href: "/admin" as Route, label: "Overview" },
@@ -24,7 +25,7 @@ export function AdminShell({ children, adminEmail }: { children: ReactNode; admi
       <aside className="hidden w-64 border-r border-slate-200 bg-white px-4 py-6 lg:block">
         <div className="flex items-center justify-between gap-2 px-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">SIM.Africa</p>
+            <Link href="/admin" aria-label="SIM.Africa admin"><Brand /></Link>
             <p className="text-lg font-semibold text-slate-900">Admin</p>
           </div>
         </div>
@@ -36,20 +37,20 @@ export function AdminShell({ children, adminEmail }: { children: ReactNode; admi
                 key={item.href}
                 href={item.href}
                 className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  isActive ? "bg-teal-50 text-teal-700" : "text-slate-700 hover:bg-slate-50"
+                  isActive ? "bg-brand-900 text-white" : "text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 <span>{item.label}</span>
-                {isActive ? <span className="text-xs font-semibold text-teal-700">●</span> : null}
+                {isActive ? <span className="h-1.5 w-1.5 rounded-full bg-accent-200" aria-hidden /> : null}
               </Link>
             );
           })}
         </nav>
       </aside>
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 lg:px-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">SIM.AFRICA OPS</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">SIM.AFRICA OPS</p>
             <p className="text-lg font-semibold text-slate-900">Airalo Partner Console</p>
           </div>
           <div className="flex items-center gap-4">

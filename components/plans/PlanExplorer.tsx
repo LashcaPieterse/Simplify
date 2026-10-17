@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
 
 import { StorefrontPlanCard } from "@/components/plans/StorefrontPlanCard";
 import type { StorefrontPlan } from "@/lib/catalog/storefront";
@@ -12,6 +12,7 @@ type ValidityFilter = "all" | "week" | "month";
 type KnownBooleanFilter = "all" | "yes" | "no";
 
 export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [sort, setSort] = useState<SortOption>("price");
   const [dataFilter, setDataFilter] = useState<DataFilter>("all");
   const [validityFilter, setValidityFilter] = useState<ValidityFilter>("all");
@@ -99,6 +100,8 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
     callsFilter !== "all" ||
     topUpFilter !== "all";
 
+  const advancedFilterCount = [networkTypeFilter, carrierFilter, hotspotFilter, callsFilter, topUpFilter].filter((value) => value !== "all").length;
+
   const resetFilters = () => {
     setDataFilter("all");
     setValidityFilter("all");
@@ -111,21 +114,23 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
 
   return (
     <div>
-      <div className="rounded-3xl border border-brand-100 bg-brand-50 p-4 sm:p-5">
+      <div className="rounded-2xl border border-brand-100 bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-black text-brand-900"><SlidersHorizontal className="h-4 w-4" aria-hidden />Filter and sort</div>
-          {filtersActive ? <button type="button" onClick={resetFilters} className="min-h-10 rounded-full px-3 text-xs font-black text-brand-700 underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">Reset filters</button> : null}
+          <div className="flex items-center gap-3">{filtersActive ? <button type="button" onClick={resetFilters} className="min-h-11 rounded-md text-xs font-semibold text-brand-700 underline underline-offset-4">Reset</button> : null}<button type="button" aria-expanded={showAdvanced} aria-controls="advanced-plan-filters" onClick={() => setShowAdvanced((current) => !current)} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-100 px-4 text-xs font-medium text-brand-700 hover:bg-brand-50">More filters{advancedFilterCount ? ` (${advancedFilterCount})` : ""}<ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} aria-hidden /></button></div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <FilterSelect label="Data" value={dataFilter} onChange={(value) => setDataFilter(value as DataFilter)} options={[['all', 'All data'], ['small', 'Up to 3 GB'], ['medium', '3–10 GB'], ['large', 'More than 10 GB'], ['unlimited', 'Unlimited']]} />
           <FilterSelect label="Validity" value={validityFilter} onChange={(value) => setValidityFilter(value as ValidityFilter)} options={[['all', 'Any validity'], ['week', 'Up to 7 days'], ['month', '30+ days']]} />
           <FilterSelect label="Sort" value={sort} onChange={(value) => setSort(value as SortOption)} options={[['price', 'Lowest price'], ['data', 'Most data'], ['validity', 'Longest validity']]} />
+        </div>
+        {showAdvanced ? <div id="advanced-plan-filters" className="mt-5 grid gap-3 border-t border-brand-100 pt-5 sm:grid-cols-2 lg:grid-cols-3">
           {networkTypes.length ? <FilterSelect label="Network type" value={networkTypeFilter} onChange={setNetworkTypeFilter} options={[["all", "Any network type"], ...networkTypes.map((type) => [type, type] as [string, string])]} /> : null}
           {carriers.length ? <FilterSelect label="Carrier" value={carrierFilter} onChange={setCarrierFilter} options={[["all", "Any named carrier"], ...carriers.map((carrier) => [carrier, carrier] as [string, string])]} /> : null}
           {hasKnownHotspot ? <FilterSelect label="Hotspot" value={hotspotFilter} onChange={(value) => setHotspotFilter(value as KnownBooleanFilter)} options={[["all", "Any hotspot status"], ["yes", "Available"], ["no", "Not available"]]} /> : null}
           {hasKnownCalls ? <FilterSelect label="Calls & SMS" value={callsFilter} onChange={(value) => setCallsFilter(value as KnownBooleanFilter)} options={[["all", "Any calls status"], ["yes", "Included"], ["no", "Data only"]]} /> : null}
           {hasKnownTopUp ? <FilterSelect label="Top-up" value={topUpFilter} onChange={(value) => setTopUpFilter(value as KnownBooleanFilter)} options={[["all", "Any top-up status"], ["yes", "Available"], ["no", "Not available"]]} /> : null}
-        </div>
+        </div> : null}
       </div>
 
       <p className="mt-6 text-sm font-semibold text-brand-600" aria-live="polite">Showing {visiblePlans.length} of {plans.length} active plans</p>

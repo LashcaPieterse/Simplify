@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
+import { destinationArt } from "@/lib/content/destination-art";
 import { notFound } from "next/navigation";
 import { ChevronRight, CircleDollarSign, LockKeyhole, MailCheck } from "lucide-react";
 
@@ -40,6 +42,7 @@ export default async function CountryPage({ params }: CountryPageProps) {
   const plans = await getStorefrontPlansForCountry(slug);
   if (!plans.length) notFound();
   const country = plans[0]!.destination;
+  const art = destinationArt[country.slug];
   const packageOperators = Array.from(new Set(plans.map((plan) => plan.operatorName).filter((value): value is string => Boolean(value)))).sort();
   const namedCarriers = Array.from(new Set(plans.flatMap((plan) => plan.networks))).sort();
   const networkTypes = Array.from(new Set(plans.flatMap((plan) => plan.networkTypes)));
@@ -88,23 +91,18 @@ export default async function CountryPage({ params }: CountryPageProps) {
   return (
     <div>
       <TrackView event="country_view" properties={{ country: country.title, country_code: country.countryCode }} />
-      <div className="border-b border-brand-100 bg-brand-50">
-        <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6 lg:px-8 lg:py-16">
-          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-brand-600">
-            <Link href="/">Home</Link><ChevronRight className="h-4 w-4" aria-hidden /><Link href="/destinations">Destinations</Link><ChevronRight className="h-4 w-4" aria-hidden /><span aria-current="page">{country.title}</span>
-          </nav>
-          <p className="mt-9 text-xs font-black uppercase tracking-[0.2em] text-brand-600">{country.countryCode} travel connectivity</p>
-          <h1 className="mt-3 text-4xl font-black tracking-tight text-brand-900 sm:text-6xl">eSIM for {country.title}</h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-brand-700">Stay connected in {country.title} without relying on your home network&apos;s international roaming. Compare the available plans below.</p>
-          <div className="mt-8 flex flex-wrap gap-3 text-sm font-semibold text-brand-700">
-            <span className="rounded-full border border-brand-200 bg-white px-4 py-2">{plans.length} active plan{plans.length === 1 ? "" : "s"}</span>
-            <span className="rounded-full border border-brand-200 bg-white px-4 py-2">Current catalogue pricing</span>
+      <section className="border-b border-brand-100">
+        <div className="page-container py-10 sm:py-14">
+          <nav aria-label="Breadcrumb" className="mb-9 flex flex-wrap items-center gap-2 text-xs text-brand-500"><Link href="/">Home</Link><ChevronRight className="h-3 w-3" aria-hidden /><Link href="/destinations">Destinations</Link><ChevronRight className="h-3 w-3" aria-hidden /><span className="text-brand-900" aria-current="page">{country.title}</span></nav>
+          <div className={`grid items-center gap-8 ${art ? "lg:grid-cols-[1.1fr_0.9fr] lg:gap-16" : ""}`}>
+            <div><p className="eyebrow">Your connection to {country.title}</p><h1 className="mt-5 text-4xl font-medium leading-[1.08] tracking-[-0.05em] text-brand-900 sm:text-6xl">Hello, <span className="editorial">{country.title}.</span></h1><p className="mt-5 max-w-xl text-base leading-8 text-brand-600">A new place. The same connected you. Find prepaid eSIM data for your {country.title} journey and install before you go.</p><div className="mt-7 flex flex-wrap items-center gap-3 text-xs text-brand-600"><span className="rounded-full border border-brand-200 bg-white px-3.5 py-2">{plans.length} available plans</span><Link href="/compatibility" className="text-link text-xs">Check your device <ChevronRight className="h-3 w-3" aria-hidden /></Link></div></div>
+            {art ? <div className="relative aspect-[1.9] overflow-hidden rounded-2xl bg-brand-100"><Image src={art.src} alt={art.alt} fill preload sizes="(max-width: 1023px) 100vw, 45vw" className="object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-brand-950/60 to-transparent" aria-hidden /><p className="absolute bottom-5 left-6 right-6 text-sm font-medium text-white">{art.caption}</p></div> : null}
           </div>
         </div>
-      </div>
+      </section>
 
       <section className="mx-auto max-w-7xl px-5 py-12 sm:px-6 lg:px-8 lg:py-16" aria-labelledby="available-plans">
-        <div className="mb-8 max-w-3xl"><h2 id="available-plans" className="text-3xl font-black text-brand-900 sm:text-4xl">Available {country.title} eSIM plans</h2><p className="mt-3 leading-7 text-brand-600">Unknown plan attributes are labelled as unknown. Recommendation labels use explicit price, data, validity, and trip-estimate calculations within this eligible result set.</p></div>
+        <div className="mb-8 max-w-3xl"><h2 id="available-plans" className="text-3xl font-medium text-brand-900 sm:text-4xl">A plan for your kind of trip.</h2><p className="mt-3 leading-7 text-brand-600">Compare data, validity and network details to find your fit. Need a hand? Estimate your travel data below.</p></div>
         <div className="mb-10">
           <UsageRecommender country={country.title} plans={plans} />
         </div>
@@ -113,7 +111,7 @@ export default async function CountryPage({ params }: CountryPageProps) {
 
       <section className="border-y border-brand-100 bg-brand-50">
         <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6 lg:px-8">
-          <div className="max-w-3xl"><p className="text-xs font-black uppercase tracking-[0.18em] text-brand-600">Current catalogue snapshot</p><h2 className="mt-2 text-3xl font-black text-brand-900">What the available {country.title} packages tell us</h2><p className="mt-3 text-sm leading-6 text-brand-600">These details are derived only from the currently sellable supplier package records. A missing value is left unknown.</p></div>
+          <div className="max-w-3xl"><p className="text-xs font-black uppercase tracking-[0.18em] text-brand-600">Know before you go</p><h2 className="mt-2 text-3xl font-medium text-brand-900">The details, at a glance.</h2><p className="mt-3 text-sm leading-6 text-brand-600">Network and top-up information for the available plans. Check your chosen plan for its full details.</p></div>
           <dl className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <SnapshotFact label="Package operator(s)" value={packageOperators.length ? packageOperators.join(", ") : "Not supplied"} />
             <SnapshotFact label="Named carrier(s)" value={namedCarriers.length ? namedCarriers.join(", ") : "Not supplied"} />
@@ -125,18 +123,18 @@ export default async function CountryPage({ params }: CountryPageProps) {
 
       <section className="border-y border-brand-100 bg-white">
         <div className="mx-auto grid max-w-7xl gap-4 px-5 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
-          <CountryTrust icon={CircleDollarSign} title="Transparent price" body="The displayed selling price comes from the current active package record." />
-          <CountryTrust icon={LockKeyhole} title="Secure checkout" body="Payment is handled by the configured provider; raw card details are not stored here." />
-          <CountryTrust icon={MailCheck} title="Order instructions" body="Your fulfilled order includes the available installation and activation information." />
+          <CountryTrust icon={CircleDollarSign} title="Transparent price" body="See your plan’s one-time price before you buy." />
+          <CountryTrust icon={LockKeyhole} title="Secure checkout" body="Pay online through our secure payment provider." />
+          <CountryTrust icon={MailCheck} title="Order instructions" body="Find installation and activation guidance with your completed order." />
         </div>
       </section>
 
       <section className="mx-auto max-w-4xl px-5 py-16 sm:px-6 lg:px-8">
-        <h2 className="text-3xl font-black text-brand-900">Using an eSIM in {country.title}</h2>
+        <h2 className="text-3xl font-medium text-brand-900">Using an eSIM in {country.title}</h2>
         <div className="mt-8 divide-y divide-brand-100 rounded-3xl border border-brand-100 bg-white px-6">
-          <details className="py-5"><summary className="cursor-pointer font-bold text-brand-900">When should I install it?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Use the installation window and activation policy shown on the individual package page. These rules can vary between supplier packages.</p></details>
-          <details className="py-5"><summary className="cursor-pointer font-bold text-brand-900">Can I keep WhatsApp and my normal SIM?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Yes, on most dual-SIM devices. Keep WhatsApp registered to your existing number and select the eSIM as the mobile-data line.</p></details>
-          <details className="py-5"><summary className="cursor-pointer font-bold text-brand-900">Is my phone compatible?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Your device needs eSIM support and generally must be carrier unlocked. <Link href="/compatibility" className="font-bold text-brand-700 underline">Check the compatibility tool</Link>.</p></details>
+          <details className="faq-item py-5"><summary className="cursor-pointer font-bold text-brand-900">When should I install it?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Use the installation window and activation policy shown on the individual package page. These rules can vary between supplier packages.</p></details>
+          <details className="faq-item py-5"><summary className="cursor-pointer font-bold text-brand-900">Can I keep WhatsApp and my normal SIM?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Yes, on most dual-SIM devices. Keep WhatsApp registered to your existing number and select the eSIM as the mobile-data line.</p></details>
+          <details className="faq-item py-5"><summary className="cursor-pointer font-bold text-brand-900">Is my phone compatible?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Your device needs eSIM support and generally must be carrier unlocked. <Link href="/compatibility" className="font-bold text-brand-700 underline">Check the compatibility tool</Link>.</p></details>
         </div>
       </section>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, "\\u003c") }} />

@@ -39,7 +39,7 @@ export function LoginForm() {
             name="email"
             type="email"
             required
-            className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-teal-500 focus:outline-none"
+            className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none"
             placeholder="admin@sim.africa"
             disabled={isPending}
           />
@@ -50,7 +50,7 @@ export function LoginForm() {
             name="password"
             type="password"
             required
-            className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-teal-500 focus:outline-none"
+            className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none"
             placeholder="••••••••"
             disabled={isPending}
           />

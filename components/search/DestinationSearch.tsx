@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
-import { Globe2, MapPin, Search } from "lucide-react";
+import { ArrowUpRight, Globe2, MapPin, Search } from "lucide-react";
 
 import { trackEvent } from "@/lib/analytics";
 
@@ -61,7 +61,7 @@ export function DestinationSearch({ options, popular = [] }: { options: Destinat
 
   return (
     <div ref={wrapperRef} className="relative w-full">
-      <div className="flex min-h-16 items-center gap-3 rounded-2xl border border-brand-200 bg-white p-2 shadow-card focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-100 sm:rounded-full">
+      <div className="flex min-h-16 items-center gap-2 rounded-xl border border-brand-200 bg-white p-2 shadow-subtle focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
         <Search className="ml-3 h-5 w-5 shrink-0 text-brand-500" aria-hidden />
         <label htmlFor="destination-search" className="sr-only">Where are you travelling?</label>
         <input
@@ -73,7 +73,7 @@ export function DestinationSearch({ options, popular = [] }: { options: Destinat
           aria-controls="destination-results"
           aria-activedescendant={open && results[activeIndex] ? `destination-${results[activeIndex]!.id}` : undefined}
           autoComplete="off"
-          placeholder="Country, city, region"
+          placeholder="Where are you headed?"
           value={query}
           onFocus={() => setOpen(true)}
           onBlur={() => window.setTimeout(() => setOpen(false), 120)}
@@ -89,17 +89,17 @@ export function DestinationSearch({ options, popular = [] }: { options: Destinat
             if (event.key === "Escape") setOpen(false);
             if (event.key === "Enter" && open && results[activeIndex]) { event.preventDefault(); choose(results[activeIndex]!); }
           }}
-          className="min-w-0 flex-1 bg-transparent px-1 py-3 text-base font-semibold text-brand-900 placeholder:font-normal placeholder:text-brand-400 focus:outline-none"
+          className="min-w-0 flex-1 bg-transparent px-1 py-3 text-sm font-medium text-brand-900 placeholder:font-normal placeholder:text-brand-500 focus:outline-none"
         />
-        <button type="button" disabled={!results[0]} className="hidden h-12 shrink-0 items-center justify-center rounded-full bg-brand-700 px-6 text-sm font-bold text-white transition hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex" onClick={() => results[0] && choose(results[0])}>
-          Find my eSIM
+        <button type="button" disabled={!results[0]} className="hidden h-12 shrink-0 items-center justify-center rounded-lg bg-brand-900 px-4 text-xs font-semibold text-white transition hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:inline-flex" onClick={() => results[0] && choose(results[0])}>
+          Find my eSIM <ArrowUpRight className="ml-2 h-4 w-4" aria-hidden />
         </button>
       </div>
 
       <button
         type="button"
         disabled={!results[0]}
-        className="mt-3 flex min-h-12 w-full items-center justify-center rounded-full bg-brand-700 px-6 text-sm font-bold text-white transition hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
+        className="mt-3 flex min-h-12 w-full items-center justify-center rounded-lg bg-brand-900 px-4 text-xs font-semibold text-white transition hover:bg-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:hidden"
         onClick={() => results[0] && choose(results[0])}
       >
         Find my eSIM
@@ -123,9 +123,9 @@ export function DestinationSearch({ options, popular = [] }: { options: Destinat
       ) : null}
 
       {popularOptions.length ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold text-brand-600">Popular:</span>
-          {popularOptions.map((option) => <button key={option.id} type="button" className="min-h-10 rounded-full border border-brand-200 bg-white px-4 font-semibold text-brand-700 hover:border-brand-300 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" onClick={() => choose(option)}>{option.title}</button>)}
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px]">
+          <span className="font-normal text-brand-500">Popular:</span>
+          {popularOptions.map((option) => <button key={option.id} type="button" className="min-h-8 rounded-sm font-medium text-brand-700 underline decoration-brand-200 underline-offset-4 hover:decoration-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600" onClick={() => choose(option)}>{option.title}</button>)}
         </div>
       ) : null}
     </div>

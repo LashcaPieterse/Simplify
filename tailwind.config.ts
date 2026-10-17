@@ -12,42 +12,49 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: [...fontFamily.sans],
-        display: [...fontFamily.sans]
+        sans: ["var(--font-dm-sans)", ...fontFamily.sans],
+        display: ["var(--font-dm-sans)", ...fontFamily.sans],
+        editorial: ["var(--font-instrument-serif)", "Georgia", "serif"]
       },
+      fontWeight: { semibold: "600", bold: "650", extrabold: "700", black: "700" },
+      borderRadius: { "2xl": "1rem", "3xl": "1.25rem" },
       colors: {
+        canvas: "#f8f8f2",
+        ink: "#193426",
+        accent: { 50: "#f5fae8", 100: "#eaf5c7", 200: "#d9ef82", 300: "#c9e469", 500: "#a9c64d", 700: "#4e6224" },
         brand: {
-          50: "#f3fbfb",
-          100: "#e5f7f6",
-          200: "#c2ebeb",
-          300: "#8ad8d6",
-          400: "#58c4c1",
-          500: "#2dabac",
-          600: "#1f8789",
-          700: "#1c6b6d",
-          800: "#1a5658",
-          900: "#153f41"
+          50: "#f0f3ee",
+          100: "#e0e7dd",
+          200: "#c5d0bf",
+          300: "#a5b49e",
+          400: "#819179",
+          500: "#63755e",
+          600: "#4b6148",
+          700: "#344d37",
+          800: "#223c2c",
+          900: "#193426",
+          950: "#10251b"
         },
         sand: {
-          50: "#fff9f2",
-          100: "#ffeeda",
-          200: "#ffd4a1",
-          300: "#ffbe73",
-          400: "#f89f3c",
-          500: "#e17e16",
-          600: "#b55d0d",
-          700: "#8c460c",
-          800: "#6b360d",
-          900: "#552c0e"
+          50: "#f8f8f2",
+          100: "#f3ecdf",
+          200: "#e8d7ba",
+          300: "#d8ba91",
+          400: "#c69b6b",
+          500: "#a76e41",
+          600: "#8c5733",
+          700: "#70432b",
+          800: "#593728",
+          900: "#482e23"
         }
       },
       backgroundImage: {
         'radial-fade':
-          'radial-gradient(circle at top left, rgba(45, 171, 172, 0.2), transparent 55%), radial-gradient(circle at bottom right, rgba(248, 159, 60, 0.22), transparent 55%)'
+          'radial-gradient(ellipse at top right, rgba(217, 239, 130, 0.16), transparent 60%)'
       },
       boxShadow: {
-        subtle: "0 20px 45px -25px rgba(12, 62, 73, 0.45)",
-        card: "0 20px 40px -18px rgba(19, 49, 56, 0.45)"
+        subtle: "0 2px 8px -4px rgba(25, 52, 38, 0.12)",
+        card: "0 12px 32px -12px rgba(25, 52, 38, 0.16)"
       }
     }
   },

@@ -11,7 +11,7 @@ export default async function SyncCenterPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-600">Sync Center</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Sync Center</p>
           <h1 className="text-3xl font-bold text-slate-900">Airalo integration</h1>
           <p className="text-sm text-slate-600">Run idempotent sync jobs with full snapshots and pricing audits.</p>
         </div>
@@ -24,14 +24,14 @@ export default async function SyncCenterPage() {
           {runs.map((run) => (
             <div key={run.id} className="flex items-center justify-between rounded border border-slate-100 p-2">
               <div>
-                <Link className="font-semibold text-teal-700 underline" href={`/admin/sync-runs/${run.id}` as Route}>{run.id.slice(0, 8)}</Link>
+                <Link className="font-semibold text-brand-700 underline" href={`/admin/sync-runs/${run.id}` as Route}>{run.id.slice(0, 8)}</Link>
                 <p className="text-xs text-slate-500">{formatDate(run.startedAt)} • {run.status}</p>
               </div>
               <p className="text-xs">I:{run.insertedCount} U:{run.updatedCount} S:{run.skippedCount} F:{run.failureCount}</p>
             </div>
           ))}
         </div>
-        <Link href={"/admin/sync-runs" as Route} className="mt-4 inline-block text-sm text-teal-700 underline">See all runs →</Link>
+        <Link href={"/admin/sync-runs" as Route} className="mt-4 inline-block text-sm text-brand-700 underline">See all runs →</Link>
       </div>
     </div>
   );

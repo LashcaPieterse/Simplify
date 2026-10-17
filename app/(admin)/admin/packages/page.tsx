@@ -75,7 +75,7 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
                   : "-");
               return (
                 <tr key={pkg.id} className="border-t border-slate-100">
-                  <td className="px-3 py-2"><Link href={`/admin/packages/${pkg.id}`} className="text-teal-700 underline">{pkg.title}</Link><p className="text-xs text-slate-500">{pkg.airaloPackageId}</p></td>
+                  <td className="px-3 py-2"><Link href={`/admin/packages/${pkg.id}`} className="text-brand-700 underline">{pkg.title}</Link><p className="text-xs text-slate-500">{pkg.airaloPackageId}</p></td>
                   <td className="px-3 py-2">{pkg.operator.title} / {pkg.operator.country.title}</td>
                   <td className="px-3 py-2">{source} {currency}</td>
                   <td className="px-3 py-2">{dbPrice} {currency}</td>
@@ -87,7 +87,7 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
           </tbody>
         </table>
       </div>
-      {nextCursor ? <Link href={`/admin/packages?${new URLSearchParams({ ...(q ? { q } : {}), cursor: nextCursor }).toString()}`} className="text-sm text-teal-700 underline">Next page →</Link> : null}
+      {nextCursor ? <Link href={`/admin/packages?${new URLSearchParams({ ...(q ? { q } : {}), cursor: nextCursor }).toString()}`} className="text-sm text-brand-700 underline">Next page →</Link> : null}
     </div>
   );
 }

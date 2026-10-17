@@ -1,0 +1,19 @@
+@font-face {
+  font-family: "SIM DM Sans";
+  src: url("../app/fonts/dm-sans.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+}
+@font-face {
+  font-family: "SIM Instrument Serif";
+  src: url("../app/fonts/instrument-serif-italic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+:root {
+  --font-dm-sans: "SIM DM Sans";
+  --font-instrument-serif: "SIM Instrument Serif";
+}
+body { font-family: var(--font-dm-sans), sans-serif; }

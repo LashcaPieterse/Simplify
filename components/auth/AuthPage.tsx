@@ -1,104 +1,25 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ShieldCheck, Sparkles, SmartphoneNfc } from "lucide-react";
-
+import { ArrowUpRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import { AuthForm, type ProviderInfo } from "@/components/auth/AuthForm";
-import { Button } from "@/components/ui/button";
 
 export function AuthPage({ providers, mode }: { providers: ProviderInfo[]; mode: "signin" | "signup" }) {
   const isSignup = mode === "signup";
-  const title = isSignup ? "Create your SIM.Africa account" : "Welcome back";
-  const copy = isSignup
-    ? "Keep your eSIM orders and receipts together for future trips."
-    : "Access your saved eSIMs, manage orders, and stay connected across every trip.";
-
   return (
-    <div className="relative min-h-screen overflow-hidden bg-sand-50">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-radial-fade opacity-75" aria-hidden />
-
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 pb-16 pt-10 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-8 lg:max-w-xl">
-          <Link
-            href="/"
-            aria-label="Go to SIM.Africa home page"
-            title="Go to home page"
-            className="inline-flex h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/70 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
-          >
-            <Image src="/favicon.png" alt="" width={48} height={48} className="h-12 w-12" priority />
-          </Link>
-          <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700 shadow-subtle">
-            <ShieldCheck className="h-4 w-4" />
-            {isSignup ? "Set up your login" : "Secure customer access"}
-          </div>
-          <div className="space-y-3">
-            <h1 className="text-4xl font-bold text-brand-900 sm:text-5xl">{title}</h1>
-            <p className="text-lg text-brand-700 sm:text-xl">{copy}</p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Highlight title="Keep orders together" description="View every eSIM, receipt, and activation in a single profile." />
-            <Highlight title="Repeat checkout" description="Sign in once to prefill your account email on your next trip." />
-            <Highlight title="Travel-ready" description="Access your order history from any signed-in device." icon="device" />
-            <Highlight title="Clear data handling" description="Our privacy notice explains how account and order data is used." icon="shield" />
-          </div>
-        </div>
-
-        <div className="w-full max-w-xl rounded-[28px] border border-brand-100 bg-white p-6 shadow-[0_30px_80px_-45px_rgba(21,63,65,0.55)] sm:p-8 lg:p-9">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <h2 className="text-2xl font-bold leading-tight text-brand-900">
-                {isSignup ? "Create account" : "Log in"}
-              </h2>
-              <p className="text-sm text-brand-700 sm:text-base">
-                {isSignup ? "Pick the method you prefer to get started." : "Access your eSIMs, orders, and saved trips."}
-              </p>
-            </div>
-            <Link
-              href={isSignup ? "/auth/signin" : "/auth/signup"}
-              className="shrink-0 text-sm font-semibold text-brand-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
-            >
-              {isSignup ? "Have an account? Log in" : "New here? Create account"}
-            </Link>
-          </div>
-          <div className="mt-7">
-            <AuthForm providers={providers} mode={mode} />
-          </div>
-          <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-brand-100 bg-brand-50/60 px-4 py-3 text-xs text-brand-800 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-brand-900">Need help?</p>
-              <p>Contact support and we will get you signed in quickly.</p>
-            </div>
-            <Button asChild size="sm" variant="secondary" className="w-full bg-white text-xs sm:w-auto">
-              <a href="mailto:support@sim.africa">Contact support</a>
-            </Button>
-          </div>
-        </div>
+    <div className="page-container grid gap-10 py-10 sm:py-16 lg:grid-cols-2 lg:items-start lg:gap-20">
+      <div className="lg:py-4">
+        <p className="eyebrow">Your travel companion</p>
+        <h1 className="mt-5 max-w-lg text-4xl font-medium leading-[1.1] tracking-[-0.05em] sm:text-5xl">Your journeys.<br /><span className="editorial">All in one place.</span></h1>
+        <p className="mt-6 max-w-md text-sm leading-7 text-brand-600">Keep your eSIMs, orders, and receipts together. A little less to think about on your next adventure.</p>
+        <div className="relative mt-8 hidden aspect-[1.8] overflow-hidden rounded-2xl bg-sand-200 sm:block"><Image src="/images/namibia-dunes.jpg" alt="Travellers walking along a sunlit sand dune in Namibia" fill sizes="(max-width: 1023px) 90vw, 45vw" className="object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-brand-950/70 to-transparent" aria-hidden /><p className="absolute bottom-6 left-6 font-editorial text-3xl italic text-white">More moments like this.</p></div>
+        <ul className="mt-7 grid gap-3 text-xs text-brand-600">{["Your orders and installation details, together", "Quicker checkout on your next trip", "Your travel history, wherever you are"].map((item) => <li key={item} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />{item}</li>)}</ul>
       </div>
-    </div>
-  );
-}
-
-function Highlight({
-  title,
-  description,
-  icon = "sparkles",
-}: {
-  title: string;
-  description: string;
-  icon?: "sparkles" | "shield" | "device";
-}) {
-  return (
-    <div className="rounded-2xl border border-brand-100 bg-white/80 p-4 shadow-sm">
-      <div className="flex items-center gap-2 text-brand-600">
-        {icon === "shield" ? (
-          <ShieldCheck className="h-4 w-4" />
-        ) : icon === "device" ? (
-          <SmartphoneNfc className="h-4 w-4" />
-        ) : (
-          <Sparkles className="h-4 w-4" />
-        )}
-        <p className="text-sm font-semibold text-brand-900">{title}</p>
+      <div className="rounded-2xl border border-brand-100 bg-white p-6 sm:p-9">
+        <div className="mb-7"><span className="inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-brand-600"><ShieldCheck className="h-3.5 w-3.5" aria-hidden />Secure account access</span><h2 className="mt-4 text-3xl font-medium tracking-tight text-brand-900">{isSignup ? "Let’s get you started." : "Welcome back."}</h2><p className="mt-3 text-sm leading-6 text-brand-600">{isSignup ? "Create your account for the journey ahead." : "Log in to your SIM.Africa account."}</p></div>
+        <AuthForm providers={providers} mode={mode} />
+        <p className="mt-7 border-t border-brand-100 pt-6 text-center text-xs text-brand-600">{isSignup ? "Already part of the adventure?" : "New around here?"} <Link href={isSignup ? "/auth/signin" : "/auth/signup"} className="font-semibold text-brand-900 underline underline-offset-4">{isSignup ? "Log in" : "Create an account"}</Link></p>
+        <a href="mailto:support@sim.africa" className="mt-5 flex min-h-11 items-center justify-center gap-1.5 rounded-md text-xs text-brand-500 hover:text-brand-900">A little help getting in? Contact us <ArrowUpRight className="h-3 w-3" aria-hidden /></a>
       </div>
-      <p className="mt-2 text-sm text-brand-700">{description}</p>
     </div>
   );
 }

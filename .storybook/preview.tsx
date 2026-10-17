@@ -2,6 +2,7 @@ import type { Preview } from '@storybook/nextjs-vite';
 import { mswLoader } from 'msw-storybook-addon/csf3';
 
 import '../app/globals.css';
+import './fonts.css';
 import { Providers } from '../app/providers';
 import { mswHandlers } from './msw-handlers';
 

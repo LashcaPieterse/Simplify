@@ -86,7 +86,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
       <div className="space-y-6">
         <button
           type="button"
-          className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-brand-100 bg-white px-5 text-base font-semibold text-brand-900 shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-70"
+          className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-brand-200 bg-white px-5 text-sm font-semibold text-brand-900 shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-70"
           onClick={handleGoogle}
           disabled={googleIsPending || isPending}
         >
@@ -110,7 +110,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
                 type="email"
                 required
                 autoComplete="email"
-                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                className="h-[52px] w-full rounded-xl border border-brand-200 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-none transition placeholder:text-brand-500 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -140,7 +140,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
                 required
                 minLength={8}
                 autoComplete="current-password"
-                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                className="h-[52px] w-full rounded-xl border border-brand-200 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-none transition placeholder:text-brand-500 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -186,7 +186,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
     <div className="space-y-6">
       <button
         type="button"
-        className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl border border-brand-100 bg-white px-5 text-base font-semibold text-brand-900 shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-70"
+        className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-brand-200 bg-white px-5 text-sm font-semibold text-brand-900 shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-100 disabled:pointer-events-none disabled:opacity-70"
         onClick={handleGoogle}
         disabled={googleIsPending || isPending}
       >
@@ -210,7 +210,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
                 name="name"
                 type="text"
                 autoComplete="name"
-                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                className="h-[52px] w-full rounded-xl border border-brand-200 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-none transition placeholder:text-brand-500 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -228,7 +228,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
                 type="email"
                 required
                 autoComplete="email"
-                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                className="h-[52px] w-full rounded-xl border border-brand-200 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-none transition placeholder:text-brand-500 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -247,7 +247,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
                 required
                 minLength={8}
                 autoComplete="new-password"
-                className="h-[52px] w-full rounded-2xl border border-brand-100 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-inner transition placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                className="h-[52px] w-full rounded-xl border border-brand-200 bg-white px-4 py-3 pl-12 text-base text-brand-900 shadow-none transition placeholder:text-brand-500 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

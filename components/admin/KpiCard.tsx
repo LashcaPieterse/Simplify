@@ -14,7 +14,7 @@ export function KpiCard({
   tone?: "default" | "success" | "warning";
 }) {
   const toneClass =
-    tone === "success" ? "bg-teal-50 text-teal-800" : tone === "warning" ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-800";
+    tone === "success" ? "bg-brand-50 text-brand-800" : tone === "warning" ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-800";
 
   return (
     <div className="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

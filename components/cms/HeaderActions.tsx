@@ -39,7 +39,7 @@ export function HeaderActions() {
         <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
           <Link href="/auth/signin">Log in</Link>
         </Button>
-        <Button asChild size="sm" className="h-11 px-4 sm:h-9">
+        <Button asChild size="sm" variant="secondary" className="h-11 px-5">
           <Link href="/auth/signup">Sign up</Link>
         </Button>
       </div>
@@ -57,7 +57,7 @@ export function HeaderActions() {
 
   return (
     <div ref={menuRef} className="relative z-20 flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
-      <Button asChild size="sm" variant="secondary" className="h-11 px-3.5 text-brand-900 sm:h-9 sm:px-4">
+      <Button asChild size="sm" variant="secondary" className="h-11 px-3.5 text-brand-900 sm:h-11 sm:px-4">
         <Link href={"/account/esims" as Route}>My eSIMs</Link>
       </Button>
       <button

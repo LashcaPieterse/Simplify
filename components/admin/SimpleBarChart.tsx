@@ -27,7 +27,7 @@ export function SimpleBarChart({ bars, height = 200 }: { bars: BarValue[]; heigh
               width={barWidth}
               height={barHeight}
               rx={6}
-              className="fill-teal-500"
+              className="fill-brand-500"
               opacity={0.9}
             />
             <text x={x + barWidth / 2} y={height - 4} textAnchor="middle" className="fill-slate-600 text-[10px]">

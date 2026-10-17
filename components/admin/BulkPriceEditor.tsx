@@ -66,7 +66,7 @@ export function BulkPriceEditor({ packages }: { packages: PackageLite[] }) {
                       type="number"
                       step="0.01"
                       defaultValue={(selling / 100).toFixed(2)}
-                      className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-teal-500 focus:outline-none"
+                      className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none"
                       onChange={(event) => {
                         const value = Number(event.target.value) * 100;
                         setRows((prev) => {

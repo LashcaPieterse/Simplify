@@ -68,7 +68,7 @@ export default async function PackageDetailPage({ params }: { params: Promise<{ 
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-600">Package</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Package</p>
           <h1 className="text-3xl font-bold text-slate-900">{pkg.title}</h1>
           <p className="text-sm text-slate-600">
             {pkg.operator?.country?.title ?? "Unknown"} • {pkg.operator?.title ?? "Unknown operator"} •
@@ -139,7 +139,7 @@ export default async function PackageDetailPage({ params }: { params: Promise<{ 
                 type="number"
                 step="0.01"
                 defaultValue={sellingPriceCents ? sellingPriceCents / 100 : ""}
-                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-teal-500 focus:outline-none"
+                className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
                 placeholder="Eg. 14.99"
               />
             </label>
