@@ -6,6 +6,11 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { sendEmail } from "@/lib/notifications/email";
 import { normalizeHttpUrl } from "@/lib/http/safe-url";
 import {
+  formatReceiptActivationPolicy,
+  formatReceiptApn,
+  formatReceiptInstructions,
+} from "./receipt-content";
+import {
   canIssueScopedAccessTokens,
   createOrderAccessLink,
 } from "@/lib/orders/access";
@@ -108,7 +113,7 @@ function buildOrderLink(orderId: string, baseUrl: string): string {
   return `${baseUrl}/orders/${orderId}`;
 }
 
-function buildReceiptEmail(options: {
+export function buildReceiptEmail(options: {
   recipientName: string | null;
   orderReference: string;
   planName: string;
@@ -130,6 +135,13 @@ function buildReceiptEmail(options: {
 }) {
   const greeting = options.recipientName ? `Hi ${options.recipientName},` : "Hi there,";
   const destinationLine = options.destination ? `Destination: ${options.destination}` : "";
+  const instructions = formatReceiptInstructions(options.manualInstallation);
+  const activation = formatReceiptActivationPolicy(options.activationPolicy);
+  const apn = formatReceiptApn(options.apn);
+  const manualValuesReady = Boolean(options.smdpAddress && options.activationCode);
+  const iphoneManualStep = "iPhone: Open Settings > Cellular or Mobile Data > Add eSIM > Use QR Code > Enter Details Manually. Enter the SM-DP+ address and activation code in their separate fields.";
+  const androidManualStep = "Android: Open Settings and find the option to add an eSIM in SIM manager or Network & internet > SIMs. Choose manual entry if offered. Some phones ask for the full installation code instead of separate fields; menu names vary by device.";
+  const topUpNote = "Open your SIM.Africa order to view available top-up options. Availability depends on your eSIM.";
 
   const textLines = [
     greeting,
@@ -143,23 +155,45 @@ function buildReceiptEmail(options: {
     `Date: ${options.purchasedAt}`,
     "",
     `Manage your order: ${options.orderLink}`,
+    "",
+    "Before you install",
+    "Connect to reliable Wi-Fi and use a compatible, carrier-unlocked phone. Choose one of the available installation methods below.",
+    `When your plan starts: ${activation}`,
+    "",
+    "Install by QR code",
     options.qrCodeUrl ? `QR code: ${options.qrCodeUrl}` : "No QR code URL is currently available. Check the secure order page for the latest fulfilment details.",
-    options.qrCodeData ? `QR installation code: ${options.qrCodeData}` : "",
+    options.qrCodeUrl ? "Open the QR code on a second screen, then scan it from your phone's Add eSIM settings. If you cannot scan it, use an alternative method below." : "",
     options.directAppleUrl ? `Direct iPhone installation: ${options.directAppleUrl}` : "",
+    "",
+    "Enter details manually",
+    manualValuesReady ? iphoneManualStep : "If separate manual values are missing, use the QR code or check the secure order page for installation details.",
+    options.qrCodeData || manualValuesReady ? androidManualStep : "",
     options.smdpAddress ? `SM-DP+ address: ${options.smdpAddress}` : "",
     options.activationCode ? `Activation code: ${options.activationCode}` : "",
-    options.manualInstallation ? `Manual installation: ${options.manualInstallation}` : "No manual installation values are currently available. Check the secure order page for the latest fulfilment details.",
-    options.activationPolicy ? `Activation: ${options.activationPolicy}` : "Activation: Check the package-specific instructions on the secure order page before installing.",
-    options.apn ? `APN: ${options.apn}` : "",
-    "Installation: Add the eSIM from your phone's mobile-network settings using the supplied QR code or manual values. Keep the plan-specific activation rule in mind.",
+    options.qrCodeData ? `Full installation code (only if your phone asks for one): ${options.qrCodeData}` : "",
+    instructions ? `Plan-specific setup instructions:\n${instructions}` : "Check the secure order page for this plan's connection and roaming instructions.",
+    `APN settings: ${apn}`,
+    "After installation, select this eSIM for mobile data when you want to use it. Follow the plan-specific roaming instructions above or on your order page.",
     `Detailed installation guide: ${options.installationGuideUrl}`,
     "Important: Do not delete the eSIM prematurely. Many eSIM profiles cannot be installed again with the same QR code.",
     "",
+    `Top-ups: ${topUpNote}`,
+    `View your order and top-up options: ${options.orderLink}`,
     "Need help? Email support@sim.africa.",
     options.whatsappUrl ? `WhatsApp support: ${options.whatsappUrl}` : "",
-  ].filter(Boolean);
+  ];
 
   const safe = (value: string) => value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+  const instructionHtml = instructions?.split(/\n{2,}/).map((block) => {
+    const lines = block.split("\n").map((line) => line.trim());
+    if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+      return `<ol style="padding-left:20px;line-height:1.6;">${lines.map((line) => `<li>${safe(line.replace(/^\d+\.\s+/, ""))}</li>`).join("")}</ol>`;
+    }
+    if (lines.every((line) => /^[*-]\s+/.test(line))) {
+      return `<ul style="padding-left:20px;line-height:1.6;">${lines.map((line) => `<li>${safe(line.replace(/^[*-]\s+/, ""))}</li>`).join("")}</ul>`;
+    }
+    return `<p style="line-height:1.6;">${lines.map(safe).join("<br>")}</p>`;
+  }).join("");
 
   const html = `
     <div style="font-family: Arial, sans-serif; color: #153f41; max-width: 620px; margin: 0 auto; padding: 24px;">
@@ -182,29 +216,33 @@ function buildReceiptEmail(options: {
       <p style="margin-top: 16px;">
         <a href="${safe(options.orderLink)}" style="display:inline-block; background:#1c6b6d; color:#fff; border-radius:999px; padding:12px 20px; font-weight:700; text-decoration:none;">Open secure order &amp; instructions</a>
       </p>
-      ${options.qrCodeUrl ? `<div style="margin-top:24px;"><h2 style="font-size:18px;">Install by QR code</h2><img src="${safe(options.qrCodeUrl)}" alt="QR code for installing the eSIM" width="180" height="180" style="display:block;max-width:180px;height:auto;"></div>` : ""}
-      ${options.qrCodeData ? `<div style="margin-top:20px;"><h2 style="font-size:18px;">QR installation code</h2><p style="font-family:monospace;white-space:pre-wrap;overflow-wrap:anywhere;">${safe(options.qrCodeData)}</p></div>` : ""}
+      <div style="margin-top:24px;"><h2 style="font-size:18px;">Before you install</h2><p>Connect to reliable Wi-Fi and use a compatible, carrier-unlocked phone. Choose one of the available installation methods below.</p><p><strong>When your plan starts:</strong> ${safe(activation)}</p></div>
+      ${options.qrCodeUrl ? `<div style="margin-top:24px;"><h2 style="font-size:18px;">Install by QR code</h2><p>Open the QR code on a second screen, then scan it from your phone's Add eSIM settings. If you cannot scan it, use an alternative method below.</p><img src="${safe(options.qrCodeUrl)}" alt="QR code for installing the eSIM" width="180" height="180" style="display:block;max-width:180px;height:auto;"></div>` : ""}
       ${options.directAppleUrl ? `<p style="margin-top:16px;"><a href="${safe(options.directAppleUrl)}">Install directly on a supported iPhone</a></p>` : ""}
-      ${options.smdpAddress || options.activationCode ? `<div style="margin-top:20px;"><h2 style="font-size:18px;">Manual activation values</h2>${options.smdpAddress ? `<p><strong>SM-DP+ address:</strong> <span style="font-family:monospace;overflow-wrap:anywhere;">${safe(options.smdpAddress)}</span></p>` : ""}${options.activationCode ? `<p><strong>Activation code:</strong> <span style="font-family:monospace;overflow-wrap:anywhere;">${safe(options.activationCode)}</span></p>` : ""}</div>` : ""}
-      ${options.manualInstallation ? `<div style="margin-top:20px;"><h2 style="font-size:18px;">Manual installation</h2><p style="white-space:pre-wrap;overflow-wrap:anywhere;">${safe(options.manualInstallation)}</p></div>` : ""}
       <div style="margin-top:20px;">
-        <h2 style="font-size:18px;">Installation</h2>
-        <ol style="padding-left:20px;line-height:1.6;">
-          <li>Open the mobile-network or SIM settings on your compatible, carrier-unlocked phone.</li>
-          <li>Add an eSIM using the supplied QR code or manual values.</li>
-          <li>Follow the package-specific activation and roaming instructions before connecting.</li>
-        </ol>
+        <h2 style="font-size:18px;">Enter details manually</h2>
+        <p>${safe(manualValuesReady ? iphoneManualStep : "If separate manual values are missing, use the QR code or check the secure order page for installation details.")}</p>
+        ${options.qrCodeData || manualValuesReady ? `<p>${safe(androidManualStep)}</p>` : ""}
+        ${options.smdpAddress ? `<p><strong>SM-DP+ address:</strong> <span style="font-family:monospace;overflow-wrap:anywhere;">${safe(options.smdpAddress)}</span></p>` : ""}
+        ${options.activationCode ? `<p><strong>Activation code:</strong> <span style="font-family:monospace;overflow-wrap:anywhere;">${safe(options.activationCode)}</span></p>` : ""}
+        ${options.qrCodeData ? `<p><strong>Full installation code (only if your phone asks for one):</strong><br><span style="font-family:monospace;white-space:pre-wrap;overflow-wrap:anywhere;">${safe(options.qrCodeData)}</span></p>` : ""}
+      </div>
+      ${instructionHtml ? `<div style="margin-top:20px;overflow-wrap:anywhere;"><h2 style="font-size:18px;">Plan-specific setup instructions</h2>${instructionHtml}</div>` : ""}
+      <div style="margin-top:20px;">
+        <h2 style="font-size:18px;">Connect after installation</h2>
+        <p>Select this eSIM for mobile data when you want to use it. Follow the plan-specific connection and roaming instructions above or on your secure order page.</p>
+        <p><strong>APN settings:</strong> ${safe(apn)}</p>
         <p><a href="${safe(options.installationGuideUrl)}">Open the SIM.Africa installation guide</a></p>
       </div>
-      <div style="margin-top:20px;"><h2 style="font-size:18px;">Activation</h2><p>${safe(options.activationPolicy ?? "Check the package-specific instructions on the secure order page before installing.")}</p>${options.apn ? `<p><strong>APN:</strong> ${safe(options.apn)}</p>` : ""}</div>
       <p style="margin-top:20px; padding:14px; background:#fff7ed; color:#8c460c; border-radius:12px;"><strong>Important:</strong> Do not delete the eSIM prematurely. Many eSIM profiles cannot be installed again with the same QR code.</p>
+      <div style="margin-top:20px;"><h2 style="font-size:18px;">Top-ups</h2><p>${safe(topUpNote)} <a href="${safe(options.orderLink)}">View your order and top-up options</a>.</p></div>
       <p style="color: #64748b; font-size: 13px;">Need help? Email <a href="mailto:support@sim.africa">support@sim.africa</a>${options.whatsappUrl ? ` or use <a href="${safe(options.whatsappUrl)}">WhatsApp support</a>` : ""}.</p>
     </div>
   `;
 
   return {
     subject: `Your SIM.Africa eSIM — ${options.destination ?? options.planName}`,
-    text: textLines.join("\n"),
+    text: textLines.join("\n").replace(/\n{3,}/g, "\n\n"),
     html,
   };
 }
