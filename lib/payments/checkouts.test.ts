@@ -624,6 +624,22 @@ test("finaliseOrderFromCheckout rejects invalid top-up checkout context before A
   assert.equal(db.orders.length, 0);
 });
 
+test("provider verification outages preserve state and report that callback delivery should retry", async () => {
+  const db = new FakeCheckoutDb();
+  db.payment.status = "pending";
+  db.checkout.status = "pending";
+  const result = await verifyPaymentTransaction("payment-1", {
+    prisma: db as unknown as PrismaClient, source: "dpo-push",
+    dpoClient: { verifyTransaction: async () => { throw new Error("Simulated provider outage"); } },
+  });
+  assert.equal(result.retryable, true);
+  assert.equal(result.paymentStatus, "pending");
+  assert.equal(db.payment.status, "pending");
+  assert.equal(db.checkout.status, "pending");
+  assert.equal(db.paymentEvents.length, 0);
+  assert.equal(db.orders.length, 0);
+});
+
 test("verifyPaymentTransaction rejects verified DPO amount mismatches before Airalo", async () => {
   const db = new FakeCheckoutDb();
   db.payment.status = "pending";
@@ -661,6 +677,30 @@ test("verifyPaymentTransaction rejects verified DPO amount mismatches before Air
 });
 
 type PurchaseMode = "sync" | "async" | "top-up";
+
+test("callback verification rejects missing amount/currency and a different verified currency", async (t) => {
+  for (const fields of [
+    { amount: undefined, currency: "UGX" },
+    { amount: 25, currency: undefined },
+    { amount: 25, currency: "USD" },
+  ]) {
+    await t.test(JSON.stringify(fields), async () => {
+      const db = new FakeCheckoutDb();
+      db.payment.status = "pending";
+      db.checkout.status = "pending";
+      const result = await verifyPaymentTransaction("payment-1", {
+        prisma: db as unknown as PrismaClient, source: "dpo-push",
+        dpoClient: { verifyTransaction: async () => ({
+          status: "000", resultCode: "000", ...fields,
+          rawResponse: "<API3G><Result>000</Result></API3G>",
+        }) },
+      });
+      assert.equal(result.paymentStatus, "verification_mismatch");
+      assert.equal(db.orders.length, 0);
+      assert.equal(db.checkout.orderId, null);
+    });
+  }
+});
 
 function reservedCheckout(mode: PurchaseMode, status = "pending"): FakeCheckoutDb {
   const db = new FakeCheckoutDb();

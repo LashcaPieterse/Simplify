@@ -31,6 +31,7 @@ function pushXml(overrides: Record<string, string> = {}): string {
 function buildDeps(options: {
   knownPayment?: boolean;
   verifyThrows?: boolean;
+  verificationRetryable?: boolean;
 } = {}) {
   const calls: string[] = [];
   const events: unknown[] = [];
@@ -82,6 +83,9 @@ function buildDeps(options: {
         calls.push(`verify:${transactionId}`);
         if (options.verifyThrows) {
           throw new Error("DPO verify failed");
+        }
+        if (options.verificationRetryable) {
+          return { paymentStatus: "pending", retryable: true };
         }
         if (!finalized) {
           createdOrders += 1;
@@ -200,7 +204,7 @@ test("handleDpoPushPayment rejects unknown transaction references before mutatio
   ]);
 });
 
-test("handleDpoPushPayment records amount mismatches but does not fulfil", async () => {
+test("untrusted push amounts cannot override an independently verified payment", async () => {
   const state = buildDeps();
 
   const result = await handleDpoPushPayment({
@@ -213,12 +217,12 @@ test("handleDpoPushPayment records amount mismatches but does not fulfil", async
   assert.deepEqual(state.calls, [
     "find-token:token-1",
     `record:payment-1:${DPO_PUSH_EVENT_TYPE}`,
-    "update:payment-1:verification_mismatch",
+    "verify:payment-1",
   ]);
-  assert.equal(state.createdOrders, 0);
+  assert.equal(state.createdOrders, 1);
 });
 
-test("handleDpoPushPayment records currency mismatches but does not fulfil", async () => {
+test("untrusted push currencies cannot override an independently verified payment", async () => {
   const state = buildDeps();
 
   const result = await handleDpoPushPayment({
@@ -231,9 +235,9 @@ test("handleDpoPushPayment records currency mismatches but does not fulfil", asy
   assert.deepEqual(state.calls, [
     "find-token:token-1",
     `record:payment-1:${DPO_PUSH_EVENT_TYPE}`,
-    "update:payment-1:verification_mismatch",
+    "verify:payment-1",
   ]);
-  assert.equal(state.createdOrders, 0);
+  assert.equal(state.createdOrders, 1);
 });
 
 test("handleDpoPushPayment rejects malformed XML before mutation", async () => {
@@ -250,13 +254,18 @@ test("handleDpoPushPayment rejects malformed XML before mutation", async () => {
   assert.deepEqual(state.calls, []);
 });
 
-test("handleDpoPushPayment records non-success pushes without fulfilment", async () => {
+test("non-success pushes cannot mark a verified payment or checkout as failed", async () => {
   const state = buildDeps();
 
   const result = await handleDpoPushPayment({
     rawBody: pushXml({
       Result: "901",
       ResultExplanation: "Transaction failed",
+      TransactionToken: "",
+      TransactionRef: "",
+      CompanyRef: "checkout-1",
+      TransactionAmount: "",
+      TransactionCurrency: "",
     }),
     contentType: "application/xml",
     deps: state.deps,
@@ -264,10 +273,25 @@ test("handleDpoPushPayment records non-success pushes without fulfilment", async
 
   assert.equal(result.body, DPO_PUSH_OK_XML);
   assert.deepEqual(state.calls, [
-    "find-token:token-1",
+    "find-checkout:checkout-1",
     `record:payment-1:${DPO_PUSH_EVENT_TYPE}`,
-    "update:payment-1:failed",
-    "checkout:checkout-1:failed",
+    "verify:payment-1",
   ]);
-  assert.equal(state.createdOrders, 0);
+  assert.equal(state.createdOrders, 1);
+});
+
+test("provider verification outages request callback retry without changing payment state", async (t) => {
+  for (const options of [{ verifyThrows: true }, { verificationRetryable: true }]) {
+    await t.test(JSON.stringify(options), async () => {
+      const state = buildDeps(options);
+      const result = await handleDpoPushPayment({
+        rawBody: pushXml(), contentType: "application/xml", deps: state.deps,
+      });
+      assert.equal(result.status, 503);
+      assert.match(result.body, /verification_unavailable/);
+      assert.doesNotMatch(result.body, /<Response>OK<\/Response>/);
+      assert.deepEqual(state.calls, ["find-token:token-1", `record:payment-1:${DPO_PUSH_EVENT_TYPE}`, "verify:payment-1"]);
+      assert.equal(state.createdOrders, 0);
+    });
+  }
 });

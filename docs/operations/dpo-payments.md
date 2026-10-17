@@ -30,7 +30,7 @@ The legacy `/api/payments/dpo/ipn` path remains as a compatibility alias, but ne
 1. `/api/checkouts` validates the requested package, persists a `CheckoutSession`, and creates a DPO transaction.
 2. `/api/checkouts` sets a scoped HTTP-only checkout access cookie. Authenticated users can also access their own checkout by session ownership.
 3. Customers are redirected to DPO's hosted page. On completion DPO redirects the browser to `/checkout/[id]/return` and may send a server-to-server Push Payments Callback to `/api/payments/dpo/push`.
-4. The Push Payments handler accepts DPO XML, stores accepted payloads in `PaymentTransactionEvent`, calls DPO `verifyToken`, compares amount and currency with the stored checkout payment, and finalises the order only when both the push payload and the verified transaction are approved.
+4. The Push Payments handler accepts DPO XML and records matched notifications in `PaymentTransactionEvent`. Push fields are untrusted notifications: only the server-side `verifyToken` result may change payment state or authorize fulfilment. Verification compares the provider's amount and currency with the stored payment. An already independently approved payment remains approved on callback replay. A failed or mismatched push cannot downgrade it. If verification cannot complete, the handler preserves state and returns HTTP 503 so callback delivery can be retried.
 5. New-plan checkouts finalise through Airalo `/v2/orders` or `/v2/orders-async`; top-up checkouts finalise through Airalo `/v2/orders/topups` with the original eSIM ICCID.
 6. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` for new plans, `/orders/{originalOrderId}` for top-ups, or `/checkout/{id}/failed`.
 7. When finalisation exposes an order ID, the status API sets scoped HTTP-only order access cookies for guest order-page and eSIM-instruction access.
@@ -52,6 +52,16 @@ The legacy `/api/payments/dpo/ipn` path remains as a compatibility alias, but ne
 3. Accepted push callbacks are stored in `PaymentTransactionEvent` with `eventType=dpo-push`.
 4. DPO expects the endpoint to acknowledge accepted callbacks with XML `<Response>OK</Response>`.
 5. If DPO provides source IP ranges, configure platform/network allowlisting without disabling server-side `verifyToken`.
+
+### Verify browser-independent callback delivery
+
+1. Have DPO confirm the test merchant's Push Payments Callback URL is `https://sim.africa/api/payments/dpo/push` and notifications are enabled. Shared test API credentials do not establish that merchant configuration. The `CallBackURL` field sent by the app is not listed in DPO's current `createToken` transaction fields; do not treat it as proof of callback registration.
+2. Capture the baseline payment events and request-log window. DPO can resend a genuine notification for an existing test transaction, if supported, to verify transport and duplicate handling without another purchase. A resend for an already fulfilled order does not prove initial fulfilment without a browser return.
+3. For a full test, complete one approved sandbox payment using dummy card details and block browser requests to SIM.Africa after submission. Do not open the return page or call the checkout status endpoint; both can initiate verification and invalidate this test's evidence.
+4. Observe DPO's POST in Vercel logs, a matching `dpo-push` event, server verification and a single fulfilled supplier order/profile. Match timestamps and payment identifiers. Confirm receipt separately.
+5. Do not manually fabricate a successful provider payload or label a local mock test as a genuine DPO notification. Missing callback evidence leaves the end-to-end test unverified.
+
+See DPO's [Push Payments Callback contract](https://docs.dpopay.com/dpo-pay-by-network/reference/pushpayments) and [createToken fields](https://docs.dpopay.com/dpo-pay-by-network/reference/create-token).
 
 ### Credential rotation
 

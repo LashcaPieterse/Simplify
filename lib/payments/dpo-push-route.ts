@@ -1,8 +1,6 @@
 import prismaClient from "../db/client";
 import {
   recordPaymentEvent,
-  setCheckoutStatus,
-  updatePaymentStatus,
   verifyPaymentTransaction,
 } from "./checkouts";
 import { handleDpoPushPayment } from "./dpo-ipn";
@@ -49,18 +47,11 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
         recordPaymentEvent(transactionId, eventType, payload, {
           prisma: prismaClient,
         }),
-      updatePaymentStatus: (transactionId, status, options) =>
-        updatePaymentStatus(transactionId, status, {
-          prisma: prismaClient,
-          metadata: options.metadata,
-        }),
       verifyPaymentTransaction: (transactionId) =>
         verifyPaymentTransaction(transactionId, {
           prisma: prismaClient,
           source: "dpo-push",
         }),
-      setCheckoutStatus: (checkoutId, status) =>
-        setCheckoutStatus(checkoutId, status, { prisma: prismaClient }),
     },
   });
 

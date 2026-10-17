@@ -4,10 +4,6 @@ export const DPO_PUSH_EVENT_TYPE = "dpo-push";
 export const DPO_PUSH_OK_XML =
   '<?xml version="1.0" encoding="utf-8"?><API3G><Response>OK</Response></API3G>';
 
-const STATUS_FAILED = "failed";
-const STATUS_PENDING = "pending";
-const STATUS_VERIFICATION_MISMATCH = "verification_mismatch";
-
 const DPO_PUSH_FIELDS = [
   "Result",
   "ResultExplanation",
@@ -64,15 +60,9 @@ type DpoPushDeps = {
     eventType: string,
     payload: unknown,
   ) => Promise<void>;
-  updatePaymentStatus: (
-    transactionId: string,
-    status: string,
-    options: { metadata?: Record<string, unknown> },
-  ) => Promise<void>;
   verifyPaymentTransaction: (
     transactionId: string,
   ) => Promise<VerifyPaymentTransactionResult>;
-  setCheckoutStatus: (checkoutId: string, status: string) => Promise<void>;
 };
 
 export type DpoPushResult = {
@@ -167,15 +157,6 @@ export function parseDpoPushPayload(body: string): DpoPushPayload {
   return payload;
 }
 
-function normalizeResultCode(value: string | undefined): string {
-  return value?.trim() ?? "";
-}
-
-function normalizeCurrency(value: string | undefined): string | null {
-  const normalized = value?.trim().toUpperCase();
-  return normalized ? normalized : null;
-}
-
 function firstNonEmpty(
   ...values: Array<string | undefined>
 ): string | undefined {
@@ -187,45 +168,6 @@ function firstNonEmpty(
   }
 
   return undefined;
-}
-
-function parseMajorAmountToCents(value: string | undefined): number | null {
-  if (!value?.trim()) {
-    return null;
-  }
-
-  const normalized = Number(value.trim());
-  if (!Number.isFinite(normalized)) {
-    return null;
-  }
-
-  return Math.round(normalized * 100);
-}
-
-function validatePushAmountAndCurrency(
-  transaction: DpoPushPaymentTransaction,
-  payload: DpoPushPayload,
-): string | null {
-  const amountCents = parseMajorAmountToCents(payload.TransactionAmount);
-  if (amountCents === null) {
-    return "DPO push payload did not include a valid transaction amount.";
-  }
-
-  if (amountCents !== transaction.amountCents) {
-    return `DPO push amount mismatch. Expected ${transaction.amountCents} cents but received ${amountCents} cents.`;
-  }
-
-  const currency = normalizeCurrency(payload.TransactionCurrency);
-  const expectedCurrency = normalizeCurrency(transaction.currency);
-  if (!currency) {
-    return "DPO push payload did not include a transaction currency.";
-  }
-
-  if (currency !== expectedCurrency) {
-    return `DPO push currency mismatch. Expected ${expectedCurrency} but received ${currency}.`;
-  }
-
-  return null;
 }
 
 async function findPaymentTransaction(
@@ -294,42 +236,19 @@ export async function handleDpoPushPayment(options: {
     payload,
   );
 
-  const resultCode = normalizeResultCode(payload.Result);
-  if (resultCode !== "000") {
-    await options.deps.updatePaymentStatus(transaction.id, STATUS_FAILED, {
-      metadata: { source: DPO_PUSH_EVENT_TYPE, payload },
-    });
-    if (transaction.checkoutId) {
-      await options.deps.setCheckoutStatus(transaction.checkoutId, STATUS_FAILED);
-    }
-    return xmlOk();
-  }
-
-  const mismatch = validatePushAmountAndCurrency(transaction, payload);
-  if (mismatch) {
-    await options.deps.updatePaymentStatus(
-      transaction.id,
-      STATUS_VERIFICATION_MISMATCH,
-      {
-        metadata: { source: DPO_PUSH_EVENT_TYPE, reason: mismatch, payload },
-      },
-    );
-    return xmlOk();
-  }
-
+  // DPO's push payload has no documented signature. Treat every callback as
+  // a notification to verify our stored transaction, never as payment evidence.
+  // This also prevents failed, mismatched or replayed pushes from downgrading
+  // a payment which was already independently approved.
   try {
-    await options.deps.verifyPaymentTransaction(transaction.id);
-  } catch (error) {
-    await options.deps.updatePaymentStatus(transaction.id, STATUS_PENDING, {
-      metadata: {
-        source: DPO_PUSH_EVENT_TYPE,
-        payload,
-        warning:
-          error instanceof Error
-            ? error.message
-            : "DPO verification failed after push callback.",
-      },
-    });
+    const verification = await options.deps.verifyPaymentTransaction(transaction.id);
+    if (verification.retryable) {
+      return xmlError(503, "verification_unavailable");
+    }
+  } catch {
+    // Preserve payment state and let DPO retry instead of acknowledging a
+    // notification whose verification could not complete.
+    return xmlError(503, "verification_unavailable");
   }
 
   return xmlOk();

@@ -360,6 +360,7 @@ export type VerifyPaymentTransactionResult = {
   orderId?: string | null;
   redirectOrderId?: string | null;
   message?: string;
+  retryable?: boolean;
 };
 
 function amountToCents(amount: number | undefined): number | null {
@@ -515,6 +516,7 @@ async function verifyCheckoutPaymentRecord(
       redirectOrderId:
         checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId,
       message: "Verification failed.",
+      retryable: true,
     };
   }
   const resultCode = verification.resultCode ?? verification.status;
