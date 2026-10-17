@@ -5,6 +5,7 @@ import prismaClient from "@/lib/db/client";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { sendEmail } from "@/lib/notifications/email";
 import { normalizeHttpUrl } from "@/lib/http/safe-url";
+import { resolveAiraloApnSettings, type AiraloApnSettings } from "@/lib/airalo/apn";
 import {
   formatReceiptActivationPolicy,
   formatReceiptApn,
@@ -43,6 +44,7 @@ type ReceiptDeliveryDetails = {
   smdpAddress: string | null;
   activationCode: string | null;
   apn: string | null;
+  apnSettings: AiraloApnSettings | null;
 };
 
 function readPayloadString(
@@ -83,6 +85,7 @@ export function resolveReceiptDeliveryDetails(
     smdpAddress,
     activationCode,
     apn,
+    apnSettings: resolveAiraloApnSettings(payload?.apnSettings ?? payload?.apn),
   };
 }
 
@@ -131,13 +134,14 @@ export function buildReceiptEmail(options: {
   manualInstallation: string | null;
   activationPolicy: string | null;
   apn: string | null;
+  apnSettings?: AiraloApnSettings | null;
   whatsappUrl: string | null;
 }) {
   const greeting = options.recipientName ? `Hi ${options.recipientName},` : "Hi there,";
   const destinationLine = options.destination ? `Destination: ${options.destination}` : "";
   const instructions = formatReceiptInstructions(options.manualInstallation);
   const activation = formatReceiptActivationPolicy(options.activationPolicy);
-  const apn = formatReceiptApn(options.apn);
+  const apn = formatReceiptApn(options.apn, options.apnSettings);
   const manualValuesReady = Boolean(options.smdpAddress && options.activationCode);
   const iphoneManualStep = "iPhone: Open Settings > Cellular or Mobile Data > Add eSIM > Use QR Code > Enter Details Manually. Enter the SM-DP+ address and activation code in their separate fields.";
   const androidManualStep = "Android: Open Settings and find the option to add an eSIM in SIM manager or Network & internet > SIMs. Choose manual entry if offered. Some phones ask for the full installation code instead of separate fields; menu names vary by device.";
@@ -347,6 +351,7 @@ export async function sendOrderReceipt(
       null,
     activationPolicy: pkg?.operator?.activationPolicy?.trim() || null,
     apn: delivery.apn ?? pkg?.operator?.apnValue?.trim() ?? null,
+    apnSettings: delivery.apnSettings,
     whatsappUrl: whatsappNumber ? `https://wa.me/${whatsappNumber}` : null,
   });
 

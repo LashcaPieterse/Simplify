@@ -212,6 +212,20 @@ export type ListPackagesResponse = z.infer<typeof ListPackagesResponseSchema>;
 export type ListPackagesData = z.infer<typeof ListPackagesDataSchema>;
 export type ListPackagesCountry = z.infer<typeof ListPackagesCountrySchema>;
 
+const PlatformApnSchema = z.object({
+  apn_type: z.string().nullable().optional(),
+  apn_value: z.string().nullable().optional(),
+}).passthrough();
+
+// Current orders include device-specific settings; older responses use text.
+const ApnSchema = z.union([
+  z.string(),
+  z.object({
+    ios: PlatformApnSchema.nullable().optional(),
+    android: PlatformApnSchema.nullable().optional(),
+  }).passthrough(),
+]).nullable().optional();
+
 export const OrderResponseSchema = BaseResponseSchema.extend({
   data: z
     .object({
@@ -251,7 +265,7 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
       manual_installation: z.string().nullable().optional(),
       qrcode_installation: z.string().nullable().optional(),
       direct_apple_installation_url: z.string().nullable().optional(),
-      apn: z.string().nullable().optional(),
+      apn: ApnSchema,
       apn_type: z.string().nullable().optional(),
       apn_value: z.string().nullable().optional(),
       net_price: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -268,7 +282,7 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
               lpa: z.string().nullable().optional(),
               matching_id: z.string().nullable().optional(),
               activation_code: z.string().nullable().optional(),
-              apn: z.string().nullable().optional(),
+              apn: ApnSchema,
               apn_type: z.string().nullable().optional(),
               apn_value: z.string().nullable().optional(),
               net_price: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -566,6 +580,7 @@ const SimDataSchema = z
     direct_apple_installation_url: z.string().nullable().optional(),
     voucher_code: z.string().nullable().optional(),
     airalo_code: z.string().nullable().optional(),
+    apn: ApnSchema,
     apn_type: z.string().nullable().optional(),
     apn_value: z.string().nullable().optional(),
     is_roaming: z.boolean().nullable().optional(),

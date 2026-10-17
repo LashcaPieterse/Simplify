@@ -1,4 +1,5 @@
 import { compile } from "html-to-text";
+import { resolveAiraloApnSettings, type AiraloApnSettings } from "../airalo/apn";
 
 const readableText = compile({
   wordwrap: false,
@@ -59,7 +60,21 @@ export function formatReceiptActivationPolicy(value: string | null): string {
   }
 }
 
-export function formatReceiptApn(value: string | null): string {
+export function formatReceiptApn(value: string | null, deviceSettings?: AiraloApnSettings | null): string {
+  const settings = resolveAiraloApnSettings(deviceSettings);
+  if (settings) {
+    return (["ios", "android"] as const).flatMap(platform => {
+      const entry = settings[platform];
+      if (!entry) return [];
+      const label = platform === "ios" ? "iPhone" : "Android";
+      if (entry.apn_type?.toLowerCase() === "automatic") {
+        return [`${label}: APN is set automatically. Leave the APN settings unchanged.`];
+      }
+      return [`${label}: ${entry.apn_value
+        ? formatReceiptApn(entry.apn_value)
+        : "No manual APN value was supplied. Check your order's connection instructions before changing APN settings."}`];
+    }).join("\n");
+  }
   const apn = value?.trim();
   if (!apn || /^(?:n\/?a|none|null|not applicable|auto(?:matic)?)$/i.test(apn)) {
     return "No manual APN was supplied. Start with automatic settings and check your order's connection instructions if mobile data does not work.";

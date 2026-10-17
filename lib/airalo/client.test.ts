@@ -82,6 +82,34 @@ function requireFormData(value: FormData | null): FormData {
   return value;
 }
 
+test("AiraloClient accepts device APNs during submission, lookup, and recovery search", async (t) => {
+  const apn = {
+    ios: { apn_type: "automatic", apn_value: "globaldata" },
+    android: { apn_type: "manual", apn_value: "globaldata" },
+  };
+  const order = { id: 123, sims: [{ iccid: "test-iccid", apn }] };
+  for (const operation of ["submit", "lookup", "search"] as const) {
+    await t.test(operation, async () => {
+      let requests = 0;
+      const client = createTestClient({
+        clientId: "mock", clientSecret: "mock",
+        tokenCache: new MockTokenCache({ token: "mock", expiresAt: Date.now() + 3600000 }),
+        fetchImplementation: async () => {
+          requests++;
+          return jsonResponse({ data: operation === "search" ? [order] : order }, { status: 200 });
+        },
+      });
+      const result = operation === "submit"
+        ? (await client.createOrderResponse({ package_id: "test", quantity: "1" })).data
+        : operation === "lookup"
+          ? (await client.getOrderResponseById("123")).data
+          : (await client.findOrdersByDescription("[simplify_order_id:test]"))[0];
+      assert.deepEqual(result?.sims?.[0]?.apn, apn);
+      assert.equal(requests, 1);
+    });
+  }
+});
+
 test("AiraloClient never replays a supplier purchase POST automatically", async (t) => {
   const endpoints = [
     ["orders", (client: AiraloClient) => client.createOrderResponse({ package_id: "test", quantity: "1" })],

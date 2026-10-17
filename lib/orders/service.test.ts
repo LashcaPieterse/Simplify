@@ -552,8 +552,12 @@ test("createOrder stores rich /orders response data, APN, and raw snapshot", asy
   });
 });
 
-test("createOrder stores the documented Airalo order id before the display code", async () => {
+test("createOrder persists the documented Airalo order ID and device APNs without losing delivery details", async () => {
   const db = new FakeOrderDb();
+  const deviceApn = {
+    ios: { apn_type: "automatic", apn_value: "globaldata" },
+    android: { apn_type: "manual", apn_value: "globaldata" },
+  };
   const syncResponse = OrderResponseSchema.parse({
     status: true,
     data: {
@@ -566,6 +570,7 @@ test("createOrder stores the documented Airalo order id before the display code"
       sims: [
         {
           iccid: "8944465400003573253",
+          apn: deviceApn,
           qrcode: "LPA:1$RSP-3088.IDEMIA.IO$YVTGM-5LZC6-PIC56-KFEZJ",
           direct_apple_installation_url:
             "https://example.com/apple-install",
@@ -588,6 +593,9 @@ test("createOrder stores the documented Airalo order id before the display code"
   assert.equal(db.orders[0]?.orderNumber, "583747");
   assert.equal(db.profiles[0]?.activationCode, "YVTGM-5LZC6-PIC56-KFEZJ");
   assert.equal(db.snapshots[0]?.orderNumber, "583747");
+  assert.deepEqual((db.snapshots[0]?.rawPayloadJson as OrderResponse).data.sims?.[0]?.apn, deviceApn);
+  assert.equal(airalo.syncPayloads.length, 1);
+  assert.equal(result.installation?.apn, "globaldata");
 
   const installationPayload = JSON.parse(
     String(db.installationPayloads[0]?.payload),
@@ -596,6 +604,8 @@ test("createOrder stores the documented Airalo order id before the display code"
   assert.equal(installationPayload.orderId, "583747");
   assert.equal(installationPayload.qrCodeData, "LPA:1$RSP-3088.IDEMIA.IO$YVTGM-5LZC6-PIC56-KFEZJ");
   assert.equal(installationPayload.matchingId, "YVTGM-5LZC6-PIC56-KFEZJ");
+  assert.equal(installationPayload.apn, "globaldata");
+  assert.deepEqual(installationPayload.apnSettings, deviceApn);
 });
 
 test("createOrder hydrates a reserved checkout order using the checkout price snapshot", async () => {

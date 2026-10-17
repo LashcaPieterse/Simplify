@@ -115,6 +115,42 @@ test("receipt delivery does not expose unsafe supplier URLs", () => {
   assert.equal(delivery.directAppleUrl, null);
 });
 
+test("receipts respect automatic iPhone APNs and manual Android APNs", () => {
+  const apnSettings = {
+    ios: { apn_type: "automatic", apn_value: "iphone-apn" },
+    android: { apn_type: "manual", apn_value: "android-apn" },
+  };
+  const delivery = resolveReceiptDeliveryDetails({ apn: "legacy-apn", apnSettings });
+  assert.deepEqual(delivery.apnSettings, apnSettings);
+  const receipt = buildReceiptEmail({ ...receiptOptions, apn: delivery.apn, apnSettings: delivery.apnSettings });
+  for (const body of [receipt.text, receipt.html]) {
+    assert.match(body, /iPhone: APN is set automatically/);
+    assert.match(body, /Android: Enter android-apn exactly/);
+    assert.doesNotMatch(body, /Enter iphone-apn|Enter legacy-apn|\[object Object\]/);
+  }
+});
+
+test("receipts keep different manual APNs associated with the correct devices", () => {
+  const apnSettings = {
+    ios: { apn_type: "manual", apn_value: "iphone<&apn" },
+    android: { apn_type: "manual", apn_value: "android-apn" },
+  };
+  const receipt = buildReceiptEmail({ ...receiptOptions, apnSettings });
+  assert.match(receipt.text, /iPhone: Enter iphone<&apn exactly/);
+  assert.match(receipt.html, /iPhone: Enter iphone&lt;&amp;apn exactly/);
+  for (const body of [receipt.text, receipt.html]) assert.match(body, /Android: Enter android-apn exactly/);
+});
+
+test("a missing device APN never falls back to another device's manual value", () => {
+  const receipt = buildReceiptEmail({ ...receiptOptions, apn: "other-device-apn", apnSettings: {
+    ios: { apn_type: "manual", apn_value: null },
+  } });
+  for (const body of [receipt.text, receipt.html]) {
+    assert.match(body, /iPhone: No manual APN value was supplied/);
+    assert.doesNotMatch(body, /Enter other-device-apn/);
+  }
+});
+
 test("profile activation code can make a fulfilled order deliverable", () => {
   const delivery = resolveReceiptDeliveryDetails(null, " ACTIVATION-123 ");
   assert.equal(delivery.ready, true);

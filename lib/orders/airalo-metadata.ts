@@ -1,4 +1,5 @@
 import type { Order as AiraloOrder, Sim as AiraloSim } from "../airalo/schemas";
+import { resolveAiraloApnSettings, resolveAiraloApnValue } from "../airalo/apn";
 import { normalizeHttpUrl } from "../http/safe-url";
 
 export interface UsageMetadata {
@@ -203,11 +204,11 @@ export function resolveAiraloOrderApn(
     sim && typeof sim === "object" ? (sim as Record<string, unknown>) : null;
 
   return (
-    resolveStringValue(orderRecord?.apn) ??
+    resolveAiraloApnValue(orderRecord?.apn) ??
     resolveStringValue(orderRecord?.apn_value) ??
-    resolveStringValue(firstSimRecord?.apn) ??
+    resolveAiraloApnValue(firstSimRecord?.apn) ??
     resolveStringValue(firstSimRecord?.apn_value) ??
-    resolveStringValue(simRecord?.apn) ??
+    resolveAiraloApnValue(simRecord?.apn) ??
     resolveStringValue(simRecord?.apn_value)
   );
 }
@@ -277,6 +278,11 @@ export function createInstallationPayload(
     esim: resolveStringValue(orderRecord.esim) ?? lpa,
     directAppleUrl,
     apn: resolveAiraloOrderApn(order, sim),
+    apnSettings: resolveAiraloApnSettings({
+      ...resolveAiraloApnSettings(simRecord?.apn),
+      ...resolveAiraloApnSettings(firstSimRecord?.apn),
+      ...resolveAiraloApnSettings(orderRecord.apn),
+    }),
     apnType:
       resolveStringValue(simRecord?.apn_type) ??
       resolveStringValue(firstSimRecord?.apn_type) ??
