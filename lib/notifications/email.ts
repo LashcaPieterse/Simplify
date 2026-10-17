@@ -6,6 +6,8 @@ export interface SendEmailOptions {
   text: string;
   html?: string;
   from?: string;
+  idempotencyKey?: string;
+  timeoutMs?: number;
 }
 
 interface SendEmailResult {
@@ -23,6 +25,8 @@ export async function sendEmail({
   text,
   html,
   from = process.env.ALERT_EMAIL_FROM ?? "alerts@sim.africa",
+  idempotencyKey,
+  timeoutMs,
 }: SendEmailOptions): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
 
@@ -36,7 +40,9 @@ export async function sendEmail({
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     body: JSON.stringify({
       from,
       to: normalizeRecipients(to),

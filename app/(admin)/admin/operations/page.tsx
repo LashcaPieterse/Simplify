@@ -4,6 +4,11 @@ import { formatDate } from "@/lib/format";
 import { applyRegionMarkup } from "./actions";
 
 export default async function OperationsPage() {
+  const productionAlerts = await prisma.$queryRaw<Array<{
+    alert_key: string; title: string; detail: string; entity_id: string | null;
+    first_seen_at: Date; last_notified_at: Date | null; last_error: string | null;
+  }>>`SELECT alert_key, title, detail, entity_id, first_seen_at, last_notified_at, last_error
+      FROM recovery_ops.production_alerts WHERE resolved_at IS NULL ORDER BY first_seen_at ASC LIMIT 50`;
   const countries = await prisma.country.findMany({
     select: { id: true, title: true },
     orderBy: { title: "asc" },
@@ -37,6 +42,21 @@ export default async function OperationsPage() {
           <p className="text-sm text-slate-600">Bulk pricing, tagging, and audit visibility for ops teams.</p>
         </div>
       </div>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="production-alerts">
+        <h2 id="production-alerts" className="text-lg font-semibold text-slate-900">Production alerts</h2>
+        <p className="mt-1 text-sm text-slate-600">Delivery, supplier fulfilment, and recovery health are checked every five minutes. Email reminders are limited to once an hour per incident.</p>
+        {productionAlerts.length === 0 ? <p className="mt-3 text-sm text-emerald-800">No active incidents.</p> : (
+          <ul className="mt-3 divide-y divide-slate-100">
+            {productionAlerts.map(alert => <li key={alert.alert_key} className="py-3 text-sm">
+              <h3 className="font-semibold text-rose-800">{alert.title}</h3>
+              <p className="mt-1 text-slate-700">{alert.detail}</p>
+              {alert.entity_id ? <p className="mt-1 break-all text-slate-600">Reference: {alert.entity_id}</p> : null}
+              <p className="mt-1 text-xs text-slate-500">First detected: {formatDate(alert.first_seen_at)} · {alert.last_error ? "Email delivery needs attention" : alert.last_notified_at ? `Last emailed: ${formatDate(alert.last_notified_at)}` : "Email pending"}</p>
+            </li>)}
+          </ul>
+        )}
+      </section>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Country markup</h3>

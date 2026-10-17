@@ -1,0 +1,27 @@
+name: Production Alert Watchdog
+
+on:
+  schedule:
+    - cron: "11,26,41,56 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-alert-watchdog
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    if: vars.PRODUCTION_ALERTS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check production alerts independently of Supabase Cron
+        env:
+          AIRALO_SYNC_CRON_TOKEN: ${{ secrets.AIRALO_SYNC_CRON_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          PRODUCTION_ALERT_EMAIL: ${{ vars.PRODUCTION_ALERT_EMAIL }}
+        run: python3 scripts/production-alert-watchdog.py
