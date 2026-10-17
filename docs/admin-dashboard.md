@@ -1,4 +1,4 @@
-# Simplify Admin Dashboard
+# SIM.Africa Admin Dashboard
 
 The admin dashboard ships inside the main Next.js app and is protected by the env-based admin session cookie.
 
@@ -31,7 +31,7 @@ app/api/admin/
 
 ## Key Prisma models
 
-- `Country`, `Operator`, `Package`, `PackageState`: Airalo catalog data plus Simplify selling/availability state.
+- `Country`, `Operator`, `Package`, `PackageState`: Airalo catalog data plus SIM.Africa selling/availability state.
 - `SyncRun`, `SyncRunItem`, `EntitySnapshot`, `PackageSyncPage`: catalog sync audit trail and raw Airalo page snapshots.
 - `PricingAudit`, `PublishingState`: price drift and Sanity publishing integrity checks.
 - `AdminUser`, `AuditLog`, `SyncJob`: legacy/admin support tables that still exist in the schema.

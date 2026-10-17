@@ -1,6 +1,6 @@
 # DPO payment gateway runbook
 
-This document covers the Simplify integration with the DPO payment gateway. The flow gates order fulfilment behind a successful DPO transaction for both new plans and top-up purchases.
+This document covers the SIM.Africa integration with the DPO payment gateway. The flow gates order fulfilment behind a successful DPO transaction for both new plans and top-up purchases.
 
 ## Environment configuration
 
@@ -15,7 +15,7 @@ Set the following environment variables in production and non-production environ
 | `NEXTAUTH_SECRET` | Secret used by NextAuth sessions. |
 | `ORDER_ACCESS_SECRET` | Secret used to sign scoped checkout/order access cookies for guest checkouts. |
 
-`NEXT_PUBLIC_APP_URL` (or `VERCEL_URL`) must also point to the public HTTPS domain so that checkout creation can construct absolute callback URLs.
+`NEXT_PUBLIC_APP_URL` or `NEXTAUTH_URL` must point to the canonical public HTTPS origin so checkout creation can construct trusted absolute callback URLs. Production checkout fails closed when neither is configured and never trusts a client-supplied `Origin` header for payment callbacks.
 
 Configure the DPO merchant account Push Payments Callback URL to:
 
@@ -34,6 +34,7 @@ The legacy `/api/payments/dpo/ipn` path remains as a compatibility alias, but ne
 5. New-plan checkouts finalise through Airalo `/v2/orders` or `/v2/orders-async`; top-up checkouts finalise through Airalo `/v2/orders/topups` with the original eSIM ICCID.
 6. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` for new plans, `/orders/{originalOrderId}` for top-ups, or `/checkout/{id}/failed`.
 7. When finalisation exposes an order ID, the status API sets scoped HTTP-only order access cookies for guest order-page and eSIM-instruction access.
+8. The branded delivery email is claimed only after personalised QR or manual activation values are available. Async Airalo webhooks hydrate missing installation data and retry delivery without allowing email failure to invalidate the supplier acknowledgement.
 
 ## Runbook
 

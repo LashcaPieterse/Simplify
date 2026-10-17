@@ -5,9 +5,10 @@ import { formatDate } from "@/lib/format";
 
 const PAGE_SIZE = 20;
 
-export default async function SyncRunsPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
-  const status = typeof searchParams.status === "string" ? searchParams.status : undefined;
-  const cursor = typeof searchParams.cursor === "string" ? searchParams.cursor : undefined;
+export default async function SyncRunsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const resolvedSearchParams = await searchParams;
+  const status = typeof resolvedSearchParams.status === "string" ? resolvedSearchParams.status : undefined;
+  const cursor = typeof resolvedSearchParams.cursor === "string" ? resolvedSearchParams.cursor : undefined;
 
   const runs = await prisma.syncRun.findMany({
     where: status ? { status } : undefined,

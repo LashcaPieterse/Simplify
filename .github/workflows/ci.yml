@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/simplify
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sim_africa
       ORDER_ACCESS_SECRET: ci-order-access-secret
       NEXTAUTH_SECRET: ci-nextauth-secret
       METRICS_BEARER_TOKEN: ci-metrics-token
@@ -36,7 +36,7 @@ jobs:
         run: npm run typecheck
 
       - name: Unit tests
-        run: npm run airalo:test
+        run: npm test
 
       - name: Lint
         run: npm run lint
@@ -46,4 +46,3 @@ jobs:
 
       - name: Production dependency audit
         run: npm run security:audit
-        continue-on-error: true

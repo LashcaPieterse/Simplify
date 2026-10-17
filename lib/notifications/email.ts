@@ -22,7 +22,7 @@ export async function sendEmail({
   subject,
   text,
   html,
-  from = process.env.ALERT_EMAIL_FROM ?? "alerts@simplify.africa",
+  from = process.env.ALERT_EMAIL_FROM ?? "alerts@sim.africa",
 }: SendEmailOptions): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
 

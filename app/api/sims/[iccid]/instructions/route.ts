@@ -49,9 +49,10 @@ function extractPreferredLanguage(headerValue: string | null): string {
 
 export async function GET(
   request: Request,
-  { params }: { params: { iccid: string } },
+  { params }: { params: Promise<{ iccid: string }> },
 ) {
-  const iccid = normalizeIccid(decodeURIComponent(params.iccid ?? ""));
+  const { iccid: encodedIccid } = await params;
+  const iccid = normalizeIccid(decodeURIComponent(encodedIccid ?? ""));
 
   if (!iccid) {
     return jsonBadRequest(

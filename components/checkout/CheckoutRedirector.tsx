@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -9,23 +9,18 @@ interface CheckoutRedirectorProps {
 }
 
 export function CheckoutRedirector({ paymentUrl }: CheckoutRedirectorProps) {
-  const [attemptedRedirect, setAttemptedRedirect] = useState(false);
-
   useEffect(() => {
     if (!paymentUrl) {
       return;
     }
 
-    setAttemptedRedirect(true);
     window.location.assign(paymentUrl);
   }, [paymentUrl]);
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-slate-600">
-        {attemptedRedirect
-          ? "If you are not redirected automatically, continue to payment using the button below."
-          : "Continue to payment to complete your purchase."}
+      <p className="text-sm text-brand-600">
+        You are being redirected. If that does not happen automatically, continue using the button below.
       </p>
       <Button asChild variant="primary">
         <a href={paymentUrl}>Continue to payment</a>

@@ -8,18 +8,19 @@ import {
 export const dynamic = "force-dynamic";
 
 type OrderAccessRouteContext = {
-  params: {
+  params: Promise<{
     orderId: string;
-  };
+  }>;
 };
 
 export async function GET(
   request: Request,
   { params }: OrderAccessRouteContext,
 ) {
+  const { orderId: encodedOrderId } = await params;
   const url = new URL(request.url);
   const token = url.searchParams.get("token");
-  const orderId = decodeURIComponent(params.orderId);
+  const orderId = decodeURIComponent(encodedOrderId);
 
   if (!verifyScopedAccessToken(token, "order", orderId)) {
     return new NextResponse("Order link is invalid or expired.", {

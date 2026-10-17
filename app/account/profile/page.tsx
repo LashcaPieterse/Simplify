@@ -47,7 +47,7 @@ export default async function AccountProfilePage() {
         </div>
       </div>
       <p className="mt-6 text-sm text-brand-600">
-        Need to update your profile? Email support@simplify.africa and we will help.
+        Need to update your profile? Email support@sim.africa and we will help.
       </p>
     </div>
   );

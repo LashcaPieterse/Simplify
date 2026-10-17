@@ -10,4 +10,4 @@ These files are local exports of Airalo Partner API documentation and are the so
 - [`PlaceOrders/FutureOrders.md`](PlaceOrders/FutureOrders.md): `POST /v2/future-orders`.
 - [`Install-E-Sims/GeteSim.md`](Install-E-Sims/GeteSim.md): `GET /v2/sims/{sim_iccid}`.
 
-The previous aggregate `DefaultModule.md` export was removed because it duplicated endpoint-specific content and conflicted with `getPackages.md` on package rate limits and include syntax. Prefer endpoint-specific exports when comparing code or Simplify runbooks to Airalo.
+The previous aggregate `DefaultModule.md` export was removed because it duplicated endpoint-specific content and conflicted with `getPackages.md` on package rate limits and include syntax. Prefer endpoint-specific exports when comparing code or SIM.Africa runbooks to Airalo.

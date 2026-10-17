@@ -1,4 +1,4 @@
-import { groq } from "next-sanity";
+import groq from "groq";
 import type { Prisma } from "@prisma/client";
 
 import prisma from "../db/client";
@@ -19,6 +19,7 @@ import {
   isPublicSellablePackageRecord,
   publicSellablePackageWhere,
 } from "./package-policy";
+import { extractCoverageDestinations } from "./storefront";
 
 // Featured products now reference Catalog Countries and Catalog Packages directly.
 const COUNTRY_REFERENCE_FIELDS = `
@@ -155,6 +156,8 @@ const CATALOG_PACKAGE_SELECT = {
       id: true,
       title: true,
       airaloOperatorId: true,
+      countriesJson: true,
+      coveragesJson: true,
       country: {
         select: {
           id: true,
@@ -270,6 +273,12 @@ function createPackageInfo(record: PackageRecord): CatalogPackageInfo {
       netPrices: (record.pkg.pricesNetPrice as MultiCurrencyPriceMap | null) ?? null,
       recommendedRetailPrices:
         (record.pkg.pricesRecommendedRetailPrice as MultiCurrencyPriceMap | null) ?? null,
+      coverage: record.pkg.operator
+        ? [
+            ...extractCoverageDestinations(record.pkg.operator.countriesJson),
+            ...extractCoverageDestinations(record.pkg.operator.coveragesJson),
+          ]
+        : [],
     },
     operator: record.pkg.operator
       ? {
@@ -501,7 +510,13 @@ export async function getCatalogProductSummaries(
       ? fetchBuildCatalogPackages
       : fetchPublicCatalogPackages);
 
-  const [products, packages] = await Promise.all([fetchProducts(), fetchPackages()]);
+  const [products, packages] = await Promise.all([
+    fetchProducts().catch((error) => {
+      console.error("Sanity merchandising is unavailable; using the live package catalogue only", error);
+      return [];
+    }),
+    fetchPackages(),
+  ]);
 
   const maps = buildPackageMaps(packages);
 

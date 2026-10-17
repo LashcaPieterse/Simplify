@@ -22,10 +22,16 @@ import {
 import { handleAiraloOrderFailure } from "../orders/errors";
 import {
   autoDeactivatePackage,
+  claimReservedOrderForSubmission,
   handlePersistenceError,
   markReservedOrderSubmissionFailed,
   persistOrderRecords,
 } from "../orders/persistence";
+import {
+  ORDER_CLAIMABLE_STATUSES,
+  assertPurchaseOutcomeKnown,
+  resolvePurchaseFailureOutcome,
+} from "../orders/submission-state";
 import { createOrder } from "../orders/service";
 import type {
   CreateOrderOptions,
@@ -45,7 +51,7 @@ const checkoutInputSchema = z.object({
     .number({ invalid_type_error: "Quantity must be a number." })
     .int("Quantity must be an integer.")
     .positive("Quantity must be at least 1.")
-    .max(MAX_QUANTITY, `You can order up to ${MAX_QUANTITY} eSIMs per checkout.`)
+    .max(MAX_QUANTITY, "You can purchase one eSIM per checkout.")
     .default(DEFAULT_QUANTITY)
     .optional(),
   customerEmail: z
@@ -76,6 +82,10 @@ export type CheckoutSummary = {
   paymentUrl?: string;
   orderId?: string | null;
   redirectOrderId?: string | null;
+  destination?: string | null;
+  dataLabel?: string | null;
+  validityDays?: number | null;
+  customerEmail?: string | null;
 };
 
 export type CreateCheckoutResult = {
@@ -90,7 +100,6 @@ const STATUS_APPROVED = "approved";
 const STATUS_FINALIZING = "finalizing";
 const STATUS_VERIFICATION_MISMATCH = "verification_mismatch";
 const PROVIDER = "dpo";
-const RESERVED_ORDER_FAILED_STATUS = "airalo_failed";
 
 async function resolveCheckoutUserId(
   db: PrismaClient,
@@ -325,6 +334,10 @@ export async function getCheckoutSummary(
     orderId: checkout.orderId,
     redirectOrderId:
       checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId,
+    destination: pkg?.operator?.country?.title ?? null,
+    dataLabel: pkg ? (pkg.isUnlimited ? "Unlimited" : pkg.data) : null,
+    validityDays: pkg?.day ?? null,
+    customerEmail: checkout.customerEmail,
   };
 }
 
@@ -483,17 +496,16 @@ async function verifyCheckoutPaymentRecord(
     // Log key verification fields to help debug DPO responses in callback and return flows.
     console.info("dpo.verifyTransaction", {
       checkoutId: checkout.id,
-      transactionToken: payment.transactionToken,
+      paymentId: payment.id,
       source: options.source,
       resultCode: verification.resultCode ?? verification.status,
       resultExplanation: verification.resultExplanation,
       status: verification.status,
-      raw: verification.rawResponse,
     });
   } catch (error) {
     console.error("dpo.verifyTransaction failed", {
       checkoutId: checkout.id,
-      transactionToken: payment.transactionToken,
+      paymentId: payment.id,
       source: options.source,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -689,7 +701,7 @@ function shouldRetryReservedOrder(order: CheckoutOrderRecord): boolean {
   return (
     !order.orderNumber &&
     !order.requestId &&
-    order.status === RESERVED_ORDER_FAILED_STATUS
+    ORDER_CLAIMABLE_STATUSES.includes(order.status ?? "")
   );
 }
 
@@ -815,6 +827,10 @@ async function finaliseTopUpOrderFromCheckout(options: {
     options.checkout,
     options.reservation.orderId,
   );
+  const existing = await claimReservedOrderForSubmission(options.db, reservedOrder);
+  if (existing) {
+    return { ...existing, redirectOrderId: options.topUp.originalOrderId };
+  }
   const pkg = {
     id: reservedOrder.packageId,
     airaloPackageId: reservedOrder.airaloPackageId,
@@ -825,13 +841,14 @@ async function finaliseTopUpOrderFromCheckout(options: {
   try {
     airalo = options.airaloOptions?.airaloClient ?? resolveAiraloClient();
   } catch (error) {
-    await markReservedOrderSubmissionFailed(options.db, reservedOrder);
+    await markReservedOrderSubmissionFailed(options.db, reservedOrder, "rejected");
     throw error;
   }
 
   const payload = buildAiraloTopUpOrderPayload({
     pkg,
     iccid: options.topUp.iccid,
+    localOrderId: reservedOrder.orderId,
   });
 
   const airaloCallStartedAt = Date.now();
@@ -845,7 +862,7 @@ async function finaliseTopUpOrderFromCheckout(options: {
       startedAt: options.startedAt,
       airaloLatencyMs: Date.now() - airaloCallStartedAt,
       beforeMapping: () =>
-        markReservedOrderSubmissionFailed(options.db, reservedOrder),
+        markReservedOrderSubmissionFailed(options.db, reservedOrder, resolvePurchaseFailureOutcome(error)),
       autoDeactivatePackage: (deactivation) =>
         autoDeactivatePackage(pkg, {
           ...deactivation,
@@ -886,6 +903,7 @@ async function finaliseTopUpOrderFromCheckout(options: {
       redirectOrderId: options.topUp.originalOrderId,
     };
   } catch (error: unknown) {
+    await markReservedOrderSubmissionFailed(options.db, reservedOrder, "unknown");
     return handlePersistenceError({
       error,
       pkg,
@@ -996,6 +1014,7 @@ export async function finaliseOrderFromCheckout(
       if (!existingOrder) {
         throw new Error("Checkout references a missing order.");
       }
+      assertPurchaseOutcomeKnown(existingOrder);
 
       if (!shouldRetryReservedOrder(existingOrder)) {
         const result = toCreateOrderResult(existingOrder, {

@@ -4,10 +4,10 @@
 
 @layer components {
   .button-ribbon-primary {
-    border: 1px solid rgba(49, 185, 230, 0.42);
-    background-image: linear-gradient(135deg, #31b9e6 0%, #178fd3 45%, #0b4fa3 100%);
+    border: 1px solid rgba(31, 135, 137, 0.62);
+    background-image: linear-gradient(135deg, #2dabac 0%, #1f8789 48%, #1c6b6d 100%);
     color: #ffffff;
-    box-shadow: 0 16px 34px -18px rgba(11, 79, 163, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    box-shadow: 0 16px 34px -18px rgba(21, 63, 65, 0.82), inset 0 1px 0 rgba(255, 255, 255, 0.24);
     transition:
       transform 160ms ease,
       box-shadow 160ms ease,
@@ -16,14 +16,14 @@
   }
 
   .button-ribbon-primary:hover {
-    border-color: rgba(49, 185, 230, 0.62);
-    box-shadow: 0 22px 44px -22px rgba(11, 79, 163, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+    border-color: rgba(31, 135, 137, 0.82);
+    box-shadow: 0 22px 44px -22px rgba(21, 63, 65, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.32);
     filter: brightness(1.06) saturate(1.08);
     transform: translateY(-1px);
   }
 
   .button-ribbon-primary:active {
-    box-shadow: 0 10px 24px -18px rgba(11, 79, 163, 0.9), inset 0 1px 2px rgba(3, 31, 67, 0.22);
+    box-shadow: 0 10px 24px -18px rgba(21, 63, 65, 0.9), inset 0 1px 2px rgba(21, 63, 65, 0.3);
     filter: brightness(0.96) saturate(1.02);
     transform: translateY(0);
   }
@@ -31,8 +31,8 @@
   .button-ribbon-primary:focus-visible {
     outline: none;
     box-shadow:
-      0 16px 34px -18px rgba(11, 79, 163, 0.9),
-      0 0 0 4px rgba(49, 185, 230, 0.26),
+      0 16px 34px -18px rgba(21, 63, 65, 0.9),
+      0 0 0 4px rgba(45, 171, 172, 0.3),
       inset 0 1px 0 rgba(255, 255, 255, 0.24);
   }
 
@@ -52,11 +52,26 @@
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
   background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 50C27.6142 50 50 27.6142 50 0' stroke='%232dabac' stroke-opacity='0.05'/%3E%3Cpath d='M50 100C77.6142 100 100 77.6142 100 50' stroke='%23f89f3c' stroke-opacity='0.05'/%3E%3C/svg%3E");
-  background-attachment: fixed;
 }
 
 ::selection {
   background-color: theme("colors.brand.200");
   color: theme("colors.brand.900");
+}
+
+:focus-visible {
+  scroll-margin-block: 6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

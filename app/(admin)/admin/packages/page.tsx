@@ -4,9 +4,10 @@ import { formatDate } from "@/lib/format";
 
 const PAGE_SIZE = 20;
 
-export default async function AdminPackagesPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
-  const q = typeof searchParams.q === "string" ? searchParams.q : "";
-  const cursor = typeof searchParams.cursor === "string" ? searchParams.cursor : undefined;
+export default async function AdminPackagesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const resolvedSearchParams = await searchParams;
+  const q = typeof resolvedSearchParams.q === "string" ? resolvedSearchParams.q : "";
+  const cursor = typeof resolvedSearchParams.cursor === "string" ? resolvedSearchParams.cursor : undefined;
 
   const packages = await prisma.package.findMany({
     where: q

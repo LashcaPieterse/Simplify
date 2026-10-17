@@ -16,8 +16,6 @@ import { logOrderInfo, logOrderWarn } from "../observability/logging";
 import { resolveAiraloOrderActivationCode as resolveAiraloInstallActivationCode } from "./airalo-metadata";
 import { OrderServiceError } from "./errors";
 
-const ORDER_RATE_LIMIT_RETRY = { attempts: 3, baseDelayMs: 500 };
-
 let cachedAiraloClient: AiraloClient | null = null;
 
 export type OrderSubmissionMode = "async" | "sync";
@@ -322,11 +320,13 @@ export function buildAiraloOrderPayload(options: {
 export function buildAiraloTopUpOrderPayload(options: {
   pkg: AiraloOrderPackage;
   iccid: string;
+  localOrderId?: string | null;
 }): CreateTopUpOrderPayload {
+  const localOrderId = normalizeOptionalString(options.localOrderId);
   return {
     package_id: options.pkg.airaloPackageId,
     iccid: options.iccid,
-    description: `Topup (${options.iccid})`,
+    description: `Topup (${options.iccid})${localOrderId ? ` [simplify_order_id:${localOrderId}]` : ""}`,
   };
 }
 
@@ -336,6 +336,7 @@ function shouldFallbackAsyncToSync(error: unknown): boolean {
   }
 
   const businessError = extractAiraloBusinessError(error.details.body);
+  if (businessError?.code === 53) return false;
   const signals = [businessError?.reason, businessError?.message, error.message]
     .filter(
       (value): value is string =>
@@ -346,32 +347,17 @@ function shouldFallbackAsyncToSync(error: unknown): boolean {
   return signals.some(
     (value) =>
       value.includes("not opted in") ||
-      value.includes("no webhook url provided") ||
-      value.includes("webhook url"),
+      value.includes("no webhook url provided"),
   );
 }
 
-async function invokeWithBackoff<T>(fn: () => Promise<T>): Promise<T> {
-  let attempt = 0;
-  let lastError: unknown;
-  while (attempt < ORDER_RATE_LIMIT_RETRY.attempts) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      const isRateLimit =
-        error instanceof AiraloError && error.details.status === 429;
-      if (!isRateLimit) {
-        throw error;
-      }
-      const delayMs =
-        ORDER_RATE_LIMIT_RETRY.baseDelayMs * 2 ** attempt +
-        Math.floor(Math.random() * 150);
-      await new Promise((r) => setTimeout(r, delayMs));
-      attempt += 1;
-    }
+function assertSupplierOrderReference(order: AiraloOrder): void {
+  if (!resolveAiraloOrderId(order)?.trim()) {
+    throw new OrderServiceError(
+      "Supplier purchase response has no order reference. Reconcile the existing order before retrying fulfillment.",
+      503,
+    );
   }
-  throw lastError;
 }
 
 export async function submitAiraloOrder(options: {
@@ -393,10 +379,11 @@ export async function submitAiraloOrder(options: {
       const asyncOrderPayload: CreateOrderPayload = options.asyncWebhookUrl
         ? { ...options.payload, webhook_url: options.asyncWebhookUrl }
         : options.payload;
-      airaloAsyncResponse = await invokeWithBackoff(() =>
-        options.airalo.createOrderAsyncResponse(asyncOrderPayload),
-      );
+      airaloAsyncResponse = await options.airalo.createOrderAsyncResponse(asyncOrderPayload);
       airaloAck = airaloAsyncResponse.data;
+      if (!airaloAck.request_id.trim()) {
+        throw new OrderServiceError("Supplier purchase acknowledgement has no request reference.", 503);
+      }
     } catch (asyncError: unknown) {
       if (!shouldFallbackAsyncToSync(asyncError)) {
         throw asyncError;
@@ -412,17 +399,15 @@ export async function submitAiraloOrder(options: {
       });
 
       resolvedSubmissionMode = "sync";
-      airaloOrderResponse = await invokeWithBackoff(() =>
-        options.airalo.createOrderResponse(options.payload),
-      );
+      airaloOrderResponse = await options.airalo.createOrderResponse(options.payload);
       airaloOrder = airaloOrderResponse.data;
     }
   } else {
-    airaloOrderResponse = await invokeWithBackoff(() =>
-      options.airalo.createOrderResponse(options.payload),
-    );
+    airaloOrderResponse = await options.airalo.createOrderResponse(options.payload);
     airaloOrder = airaloOrderResponse.data;
   }
+
+  if (airaloOrder) assertSupplierOrderReference(airaloOrder);
 
   return {
     resolvedSubmissionMode,
@@ -439,9 +424,8 @@ export async function submitAiraloTopUpOrder(options: {
   payload: CreateTopUpOrderPayload;
 }): Promise<AiraloTopUpOrderSubmissionResult> {
   const airaloCallStartedAt = Date.now();
-  const airaloOrderResponse = await invokeWithBackoff(() =>
-    options.airalo.createTopUpOrderResponse(options.payload),
-  );
+  const airaloOrderResponse = await options.airalo.createTopUpOrderResponse(options.payload);
+  assertSupplierOrderReference(airaloOrderResponse.data);
 
   return {
     airaloOrderResponse,

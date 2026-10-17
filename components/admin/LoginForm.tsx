@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { loginAdmin } from "@/app/(admin-auth)/admin/login/actions";
 
 export function LoginForm() {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -21,13 +23,14 @@ export function LoginForm() {
             return;
           }
 
-          window.location.href = "/admin";
+          router.push("/admin");
+          router.refresh();
         });
       }}
     >
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold text-slate-900">Admin sign-in</h1>
-        <p className="text-sm text-slate-600">Use your Simplify admin credentials.</p>
+        <p className="text-sm text-slate-600">Use your SIM.Africa admin credentials.</p>
       </div>
       <div className="mt-8 space-y-6">
         <label className="block text-sm font-medium text-slate-700">
@@ -37,7 +40,7 @@ export function LoginForm() {
             type="email"
             required
             className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-teal-500 focus:outline-none"
-            placeholder="admin@simplify.com"
+            placeholder="admin@sim.africa"
             disabled={isPending}
           />
         </label>

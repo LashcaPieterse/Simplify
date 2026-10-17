@@ -3,6 +3,7 @@ import path from "node:path";
 
 import prisma from "../lib/db/client";
 import { finaliseOrderFromCheckout } from "../lib/payments/checkouts";
+import { ORDER_CLAIMABLE_STATUSES } from "../lib/orders/submission-state";
 
 const APPROVED_PAYMENT_STATUSES = new Set(["approved", "paid"]);
 const DEFAULT_LIMIT = 100;
@@ -104,7 +105,7 @@ async function main() {
             is: {
               orderNumber: null,
               requestId: null,
-              status: "airalo_failed",
+              status: { in: ORDER_CLAIMABLE_STATUSES },
             },
           },
         },

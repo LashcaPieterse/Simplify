@@ -1,24 +1,20 @@
 # Dependency Security Triage
 
-Last reviewed: 2026-05-24.
+Last reviewed: 2026-10-17.
 
 ## Current Status
 
-`npm audit --omit=dev --json` reports 38 production advisories after removing the unused `sqlite3` runtime dependency:
+`npm run security:audit` reports zero production vulnerabilities as of this review. The checked lockfile resolves Next 16.4.2, React 19.2.3, NextAuth 4.24.15, Sharp 0.35.5, source-map-js 1.2.2, and the Sanity 7 API client. Advisory results can change; rerun the check for every release.
 
-- 16 high severity
-- 22 moderate severity
-- 0 critical severity
+## Runtime decisions
 
-`sqlite3` was not imported by the app and the Prisma datasource is Postgres, so it was removed from runtime dependencies. That eliminated the `sqlite3`/`node-gyp` advisory chain and reduced installed production packages.
+- Sanity Studio and its CLI are development-only dependencies and are deployed separately. The customer runtime uses `@sanity/client` and `@sanity/image-url`; it does not ship the Studio or deployment CLI.
+- The old, unused React map/D3 dependency chain was removed.
+- Magic-link sign-in sends through the existing Resend client. It does not import NextAuth's Nodemailer provider. The optional peer is locked to patched Nodemailer 10.1.2. Keep the override under review when upgrading NextAuth.
+- Node 22.12 or newer in the Node 22 line is required by the current Sanity tooling.
 
-## Remaining High-Priority Items
-
-- `next` / `next-sanity`: audit recommends major upgrades (`next@16.2.6`, `next-sanity@13.0.3`). Treat this as a framework upgrade project with full build, auth, Sanity Studio, ISR, checkout, and admin regression testing.
-- `react-simple-maps` / `d3-*`: the current map dependency pulls vulnerable D3 transitive packages. Replace the map component or verify an upgrade path before production traffic.
-- `sanity` / `@sanity/vision`: `sanity@3.99.0` is the non-major audit fix for several Studio advisories, but it may require Node 20 and Studio QA.
-- `next-auth`: audit flags the transitive `uuid` chain. Review whether the issue applies to the configured providers, then plan a migration or patch strategy.
+The complete development tree can still report advisories inside Sanity's deployment CLI. Those packages are not bundled into the storefront. Run Studio commands only in a trusted development environment, do not process untrusted archives or configuration through the CLI, and review upstream releases regularly.
 
 ## CI Policy
 
-CI runs `npm run security:audit` as a report-only step until the major framework and Studio upgrades are completed. Do not treat a passing typecheck/build as security clearance while this document lists unresolved high-severity runtime advisories.
+CI must run `npm run security:audit` as a blocking production-tree gate alongside typecheck, lint, tests, and build. A new production advisory fails the command and must be triaged before deployment.

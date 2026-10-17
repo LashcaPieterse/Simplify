@@ -1,0 +1,52 @@
+name: Airalo Order Recovery
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: airalo-order-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Reconcile existing supplier purchases
+        env:
+          AIRALO_SYNC_URL: ${{ secrets.AIRALO_SYNC_URL }}
+          AIRALO_RECOVERY_URL: ${{ secrets.AIRALO_RECOVERY_URL }}
+          AIRALO_SYNC_CRON_TOKEN: ${{ secrets.AIRALO_SYNC_CRON_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ.get("AIRALO_SYNC_CRON_TOKEN", "").strip()
+          configured = os.environ.get("AIRALO_RECOVERY_URL", "").strip()
+          source = configured or os.environ.get("AIRALO_SYNC_URL", "").strip()
+          if not token or not source:
+              raise SystemExit("Configure AIRALO_SYNC_CRON_TOKEN and AIRALO_SYNC_URL (or AIRALO_RECOVERY_URL).")
+          parts = urllib.parse.urlsplit(source)
+          if parts.scheme != "https" or not parts.netloc or parts.username or parts.password:
+              raise SystemExit("Recovery requires an HTTPS application URL without embedded credentials.")
+          url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, "/api/airalo/recover", "", ""))
+          request = urllib.request.Request(url, method="POST", headers={"x-airalo-sync-key": token})
+          # Do not forward the scheduler secret through a redirect.
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          opener = urllib.request.build_opener(NoRedirect)
+          with opener.open(request, timeout=310) as response:
+              summary = json.load(response)
+          print(json.dumps(summary))
+          if summary.get("unresolved", 0):
+              raise SystemExit("Unresolved purchases require review; no purchases were resubmitted.")
+          PY

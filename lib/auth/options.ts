@@ -1,6 +1,5 @@
 import GoogleProvider from "next-auth/providers/google";
 import AppleProvider from "next-auth/providers/apple";
-import EmailProvider from "next-auth/providers/email";
 import CredentialsProvider from "next-auth/providers/credentials";
 import type { NextAuthOptions } from "next-auth";
 
@@ -8,13 +7,38 @@ import { PrismaUserIdentityAdapter } from "./adapter";
 import prisma from "@/lib/db/client";
 import { verifyPassword } from "./password";
 import { markUserEmailVerifiedAndClaimGuestOrders } from "./guest-orders";
+import { sendEmail } from "@/lib/notifications/email";
 
 const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const APPLE_ID = process.env.APPLE_CLIENT_ID;
 const APPLE_SECRET = process.env.APPLE_CLIENT_SECRET;
-const EMAIL_SERVER = process.env.EMAIL_SERVER;
 const EMAIL_FROM = process.env.EMAIL_FROM;
+
+function resendEmailProvider(from: string) {
+  return {
+    id: "email" as const,
+    type: "email" as const,
+    name: "Email" as const,
+    server: { host: "api.resend.com", port: 443 },
+    from,
+    maxAge: 24 * 60 * 60,
+    options: { from },
+    async sendVerificationRequest({ identifier, url }: { identifier: string; url: string }) {
+      const host = new URL(url).host;
+      const result = await sendEmail({
+        to: identifier,
+        from,
+        subject: `Sign in to SIM.Africa`,
+        text: `Use this secure link to sign in to SIM.Africa:\n\n${url}\n\nThe link expires in 24 hours. If you did not request it, ignore this email.\n\nRequested for ${host}.`,
+      });
+
+      if (result.skipped) {
+        throw new Error("Magic-link email delivery is not configured.");
+      }
+    },
+  };
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaUserIdentityAdapter(),
@@ -55,12 +79,9 @@ export const authOptions: NextAuthOptions = {
           }),
         ]
       : []),
-    ...(EMAIL_SERVER && EMAIL_FROM
+    ...(process.env.RESEND_API_KEY && EMAIL_FROM
       ? [
-          EmailProvider({
-            server: EMAIL_SERVER,
-            from: EMAIL_FROM,
-          }),
+          resendEmailProvider(EMAIL_FROM),
         ]
       : []),
   ],

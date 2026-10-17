@@ -26,6 +26,14 @@ import {
   assertValidReservedOrderSnapshot,
   type ReservedOrderSnapshot,
 } from "./validation";
+import {
+  ORDER_CLAIMABLE_STATUSES,
+  ORDER_OUTCOME_UNKNOWN_STATUS,
+  ORDER_REJECTED_STATUS,
+  ORDER_SUBMITTING_STATUS,
+  assertPurchaseOutcomeKnown,
+  type PurchaseFailureOutcome,
+} from "./submission-state";
 
 export type PrismaDbClient = PrismaClient | Prisma.TransactionClient;
 
@@ -48,13 +56,6 @@ export type PersistedOrderRecord = {
   orderNumber: string | null;
   requestId: string | null;
 };
-
-const RESERVED_ORDER_SUBMITTING_STATUS = "airalo_submitting";
-const RESERVED_ORDER_FAILED_STATUS = "airalo_failed";
-const RESERVED_ORDER_CLAIMABLE_STATUSES = [
-  "pending",
-  RESERVED_ORDER_FAILED_STATUS,
-];
 
 export function isPrismaClient(client: PrismaDbClient): client is PrismaClient {
   return typeof (client as PrismaClient).$transaction === "function";
@@ -96,16 +97,17 @@ export async function claimReservedOrderForSubmission(
   if (existing.orderNumber || existing.requestId) {
     return createResultFromExistingOrder(existing);
   }
+  assertPurchaseOutcomeKnown(existing);
 
   const claim = await db.esimOrder.updateMany({
     where: {
       id: snapshot.orderId,
       orderNumber: null,
       requestId: null,
-      status: { in: RESERVED_ORDER_CLAIMABLE_STATUSES },
+      status: { in: ORDER_CLAIMABLE_STATUSES },
     },
     data: {
-      status: RESERVED_ORDER_SUBMITTING_STATUS,
+      status: ORDER_SUBMITTING_STATUS,
     },
   });
 
@@ -126,13 +128,14 @@ export async function claimReservedOrderForSubmission(
   if (!current) {
     throw new OrderServiceError("Reserved checkout order was not found.", 500);
   }
-
+  assertPurchaseOutcomeKnown(current);
   return createResultFromExistingOrder(current);
 }
 
 export async function markReservedOrderSubmissionFailed(
   db: PrismaDbClient,
   snapshot: ReservedOrderSnapshot | null,
+  outcome: PurchaseFailureOutcome,
 ): Promise<void> {
   if (!snapshot) {
     return;
@@ -144,10 +147,10 @@ export async function markReservedOrderSubmissionFailed(
         id: snapshot.orderId,
         orderNumber: null,
         requestId: null,
-        status: RESERVED_ORDER_SUBMITTING_STATUS,
+        status: ORDER_SUBMITTING_STATUS,
       },
       data: {
-        status: RESERVED_ORDER_FAILED_STATUS,
+        status: outcome === "rejected" ? ORDER_REJECTED_STATUS : ORDER_OUTCOME_UNKNOWN_STATUS,
       },
     });
   } catch (error) {
@@ -223,14 +226,37 @@ export async function persistOrderRecords(
       currency: input.currency,
     };
 
-    const orderRecord = input.reservedOrder
-      ? await tx.esimOrder.update({
-          where: { id: input.reservedOrder.orderId },
-          data: orderData,
-        })
-      : await tx.esimOrder.create({
-          data: orderData,
+    let orderRecord: PersistedOrderRecord;
+    if (input.reservedOrder && input.airaloAck) {
+      // A fast webhook can fulfill the order before its async ACK is saved.
+      // Never replace that supplier identity or completed status with a pending ACK.
+      await tx.esimOrder.updateMany({
+        where: {
+          id: input.reservedOrder.orderId,
+          orderNumber: null,
+          requestId: null,
+          status: ORDER_SUBMITTING_STATUS,
+        },
+        data: orderData,
+      });
+      const existing = await tx.esimOrder.findUnique({ where: { id: input.reservedOrder.orderId } });
+      if (!existing || (existing.requestId && existing.requestId !== input.airaloAck.request_id)) {
+        throw new OrderServiceError("Async acknowledgement conflicts with the reserved purchase.", 409);
+      }
+      if (!existing.requestId) {
+        if (!existing.orderNumber) throw new OrderServiceError("Reserved purchase cannot accept this acknowledgement.", 409);
+        const linked = await tx.esimOrder.updateMany({
+          where: { id: existing.id, orderNumber: existing.orderNumber, requestId: null },
+          data: { requestId: input.airaloAck.request_id },
         });
+        if (linked.count !== 1) throw new OrderServiceError("Reserved purchase changed while saving its acknowledgement.", 409);
+      }
+      orderRecord = { ...existing, requestId: input.airaloAck.request_id };
+    } else {
+      orderRecord = input.reservedOrder
+        ? await tx.esimOrder.update({ where: { id: input.reservedOrder.orderId }, data: orderData })
+        : await tx.esimOrder.create({ data: orderData });
+    }
 
     if (input.airaloAsyncResponse) {
       await tx.airaloOrderSnapshot.create({
@@ -259,7 +285,7 @@ export async function persistOrderRecords(
     if (input.airaloOrder) {
       const iccid = resolveAiraloIccid(input.airaloOrder);
       if (iccid && input.persistSimProfile !== false) {
-        await tx.esimProfile.upsert({
+        const profile = await tx.esimProfile.upsert({
           where: { iccid },
           create: {
             iccid,
@@ -270,9 +296,11 @@ export async function persistOrderRecords(
           update: {
             status: resolveAiraloStatus(input.airaloOrder),
             activationCode: resolveAiraloActivationCode(input.airaloOrder),
-            orderId: orderRecord.id,
           },
         });
+        if (profile.orderId !== orderRecord.id) {
+          throw new OrderServiceError("Supplier SIM already belongs to another purchase.", 409);
+        }
       }
 
       if (input.persistInstallation !== false) {

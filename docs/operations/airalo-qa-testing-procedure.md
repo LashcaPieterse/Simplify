@@ -109,15 +109,15 @@ If smoke fails:
 
 Application behavior for documented Airalo API errors:
 
-- `401`: clear token cache, refresh token, retry auth path; if persistent, fail as credentials/config issue.
-- `429`: exponential backoff retry with jitter and `Retry-After` support.
-- `5xx`: exponential backoff retry with jitter.
+- `401`: reads refresh the token and retry; purchases clear the cached token but do not replay. A later claimed attempt may use a fresh token.
+- `429`: reads retry with backoff and `Retry-After`; purchases record a confirmed rejection and allow only a later claimed attempt.
+- `5xx`: reads retry with backoff; purchase outcomes are unknown and require reconciliation before resubmission.
 - `422 code 11` (insufficient credit): fail fast, surface `402` upstream behavior.
-- `422 code 13` (operator maintenance): retry as transient, surface `503` if exhausted.
+- `422 code 13` (operator maintenance): do not replay a purchase in the same call; allow a later claimed attempt after the rejection.
 - `422 code 14` (invalid checksum): fail fast as validation.
 - `422 code 23` (top-up disabled): fail fast as conflict/business rule.
-- `422 code 33` (insufficient stock): retry as transient, then treat as out-of-stock.
+- `422 code 33` (insufficient stock): treat purchases as rejected/out-of-stock; do not replay in the same call.
 - `422 code 34` (invalid package/out of stock): fail validation and auto-pause package when applicable.
 - `422 code 43` (bad request): fail fast as validation.
-- `422 code 53` (unexpected temporary issue): retry as transient and surface `503` if exhausted.
+- `422 code 53` (unexpected temporary issue): purchase outcome is unknown; reconcile before resubmission. Reads retain transient retries.
 - `422 code 73` (recycled ICCID): fail fast as non-recoverable (`410` semantics).

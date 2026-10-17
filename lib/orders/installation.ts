@@ -8,6 +8,7 @@ import type {
   SimResponse,
 } from "../airalo/schemas";
 import prismaClient from "../db/client";
+import { OrderServiceError } from "./errors";
 import { toPrismaJson } from "../db/json";
 import { logOrderWarn } from "../observability/logging";
 import {
@@ -218,6 +219,9 @@ export async function ensureOrderInstallation(
   }
 
   const resolvedIccid = resolveAiraloIccid(airaloOrder) ?? existingIccid;
+  if (existingIccid && resolvedIccid !== existingIccid) {
+    throw new OrderServiceError("Supplier SIM conflicts with the existing installation.", 409);
+  }
   let simResponse: SimResponse | null = null;
   let simDetails: Sim | null = null;
 
@@ -246,6 +250,10 @@ export async function ensureOrderInstallation(
     }
 
     return existing;
+  }
+
+  if (simDetails && resolvedIccid && simDetails.iccid !== resolvedIccid) {
+    throw new OrderServiceError("Supplier SIM details have a conflicting ICCID.", 409);
   }
 
   const payload = createInstallationPayload(airaloOrder, simDetails);
@@ -293,7 +301,7 @@ export async function ensureOrderInstallation(
     }
 
     if (resolvedIccid) {
-      await tx.esimProfile.upsert({
+      const profile = await tx.esimProfile.upsert({
         where: { iccid: resolvedIccid },
         create: {
           iccid: resolvedIccid,
@@ -304,9 +312,11 @@ export async function ensureOrderInstallation(
         update: {
           status: resolvedStatus,
           ...(activationCode ? { activationCode } : {}),
-          orderId: existing.id,
         },
       });
+      if (profile.orderId !== existing.id) {
+        throw new OrderServiceError("Supplier SIM already belongs to another purchase.", 409);
+      }
     }
 
     await tx.esimInstallationPayload.upsert({

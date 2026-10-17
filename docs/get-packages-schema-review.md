@@ -1,6 +1,6 @@
 # Get Packages Endpoint Alignment Review
 
-This review tracks how the Simplify catalog schema and sync job align with the local Airalo [`getPackages.md`](<Airalo API/getPackages.md>) OpenAPI export.
+This review tracks how the SIM.Africa catalog schema and sync job align with the local Airalo [`getPackages.md`](<Airalo API/getPackages.md>) OpenAPI export.
 
 ## Current status
 
@@ -23,10 +23,10 @@ The previous review stated that the catalog tables were missing. That is no long
 
 ## Rate limits
 
-The endpoint-specific Airalo export identifies the package endpoint limit as 80 requests per minute per authentication token. Simplify keeps an internal sync pacing limit of 40 requests per minute for unattended catalog jobs. This is intentionally conservative and still far above the hourly scheduler's normal needs.
+The endpoint-specific Airalo export identifies the package endpoint limit as 80 requests per minute per authentication token. SIM.Africa keeps an internal sync pacing limit of 40 requests per minute for unattended catalog jobs. This is intentionally conservative and still far above the hourly scheduler's normal needs.
 
 ## Notes for future changes
 
-- Keep the Airalo API-shaped package data in `packages`; put Simplify-specific selling state in `package_state`.
+- Keep the Airalo API-shaped package data in `packages`; put SIM.Africa-specific selling state in `package_state`.
 - When adding fields from the OpenAPI export, prefer first-class columns for documented package/operator fields and JSON columns for nested provider blobs.
 - Keep regression coverage for page 2+ indexed country responses, global packages with missing `country_code`, multi-currency pricing, fair-usage policies, voice/text plans, raw snapshots, and stale-package deactivation.

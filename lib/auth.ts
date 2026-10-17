@@ -88,13 +88,14 @@ export async function verifySessionToken(token?: string | null) {
 }
 
 export async function requireAdminSession() {
-  const token = cookies().get(ADMIN_SESSION_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);
   const isAllowed = session ? isAdminEmailAllowed(session.email) : false;
 
   if (!session || !isAllowed) {
     if (session && !isAllowed) {
-      clearAdminSession();
+      await clearAdminSession();
     }
     redirect("/admin/login");
   }
@@ -109,7 +110,8 @@ export async function createAdminSession(email: string) {
   }
 
   const token = await buildToken(email, Date.now(), secret);
-  cookies().set(ADMIN_SESSION_COOKIE, token, {
+  const cookieStore = await cookies();
+  cookieStore.set(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -118,8 +120,9 @@ export async function createAdminSession(email: string) {
   });
 }
 
-export function clearAdminSession() {
-  cookies().delete(ADMIN_SESSION_COOKIE);
+export async function clearAdminSession() {
+  const cookieStore = await cookies();
+  cookieStore.delete(ADMIN_SESSION_COOKIE);
 }
 
 export function validateAdminCredentials(email: string, password: string) {

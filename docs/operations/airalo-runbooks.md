@@ -141,7 +141,7 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 2. **Inspect metrics**: Review `airalo_order_requests_total` and `airalo_webhook_events_total` for concurrent failures.
 3. **Review logs**: Search for `order.persistence.failed`, `airalo.order.create.failed`, `airalo.order.async_fallback_sync`, `catalog.package.auto_paused`, or `webhook.processing.failed` events.
 4. **Mitigation**:
-   - If due to Airalo 5xx/429 responses, enable request backoff and contact the partner if sustained.
+   - For read-only Airalo requests, retain backoff. For purchase 5xx responses, reconcile the existing order before resubmission; never enable automatic purchase replay. A 429 purchase rejection permits a later atomically claimed attempt. Contact the partner if failures persist.
    - For database failures, check Prisma migrations and database availability.
    - Redeploy if the issue correlates with a recent release.
 5. **Post-incident**: Document the cause, add regression tests/alerts if needed.
@@ -157,7 +157,7 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 ### Rate-Limit Breaches
 
 1. **Observe counters**: `airalo_rate_limit_events_total{source="orders"}` indicates client-side limits, `{source="webhooks"}` indicates transaction contention/backoff.
-2. **Throttle outbound traffic**: Add jitter/backoff to order creation flows or temporarily reduce throughput.
+2. **Throttle outbound traffic**: Reduce purchase throughput before submission. Keep purchase POSTs single-attempt; do not add automatic retries around order creation.
 3. **Notify partners**: Inform Airalo support if limits persist beyond 30 minutes.
 4. **Long-term fixes**: Cache data, schedule orders, or request higher rate limits.
 
@@ -170,21 +170,23 @@ Use this runbook when `/api/airalo-sync` fails, returns `Unauthorized`, or appea
 
 ### Pending Order Recovery Worker
 
-Orders that remain in `pending` without an `orderNumber` or associated `EsimProfile` for more than ten minutes are automatically
-re-queried via the scheduled recovery worker. The worker uses `AiraloClient.getOrderById` to pull the latest installation payload,
-status, metadata, and usage readings; it then applies the same persistence logic as the webhook handler.
+The recovery worker checks stale `pending`, `airalo_submitting`, `airalo_outcome_unknown`, and legacy `airalo_failed` purchases, plus completed new-eSIM orders missing their profile. It only reads existing supplier purchases; it never submits a purchase. Known supplier order IDs use `/orders/{order_id}?include=sims,status`. Async request IDs are not valid substitutes. Orders without a supplier order ID use Airalo's documented `filter[description]` search and require exactly one matching `[simplify_order_id:LOCAL_ORDER_ID]` marker, then fetch and validate that purchase.
 
-- **Command**: `npm run airalo:recover-orders`
-- **Schedule**: run every 5 minutes via cron or your scheduler of choice. Ensure `AIRALO_CLIENT_ID`/`AIRALO_CLIENT_SECRET` are
-  available in the worker environment.
+Only confirmed completed purchases are persisted. Conflicting identifiers, package, quantity, or SIM ownership stop reconciliation. Historical multiple-eSIM purchases require manual delivery/refund handling. Top-ups verify the original SIM and never create or reassign its profile.
+
+- **Command**: `npm run airalo:recover-orders`; to select one local purchase, `npm run airalo:recover-orders -- --order-id LOCAL_ORDER_ID`. The ten-minute staleness threshold and five-minute attempt cooldown still apply.
+- **Schedule**: `.github/workflows/airalo-recovery.yml` runs every five minutes on the default branch after it is merged. It POSTs to `/api/airalo/recover` using `x-airalo-sync-key`. The endpoint requires the deployed `AIRALO_SYNC_CRON_TOKEN`; query-string authentication is not accepted.
+- **Configuration**: reuse GitHub secrets `AIRALO_SYNC_URL` and `AIRALO_SYNC_CRON_TOKEN`. The workflow derives `/api/airalo/recover` on that origin; optionally set `AIRALO_RECOVERY_URL` for another application origin. The application requires its existing database/Airalo credentials and a platform duration allowance of 300 seconds. Each HTTP run checks at most five purchases. Older unresolved purchases rotate through the queue and retain their submission block.
+- **Deployment verification**: deploy the endpoint first, manually dispatch the workflow, then confirm both the workflow summary and `EsimOrderRecoveryAttempt` entries. A scheduled workflow definition alone does not prove it has run. GitHub may delay scheduled jobs; monitor actual run times and configure failure notifications.
 - **Signals**:
   - Logs prefixed with `airalo.order.recovery.*` describe the attempt lifecycle (started/completed/failed/alert).
-  - The `EsimOrderRecoveryAttempt` table keeps a durable audit trail of success/failure/skip results, including reasons.
+  - The `EsimOrderRecoveryAttempt` table keeps a durable audit trail of `success`/`unresolved` results, including reasons.
+  - Runs with unresolved purchases fail the GitHub step so they remain visible for review. A zero-match search never resets a purchase to `pending` or authorizes another purchase.
 - **Alerts**: when Airalo cannot confirm an order for 45 minutes the worker emits `airalo.order.recovery.alert` logs so support
   can follow up with Airalo or issue refunds.
 
 For manual investigations, query `EsimOrderRecoveryAttempt` joined with `EsimOrder` metadata to confirm how many times a record
-has been retried and the last observed error message.
+has been checked and the last observed error message. For unresolved purchases, compare supplier order history, payment evidence, exact local marker, package and SIM ownership. Legacy purchases without an exact marker need an operator investigation with Airalo; do not guess by package or substitute a request ID. Escalate confirmed duplicates or missing fulfillment for delivery/refund handling and preserve the investigation evidence before changing local supplier references.
 
 ## Maintenance Checklist
 

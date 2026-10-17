@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/client";
 import { requireAdminApiSession } from "@/lib/admin/guards";
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const session = await requireAdminApiSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const params = await paramsPromise;
 
   const MAX_ENTITY_SNAPSHOTS = 500;
 

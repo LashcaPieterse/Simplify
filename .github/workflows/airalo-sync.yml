@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "$AIRALO_SYNC_URL" ]; then
-            echo "Missing AIRALO_SYNC_URL secret (e.g. https://simplify-pink.vercel.app/api/airalo-sync)"
+            echo "Missing AIRALO_SYNC_URL secret (e.g. https://sim.africa/api/airalo-sync)"
             exit 1
           fi
 

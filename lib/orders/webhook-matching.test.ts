@@ -3,10 +3,48 @@ import test from "node:test";
 
 import { WebhookPayloadSchema } from "../airalo/schemas";
 import {
+  assertWebhookOrderIdentity,
+  findOrderForWebhook,
   buildWebhookOrderClauses,
   resolveWebhookLocalOrderId,
   resolveWebhookRequestId,
 } from "./webhook-matching";
+
+test("unmatched supplier identifiers never fall back to a shared package", async () => {
+  const queries: unknown[] = [];
+  const tx = { esimOrder: { findMany: async (query: unknown) => { queries.push(query); return []; } } };
+  const payload = WebhookPayloadSchema.parse({ data: { id: 123, package_id: "shared-package" } });
+  const result = await findOrderForWebhook(tx as unknown as Parameters<typeof findOrderForWebhook>[0], payload);
+  assert.equal(result.order, null);
+  assert.equal(queries.length, 1);
+  assert.deepEqual((queries[0] as { where: unknown }).where, { OR: [{ orderNumber: "123" }] });
+});
+
+test("conflicting supplier identifiers cannot select an arbitrary customer", async () => {
+  const tx = { esimOrder: { findMany: async () => [{ id: "customer-a" }, { id: "customer-b" }] } };
+  await assert.rejects(
+    findOrderForWebhook(tx as unknown as Parameters<typeof findOrderForWebhook>[0], WebhookPayloadSchema.parse({
+      data: { id: 123, description: "[simplify_order_id:customer-b]" },
+    })),
+    /different local purchases/,
+  );
+});
+
+test("webhook identity rejects conflicting order, request, package, quantity and SIM fields", () => {
+  const order = {
+    id: "local-1", orderNumber: "123", requestId: "req-1", quantity: 1,
+    profiles: [{ iccid: "sim-1" }], package: { airaloPackageId: "pkg-1" },
+  } as Parameters<typeof assertWebhookOrderIdentity>[0];
+  const valid = { order_id: "123", status: "completed", reference: "req-1", package_id: "pkg-1", iccid: "sim-1" };
+  assert.doesNotThrow(() => assertWebhookOrderIdentity(order, valid));
+  for (const conflict of [
+    { order_id: "other" }, { reference: "other" }, { package_id: "other" },
+    { description: "[simplify_order_id:other]" }, { iccid: "other" },
+    { quantity: 2 }, { sims: [{ iccid: "sim-1" }, { iccid: "sim-2" }] },
+  ]) {
+    assert.throws(() => assertWebhookOrderIdentity(order, { ...valid, ...conflict }), /identity conflicts/);
+  }
+});
 
 test("webhook matching prefers reference and falls back to request_id", () => {
   const withReference = {

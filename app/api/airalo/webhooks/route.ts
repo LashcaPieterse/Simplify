@@ -28,12 +28,38 @@ import {
   extractActivationCode,
   extractUsage,
 } from "@/lib/orders/airalo-metadata";
+import { ensureOrderInstallation } from "@/lib/orders/installation";
+import { sendOrderReceipt } from "@/lib/notifications/receipts";
 import {
-  buildWebhookOrderClauses,
-  resolveWebhookPackageExternalId,
+  findOrderForWebhook,
   resolveWebhookRequestId,
 } from "@/lib/orders/webhook-matching";
 import { authenticateAiraloWebhookRequest } from "@/lib/orders/webhook-auth";
+
+async function attemptOrderDeliveryEmail(orderId: string): Promise<void> {
+  try {
+    let receipt = await sendOrderReceipt(orderId);
+
+    if (receipt.reason === "fulfilment_pending") {
+      await ensureOrderInstallation(orderId);
+      receipt = await sendOrderReceipt(orderId);
+    }
+
+    logOrderInfo("webhook.order.delivery_email", {
+      orderId,
+      sent: receipt.sent,
+      skipped: receipt.skipped,
+      reason: receipt.reason ?? null,
+    });
+  } catch (error) {
+    // Supplier acknowledgement must not be retried solely because email or
+    // the follow-up installation lookup is temporarily unavailable.
+    logOrderWarn("webhook.order.delivery_email_failed", {
+      orderId,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+}
 
 function resolveEventId(
   headers: Headers,
@@ -86,64 +112,6 @@ async function recordWebhookSnapshot({
       rawPayloadJson: toPrismaJson(payload),
     },
   });
-}
-
-async function findOrderForWebhook(
-  tx: Prisma.TransactionClient,
-  payload: WebhookPayload,
-): Promise<{
-  order: Prisma.EsimOrderGetPayload<{ include: { profiles: true } }> | null;
-  matchMethod: "direct" | "package_fallback" | null;
-  fallbackCandidates: number | null;
-}> {
-  const orderClauses = buildWebhookOrderClauses(payload.data);
-
-  const directOrder = await tx.esimOrder.findFirst({
-    where: { OR: orderClauses },
-    include: { profiles: true },
-  });
-
-  if (directOrder) {
-    return {
-      order: directOrder,
-      matchMethod: "direct",
-      fallbackCandidates: null,
-    };
-  }
-
-  const packageExternalId = resolveWebhookPackageExternalId(payload.data);
-  if (!packageExternalId) {
-    return { order: null, matchMethod: null, fallbackCandidates: null };
-  }
-
-  const fallbackCandidates = await tx.esimOrder.findMany({
-    where: {
-      orderNumber: null,
-      profiles: { none: {} },
-      status: { in: ["pending", "airalo_submitting"] },
-      package: { is: { airaloPackageId: packageExternalId } },
-      createdAt: {
-        gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      },
-    },
-    include: { profiles: true },
-    orderBy: { createdAt: "desc" },
-    take: 2,
-  });
-
-  if (fallbackCandidates.length === 1) {
-    return {
-      order: fallbackCandidates[0],
-      matchMethod: "package_fallback",
-      fallbackCandidates: 1,
-    };
-  }
-
-  return {
-    order: null,
-    matchMethod: null,
-    fallbackCandidates: fallbackCandidates.length,
-  };
 }
 
 export async function POST(request: Request) {
@@ -211,7 +179,10 @@ export async function POST(request: Request) {
         where: { eventId },
       });
       if (eventRecord?.orderId) {
-        return { status: "duplicate" as const };
+        return {
+          status: "duplicate" as const,
+          orderId: eventRecord.orderId,
+        };
       }
 
       const match = await findOrderForWebhook(tx, payload);
@@ -246,13 +217,16 @@ export async function POST(request: Request) {
       }
 
       if (!eventRecord) {
-        return { status: "duplicate" as const };
+        return {
+          status: "duplicate" as const,
+          orderId: order?.id ?? null,
+        };
       }
 
       let profileId: string | null = null;
 
       if (order) {
-        const updateData: Prisma.EsimOrderUpdateInput = {
+        const updateData: Prisma.EsimOrderUpdateManyMutationInput = {
           status: payload.data.status,
         };
 
@@ -265,10 +239,18 @@ export async function POST(request: Request) {
           updateData.requestId = requestId;
         }
 
-        await tx.esimOrder.update({
-          where: { id: order.id },
+        const claimed = await tx.esimOrder.updateMany({
+          where: {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            requestId: order.requestId,
+            updatedAt: order.updatedAt,
+          },
           data: updateData,
         });
+        if (claimed.count !== 1) {
+          throw new Error("Order identity changed while processing the webhook.");
+        }
 
         const activationCode = extractActivationCode(payload.data.metadata);
 
@@ -284,9 +266,11 @@ export async function POST(request: Request) {
             update: {
               status: payload.data.status,
               activationCode,
-              orderId: order.id,
             },
           });
+          if (profile.orderId !== order.id) {
+            throw new Error("Supplier SIM already belongs to another purchase.");
+          }
 
           profileId = profile.id;
         } else if (order.profiles.length > 0) {
@@ -321,11 +305,14 @@ export async function POST(request: Request) {
         status: "processed" as const,
         orderId: order?.id ?? null,
         matchMethod: match.matchMethod,
-        fallbackCandidates: match.fallbackCandidates,
       };
     });
 
     const duration = Date.now() - processingStartedAt;
+
+    if (result.orderId) {
+      await attemptOrderDeliveryEmail(result.orderId);
+    }
 
     if (result.status === "duplicate") {
       logOrderInfo("webhook.event.duplicate", {
@@ -350,7 +337,6 @@ export async function POST(request: Request) {
       requestId: resolveWebhookRequestId(payload.data),
       authMethod: auth.method,
       matchMethod: result.matchMethod,
-      fallbackCandidates: result.fallbackCandidates,
       reason: result.orderId ? "ok" : "order_not_found",
     });
 

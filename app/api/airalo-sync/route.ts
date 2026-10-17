@@ -1,11 +1,9 @@
-import { createHash } from "crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { mapAuditResultToLegacySyncResult, runSyncAuditJob } from "@/lib/sync-audit/sync-job";
 import { sendEmail } from "@/lib/notifications/email";
-
-const ALERT_RECIPIENT = process.env.AIRALO_SYNC_ALERT_EMAIL ?? "pieterselashca@gmail.com";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +15,14 @@ function isAuthorized(request: NextRequest) {
   const headerToken = request.headers.get("x-airalo-sync-key");
   const queryToken = request.nextUrl.searchParams.get("key");
 
-  return headerToken === cronToken || queryToken === cronToken;
+  return safeEqual(headerToken, cronToken) || safeEqual(queryToken, cronToken);
+}
+
+function safeEqual(provided: string | null, expected: string): boolean {
+  if (!provided) return false;
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  return providedBuffer.length === expectedBuffer.length && timingSafeEqual(providedBuffer, expectedBuffer);
 }
 
 function fingerprint(value?: string | null): string | null {
@@ -26,12 +31,17 @@ function fingerprint(value?: string | null): string | null {
 }
 
 async function notifyFailure(error: unknown) {
+  const alertRecipient = process.env.AIRALO_SYNC_ALERT_EMAIL?.trim();
+  if (!alertRecipient) {
+    console.warn("[airalo-sync] AIRALO_SYNC_ALERT_EMAIL is not configured; failure email skipped");
+    return;
+  }
   const failureReason = error instanceof Error ? `${error.message}\n\n${error.stack ?? ""}` : String(error);
   const timestamp = new Date().toISOString();
 
   await sendEmail({
-    to: ALERT_RECIPIENT,
-    subject: "Airalo package sync failed",
+    to: alertRecipient,
+    subject: "SIM.Africa Airalo package sync failed",
     text: `The hourly Airalo package sync failed at ${timestamp}.\n\n${failureReason}`,
   });
 }

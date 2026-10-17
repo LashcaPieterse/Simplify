@@ -292,3 +292,37 @@ test("no-match state returns no primary recommendation", () => {
 
   assert.equal(result.primary, null);
 });
+
+test("destination keywords and provider names cannot bypass strict country coverage", () => {
+  const misleading = product({
+    id: "canary-uganda-keyword",
+    name: "Uganda traveller special",
+    country: "Canary Islands",
+    price: 1,
+    dataMb: 10240,
+    validityDays: 30,
+    keywords: ["Uganda"],
+  });
+  misleading.provider = { title: "Uganda Connect" };
+
+  const result = matchTripPlans({
+    destination: "Uganda",
+    durationDays: 7,
+    usageProfileId: "light",
+    products: [
+      misleading,
+      product({
+        id: "uganda",
+        name: "Uganda 2GB",
+        country: "Uganda",
+        price: 12,
+        dataMb: 2048,
+        validityDays: 7,
+      }),
+    ],
+  });
+
+  assert.equal(result.primary?.product._id, "uganda");
+  assert.equal(result.alternatives.cheapest, null);
+  assert.equal(result.alternatives.moreData, null);
+});

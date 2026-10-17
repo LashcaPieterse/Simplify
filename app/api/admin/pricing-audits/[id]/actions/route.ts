@@ -11,11 +11,11 @@ const PricingAuditActionParamsSchema = z.object({
   id: z.string().trim().min(1, "Audit id is required."),
 });
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAdminApiSession(request);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const parsedParams = PricingAuditActionParamsSchema.safeParse(params);
+  const parsedParams = PricingAuditActionParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
     return jsonValidationError(parsedParams.error);
   }

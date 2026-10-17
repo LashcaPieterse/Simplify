@@ -85,7 +85,7 @@ export default async function AccountEsimsPage() {
                   {pkg?.operator?.country?.title ?? "eSIM"}
                 </p>
                 <h2 className="text-lg font-semibold text-brand-900">
-                  {pkg?.title ?? "Simplify eSIM plan"}
+                  {pkg?.title ?? "SIM.Africa eSIM plan"}
                 </h2>
                 <p className="mt-1 text-sm text-brand-600">
                   Order reference {order.orderNumber ?? order.requestId ?? order.id}

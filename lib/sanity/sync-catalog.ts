@@ -109,55 +109,6 @@ async function resolveImageFromUrl(url: string | null | undefined): Promise<Sani
   }
 }
 
-const PLACEHOLDER_IMAGE_BASE64 =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6wHuAAAAAASUVORK5CYII=";
-
-async function uploadPlaceholderImage(filename = "placeholder.png"): Promise<SanityImageValue | null> {
-  try {
-    const asset = await getSanityClient().assets.upload(
-      "image",
-      Buffer.from(PLACEHOLDER_IMAGE_BASE64, "base64"),
-      { filename, contentType: "image/png" }
-    );
-    const image = {
-      _type: "image",
-      asset: { _type: "reference", _ref: asset._id }
-    } satisfies SanityImageValue;
-    return image;
-  } catch (error) {
-    console.warn("[sanity-sync] Failed to upload placeholder image", error);
-    return null;
-  }
-}
-
-function fallbackCountryImageUrl(countryCode?: string | null, name?: string | null): string | null {
-  const code = (countryCode ?? name ?? "").toLowerCase();
-  const map: Record<string, string> = {
-    na: "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1600&q=80",
-    za: "https://images.unsplash.com/photo-1526481280695-3c469928b67b?auto=format&fit=crop&w=1600&q=80",
-    ke: "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=1600&q=80",
-    bw: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1600&q=80",
-    zm: "https://images.unsplash.com/photo-1526498460520-4c246339dccb?auto=format&fit=crop&w=1600&q=80",
-    tz: "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1600&q=80"
-  };
-  return map[code] ?? "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1600&q=80";
-}
-
-function fallbackOperatorImageUrl(code?: string | null, name?: string | null): string | null {
-  const key = (code ?? name ?? "").toLowerCase();
-  if (key.includes("vod") || key.includes("vodacom") || key.includes("vodafone")) {
-    return "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1600&q=80";
-  }
-  if (key.includes("airtel")) {
-    return "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1600&q=80";
-  }
-  return "https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=1600&q=80";
-}
-
-function fallbackPackageImageUrl(): string | null {
-  return "https://images.unsplash.com/photo-1483478550801-ceba5fe50e8e?auto=format&fit=crop&w=1600&q=80";
-}
-
 function extractImageUrl(value: unknown): string | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -309,21 +260,17 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
   const now = new Date().toISOString();
 
   const countryIdMap = new Map<string, string>();
-  const countryById = new Map<string, (typeof countries)[number]>();
   const countryDocs: SyncDocument[] = [];
 
   for (const country of countries) {
     const docId = `catalog-country-${country.countryCode.toLowerCase()}`;
     countryIdMap.set(country.id, docId);
-    countryById.set(country.id, country);
 
-    const sourceImageUrl =
-      extractImageUrl(country.imageJson) ??
-      fallbackCountryImageUrl(country.countryCode, country.title);
+    const sourceImageUrl = extractImageUrl(country.imageJson);
     const image =
       (await resolveImageFromUrl(sourceImageUrl)) ??
       existingImages.get(docId) ??
-      (await uploadPlaceholderImage("catalog-country-placeholder.png"));
+      null;
 
     countryDocs.push({
       _id: docId,
@@ -348,18 +295,11 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
     const countryRef = countryIdMap.get(operator.countryId);
     const docId = `catalog-operator-${operator.airaloOperatorId ?? operator.id}`;
     operatorIdMap.set(operator.id, docId);
-    const country = countryById.get(operator.countryId);
-    const sourceImageUrl =
-      extractImageUrl(operator.imageJson) ??
-      fallbackOperatorImageUrl(
-        operator.airaloOperatorId?.toString() ?? null,
-        operator.title,
-      ) ??
-      fallbackCountryImageUrl(country?.countryCode, country?.title);
+    const sourceImageUrl = extractImageUrl(operator.imageJson);
     const image =
       (await resolveImageFromUrl(sourceImageUrl)) ??
       existingImages.get(docId) ??
-      (await uploadPlaceholderImage("catalog-operator-placeholder.png"));
+      null;
 
     operatorDocs.push({
       _id: docId,
@@ -399,11 +339,7 @@ export async function syncCatalogToSanity(): Promise<SanityCatalogSyncResult> {
     }
 
     const docId = `catalog-package-${sanitizeDocumentId(pkg.airaloPackageId)}`;
-    const sourceImageUrl = fallbackPackageImageUrl();
-    const image =
-      (await resolveImageFromUrl(sourceImageUrl)) ??
-      existingImages.get(docId) ??
-      (await uploadPlaceholderImage("catalog-package-placeholder.png"));
+    const image = existingImages.get(docId) ?? null;
 
     const pkgDocId = `catalog-package-${sanitizeDocumentId(pkg.airaloPackageId)}`;
     const currentPriceCents = pkg.state?.sellingPriceCents;

@@ -38,6 +38,7 @@ import {
   type ReservedOrderSnapshot,
 } from "./validation";
 import { normaliseQuantity } from "./quantity";
+import { resolvePurchaseFailureOutcome } from "./submission-state";
 
 export { resolveAiraloClient } from "./airalo-ordering";
 export {
@@ -197,7 +198,7 @@ export async function createOrder(
     asyncWebhookUrl =
       submissionMode === "async" ? resolveRequiredAsyncWebhookUrl(options) : null;
   } catch (error) {
-    await markReservedOrderSubmissionFailed(db, reservedOrder);
+    await markReservedOrderSubmissionFailed(db, reservedOrder, "rejected");
     throw error;
   }
 
@@ -212,7 +213,7 @@ export async function createOrder(
   try {
     airalo = options.airaloClient ?? resolveAiraloClient();
   } catch (error) {
-    await markReservedOrderSubmissionFailed(db, reservedOrder);
+    await markReservedOrderSubmissionFailed(db, reservedOrder, "rejected");
     throw error;
   }
 
@@ -233,7 +234,7 @@ export async function createOrder(
       startedAt,
       airaloLatencyMs: Date.now() - airaloCallStartedAt,
       beforeMapping: () =>
-        markReservedOrderSubmissionFailed(db, reservedOrder),
+        markReservedOrderSubmissionFailed(db, reservedOrder, resolvePurchaseFailureOutcome(error)),
       autoDeactivatePackage: (deactivation) =>
         autoDeactivatePackage(resolvedPackage.pkg, {
           ...deactivation,
@@ -297,6 +298,7 @@ export async function createOrder(
       ),
     };
   } catch (error: unknown) {
+    await markReservedOrderSubmissionFailed(db, reservedOrder, "unknown");
     return handlePersistenceError({
       error,
       pkg: resolvedPackage.pkg,

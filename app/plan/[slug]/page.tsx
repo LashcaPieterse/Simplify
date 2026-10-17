@@ -1,156 +1,190 @@
-import Image from "next/image";
+import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2, Globe2, Router, SignalHigh } from "lucide-react";
-import { OrderButton } from "@/components/orders/OrderButton";
-import { PortableTextRenderer } from "@/components/rich/PortableText";
+import {
+  CalendarDays,
+  ChevronRight,
+  Database,
+  Globe2,
+  Info,
+  Phone,
+  Radio,
+  RefreshCw,
+  Router,
+  Settings2,
+  ShieldCheck,
+  Smartphone,
+} from "lucide-react";
+
+import { TrackView } from "@/components/analytics/TrackView";
+import { AddToCartButton } from "@/components/cart/AddToCartButton";
+import { WhatsAppSupportLink } from "@/components/site/WhatsAppSupportLink";
+import { storefrontPlanToCartItem, formatKnownBoolean } from "@/lib/catalog/presentation";
+import {
+  getStorefrontPlan,
+} from "@/lib/catalog/storefront";
 import { formatMoneyAmount } from "@/lib/format";
-import { getCatalogPackageId, getPlanBySlug, getPlanSlugs, getPosts } from "@/lib/sanity.queries";
-import { urlForImage } from "@/lib/image";
 
 export const dynamic = "force-static";
 export const revalidate = 300;
 
-export async function generateStaticParams() {
-  const slugs = await getPlanSlugs();
-  return slugs.map((slug) => ({ slug }));
+type PlanPageProps = { params: Promise<{ slug: string }> };
+
+// Plans are generated on first request and revalidated for five minutes. This
+// keeps deployment independent of the size and momentary health of the catalogue.
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
 }
 
-type PlanPageProps = {
-  params: { slug: string };
-};
+export async function generateMetadata({ params }: PlanPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const plan = await getStorefrontPlan(slug);
+  if (!plan) return {};
+  const title = `${plan.dataLabel} eSIM for ${plan.destination.title}`;
+  const description = `Compare the ${plan.title} eSIM for ${plan.destination.title}: ${plan.dataLabel}, ${plan.validityDays ? `${plan.validityDays} days` : "supplier-defined validity"}, and current catalogue pricing.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/plan/${encodeURIComponent(plan.externalId)}` },
+    openGraph: { title, description, url: `/plan/${encodeURIComponent(plan.externalId)}`, type: "website" },
+  };
+}
 
 export default async function PlanPage({ params }: PlanPageProps) {
-  const plan = await getPlanBySlug(params.slug);
+  const { slug } = await params;
+  const plan = await getStorefrontPlan(slug);
+  if (!plan) notFound();
 
-  if (!plan) {
-    notFound();
-  }
+  const suppliedCallAllowances = [
+    plan.callsMinutes ? `${plan.callsMinutes} voice minutes` : null,
+    plan.texts ? `${plan.texts} texts` : null,
+  ].filter(Boolean).join(" · ");
+  const callsAndTexts = suppliedCallAllowances || formatKnownBoolean(plan.callsAndSms, {
+    yes: "Included; allowance not provided",
+    no: "Data only",
+  });
+  const networkLabel = plan.networkTypes.length ? plan.networkTypes.join(" / ") : "Unknown";
+  const carrierLabel = plan.networks.length ? plan.networks.join(", ") : plan.operatorName ?? "Unknown";
+  const cartItem = storefrontPlanToCartItem(plan);
+  const destinationHref = (plan.isRegional
+    ? `/regional-esims#${plan.destination.slug}`
+    : `/country/${plan.destination.slug}`) as Route;
 
-  const relatedPosts = (await getPosts()).slice(0, 3);
-  const inclusions = Array.isArray(plan.whatsIncluded) ? plan.whatsIncluded : [];
-  const installSteps = Array.isArray(plan.installSteps) ? plan.installSteps : [];
-  const terms = Array.isArray(plan.terms) ? plan.terms : [];
-  const features = Array.isArray(plan.features) ? plan.features : [];
-  const providerLogo = plan.provider?.logo ? urlForImage(plan.provider.logo)?.width(160).height(160).url() : null;
-  const providerHandle = plan.provider?.title
-    ? plan.provider.title.toLowerCase().replace(/\s+/g, "")
-    : "simplify";
-
-  const livePrice = plan.price?.source === "airalo" ? plan.price : null;
-  const hasLivePrice = Boolean(livePrice && typeof livePrice.amount === "number");
+  const productSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: `${plan.title} eSIM for ${plan.destination.title}`,
+    description: plan.shortInfo ?? `${plan.dataLabel} travel eSIM for ${plan.destination.title}.`,
+    sku: plan.externalId,
+    category: "Travel eSIM",
+    brand: { "@type": "Brand", name: "SIM.Africa" },
+    offers: {
+      "@type": "Offer",
+      price: plan.price.amount,
+      priceCurrency: plan.price.currency,
+      availability: "https://schema.org/InStock",
+      url: `https://sim.africa/plan/${encodeURIComponent(plan.externalId)}`,
+    },
+  };
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://sim.africa" },
+      { "@type": "ListItem", position: 2, name: plan.isRegional ? "Regional eSIMs" : plan.destination.title, item: `https://sim.africa${destinationHref}` },
+      { "@type": "ListItem", position: 3, name: plan.title, item: `https://sim.africa/plan/${encodeURIComponent(plan.externalId)}` },
+    ],
+  };
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-16 lg:px-10">
-      <div className="rounded-[2rem] border border-brand-100/80 bg-white p-10 shadow-card">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-500">{plan.provider?.title}</p>
-            <h1 className="font-display text-4xl text-brand-900 sm:text-5xl">{plan.title}</h1>
-            <p className="text-base text-brand-600">{plan.shortBlurb}</p>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-brand-600">
-              <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                <Globe2 className="h-5 w-5 text-brand-400" />
-                {plan.country?.title}
-              </span>
-              {plan.fiveG ? (
-                <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                  <SignalHigh className="h-5 w-5 text-brand-400" />
-                  5G access
-                </span>
-              ) : null}
-              {plan.hotspot ? (
-                <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                  <Router className="h-5 w-5 text-brand-400" />
-                  Hotspot enabled
-                </span>
-              ) : null}
-            </div>
+    <div className="pb-24 lg:pb-0">
+      <TrackView event="plan_view" properties={{ package_id: plan.externalId, destination: plan.destination.title }} />
+      <div className="mx-auto max-w-7xl px-5 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-brand-600">
+          <Link href="/">Home</Link><ChevronRight className="h-4 w-4" aria-hidden /><Link href={destinationHref}>{plan.isRegional ? "Regional eSIMs" : plan.destination.title}</Link><ChevronRight className="h-4 w-4" aria-hidden /><span aria-current="page">{plan.title}</span>
+        </nav>
+
+        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-600">{plan.isRegional ? "Regional travel eSIM" : `eSIM for ${plan.destination.title}`}</p>
+            <h1 className="mt-3 max-w-4xl text-4xl font-black tracking-tight text-brand-900 sm:text-6xl">{plan.title}</h1>
+            {plan.shortInfo ? <p className="mt-5 max-w-3xl text-lg leading-8 text-brand-600">{plan.shortInfo}</p> : null}
+
+            <dl className="mt-9 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <HeroFact icon={Database} label="Data" value={plan.dataLabel} />
+              <HeroFact icon={CalendarDays} label="Validity" value={plan.validityDays ? `${plan.validityDays} days` : "Unknown"} />
+              <HeroFact icon={Radio} label="Network" value={networkLabel} />
+              <HeroFact icon={Globe2} label="Destination" value={plan.destination.title} />
+            </dl>
           </div>
-          <div className="flex flex-col items-end gap-4 text-right">
-            {providerLogo ? (
-              <Image src={providerLogo} alt={plan.provider?.title ?? "Carrier"} width={64} height={64} className="rounded-full" />
-            ) : null}
-            <p className="text-3xl font-semibold text-brand-900">
-              {hasLivePrice
-                ? formatMoneyAmount(livePrice?.amount, livePrice?.currency ?? "USD")
-                : "Unavailable"}
-            </p>
-            <OrderButton
-              packageId={getCatalogPackageId(plan.package)}
-              label="Get this plan"
-              pendingLabel="Processing…"
-              size="lg"
-              fullWidth
-              className="w-full"
-            />
-          </div>
+
+          <aside className="rounded-3xl border border-brand-100 bg-white p-6 shadow-card lg:sticky lg:top-28">
+            <p className="text-xs font-black uppercase tracking-wide text-brand-500">Price</p>
+            <p className="mt-2 text-4xl font-black text-brand-900">{formatMoneyAmount(plan.price.amount, plan.price.currency)}</p>
+            <p className="mt-3 text-sm leading-6 text-brand-600">One-time package price for the selected eSIM. Payment currency: {plan.price.currency}.</p>
+            <AddToCartButton item={cartItem} label="Add to cart" className="mt-6" />
+            <div className="mt-5 flex items-start gap-2 border-t border-brand-100 pt-5 text-xs leading-5 text-brand-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />Availability and price are revalidated by checkout before payment.</div>
+          </aside>
         </div>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[1.3fr,0.7fr]">
-          <div>
-            <h2 className="text-xl font-semibold text-brand-900">What&apos;s included</h2>
-            <ul className="mt-4 space-y-3 text-sm text-brand-600">
-              {inclusions.map((item) => (
-                <li key={item} className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-brand-400" />
-                  {item}
-                </li>
-              ))}
-            </ul>
+        <div className="mt-14 grid gap-8 lg:grid-cols-[minmax(0,1fr)_23rem]">
+          <div className="space-y-8">
+            <DetailSection title="Plan details">
+              <dl className="grid gap-px overflow-hidden rounded-2xl border border-brand-100 bg-brand-100 sm:grid-cols-2">
+                <DetailFact icon={Radio} label="Supported carrier(s)" value={carrierLabel} />
+                <DetailFact icon={Router} label="Hotspot / tethering" value={formatKnownBoolean(plan.hotspot)} />
+                <DetailFact icon={Phone} label="Calls & SMS" value={callsAndTexts} />
+                <DetailFact icon={Smartphone} label="Phone number" value={formatKnownBoolean(plan.includesPhoneNumber, { yes: "Included", no: "Not included" })} />
+                <DetailFact icon={RefreshCw} label="Top-up" value={formatKnownBoolean(plan.topUpAvailable, { yes: "Available", no: "Not available" })} />
+                <DetailFact icon={Settings2} label="APN" value={plan.apn ?? "No supplier value provided"} />
+              </dl>
+            </DetailSection>
 
-            {features.length ? (
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold text-brand-900">Perks</h3>
-                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {features.map((feature) => (
-                    <li key={feature} className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-600">
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            <DetailSection title="Purchase, installation, and activation">
+              <ol className="grid gap-4 sm:grid-cols-3">
+                <TimelineStep number="1" title="Purchase" body="Pay securely and wait for the order to be fulfilled." />
+                <TimelineStep number="2" title="Installation" body={plan.installWindowDays ? `Install within ${plan.installWindowDays} days of purchase, following the order guide.` : "Follow the installation timing in your fulfilled order. No install window was provided in the catalogue."} />
+                <TimelineStep number="3" title="Activation" body={plan.activationPolicy ?? "The supplier has not provided a catalogue activation rule. Check the fulfilled order instructions or contact support before installing."} />
+              </ol>
+            </DetailSection>
 
-            <div className="mt-10 space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-brand-900">Installation steps</h3>
-                <div className="prose prose-brand max-w-none">
-                  <PortableTextRenderer value={installSteps} />
-                </div>
-              </div>
-              {terms.length ? (
-                <div>
-                  <h3 className="text-lg font-semibold text-brand-900">Terms</h3>
-                  <div className="prose prose-brand max-w-none">
-                    <PortableTextRenderer value={terms} />
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            {plan.fairUsagePolicy ? <DetailSection title="Fair-use policy"><div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">{plan.fairUsagePolicy}</div></DetailSection> : null}
+
+            <DetailSection title={plan.isRegional ? "Supported destinations" : "Coverage"}>
+              {plan.isRegional && !plan.coverageVerified ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">The regional coverage list could not be verified from the supplier catalogue, so this package is not used for route recommendations. Contact support before purchase.</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">{plan.coverage.map((destination) => <span key={`${destination.code}-${destination.slug}`} className="rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-800">{destination.name}{destination.code ? ` (${destination.code})` : ""}</span>)}</div>
+              )}
+            </DetailSection>
           </div>
 
-          <aside className="space-y-6 rounded-2xl border border-brand-100 bg-brand-50/70 p-6">
-            <h3 className="text-lg font-semibold text-brand-900">Travel tips</h3>
-            <p className="text-sm text-brand-600">
-              Activate your eSIM within 30 days of purchase. Need help? Email support@{providerHandle}.travel or chat in the app.
-            </p>
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-500">Latest resources</h4>
-              <ul className="space-y-3 text-sm text-brand-600">
-                {relatedPosts.map((post) => (
-                  <li key={post._id} className="flex items-center justify-between">
-                    <Link href={`/resources/${post.slug}`} className="hover:text-brand-900">
-                      {post.title}
-                    </Link>
-                    <span className="text-xs text-brand-400">{post.readingMinutes} min read</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          <aside className="space-y-5">
+            <div className="rounded-3xl border border-brand-100 bg-brand-50 p-6"><Info className="h-6 w-6 text-brand-600" aria-hidden /><h2 className="mt-4 font-black text-brand-900">Before you buy</h2><ul className="mt-4 grid gap-3 text-sm leading-6 text-brand-600"><li>Confirm your phone supports eSIM.</li><li>Check that it is carrier unlocked.</li><li>Read the activation rule above.</li><li>Do not delete an installed eSIM prematurely.</li></ul><div className="mt-5 flex flex-wrap gap-x-4 gap-y-2"><Link href="/compatibility" className="font-bold text-brand-700 underline underline-offset-4">Check compatibility</Link><Link href="/refunds" className="font-bold text-brand-700 underline underline-offset-4">Read refund information</Link><WhatsAppSupportLink location="plan" className="font-bold text-brand-700 underline underline-offset-4" /></div></div>
+            <div className="rounded-3xl border border-brand-100 bg-white p-6 text-sm leading-6 text-brand-600"><h2 className="font-black text-brand-900">Catalogue record</h2><p className="mt-2">Package ID: <span className="break-all font-mono text-xs">{plan.externalId}</span></p>{plan.lastSyncedAt ? <p className="mt-2">Last recorded sync: <time dateTime={plan.lastSyncedAt}>{new Date(plan.lastSyncedAt).toLocaleString("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC</time></p> : null}</div>
           </aside>
         </div>
       </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-100 bg-white/95 p-3 backdrop-blur lg:hidden"><div className="mx-auto flex max-w-lg items-center gap-3"><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-600">{plan.dataLabel} · {plan.validityDays ? `${plan.validityDays} days` : "Validity unknown"}</p><p className="font-black text-brand-900">{formatMoneyAmount(plan.price.amount, plan.price.currency)}</p></div><AddToCartButton item={cartItem} label="Add to cart" className="w-auto min-w-36" /></div></div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema).replace(/</g, "\\u003c") }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, "\\u003c") }} />
     </div>
   );
+}
+
+function HeroFact({ icon: Icon, label, value }: { icon: typeof Database; label: string; value: string }) {
+  return <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4"><Icon className="h-5 w-5 text-brand-600" aria-hidden /><dt className="mt-4 text-[0.65rem] font-black uppercase tracking-wide text-brand-500">{label}</dt><dd className="mt-1 font-black text-brand-900">{value}</dd></div>;
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section><h2 className="text-2xl font-black text-brand-900">{title}</h2><div className="mt-5">{children}</div></section>;
+}
+
+function DetailFact({ icon: Icon, label, value }: { icon: typeof Radio; label: string; value: string }) {
+  return <div className="bg-white p-5"><Icon className="h-5 w-5 text-brand-500" aria-hidden /><dt className="mt-3 text-xs font-bold uppercase tracking-wide text-brand-500">{label}</dt><dd className="mt-1 font-semibold text-brand-900">{value}</dd></div>;
+}
+
+function TimelineStep({ number, title, body }: { number: string; title: string; body: string }) {
+  return <li className="rounded-2xl border border-brand-100 bg-white p-5"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-700 text-sm font-black text-white">{number}</span><h3 className="mt-4 font-black text-brand-900">{title}</h3><p className="mt-2 text-sm leading-6 text-brand-600">{body}</p></li>;
 }

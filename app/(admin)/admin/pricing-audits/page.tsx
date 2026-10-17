@@ -1,9 +1,10 @@
 import prisma from "@/lib/db/client";
 import { resolvePricingAuditAction } from "./server-actions";
 
-export default async function PricingAuditsPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
-  const severity = typeof searchParams.severity === "string" ? searchParams.severity : undefined;
-  const status = typeof searchParams.status === "string" ? searchParams.status : undefined;
+export default async function PricingAuditsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const resolvedSearchParams = await searchParams;
+  const severity = typeof resolvedSearchParams.severity === "string" ? resolvedSearchParams.severity : undefined;
+  const status = typeof resolvedSearchParams.status === "string" ? resolvedSearchParams.status : undefined;
   const audits = await prisma.pricingAudit.findMany({
     where: {
       ...(severity ? { severity } : {}),

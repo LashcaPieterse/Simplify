@@ -82,6 +82,88 @@ function requireFormData(value: FormData | null): FormData {
   return value;
 }
 
+test("AiraloClient never replays a supplier purchase POST automatically", async (t) => {
+  const endpoints = [
+    ["orders", (client: AiraloClient) => client.createOrderResponse({ package_id: "test", quantity: "1" })],
+    ["orders-async", (client: AiraloClient) => client.createOrderAsyncResponse({ package_id: "test", quantity: "1" })],
+    ["orders/topups", (client: AiraloClient) => client.createTopUpOrderResponse({ package_id: "test", iccid: "mock-iccid", description: "Test top-up" })],
+  ] as const;
+  for (const [endpoint, purchase] of endpoints) {
+    for (const status of [500, 503, 429, 401, 422]) {
+      await t.test(`${endpoint}: HTTP ${status}`, async () => {
+        let posts = 0;
+        const tokenCache = new MockTokenCache({ token: "mock", expiresAt: Date.now() + 3600000 });
+        const client = createTestClient({
+          clientId: "mock", clientSecret: "mock", tokenCache,
+          rateLimitRetry: { maxRetries: 3, baseDelayMs: 0, maxDelayMs: 0 },
+          fetchImplementation: async (_url, init) => {
+            assert.equal(init?.method, "POST");
+            posts++;
+            return jsonResponse({ code: 53, reason: "Unexpected upstream failure" }, { status });
+          },
+        });
+        await assert.rejects(() => purchase(client));
+        assert.equal(posts, 1);
+        if (status === 401) assert.equal(tokenCache.clearCount, 1);
+      });
+    }
+    for (const failure of ["network", "invalid JSON", "invalid schema"] as const) {
+      await t.test(`${endpoint}: ${failure}`, async () => {
+        let posts = 0;
+        const client = createTestClient({
+          clientId: "mock", clientSecret: "mock",
+          tokenCache: new MockTokenCache({ token: "mock", expiresAt: Date.now() + 3600000 }),
+          fetchImplementation: async () => {
+            posts++;
+            if (failure === "network") throw new TypeError("Socket closed");
+            if (failure === "invalid JSON") return new Response("not-json", { status: 200 });
+            return jsonResponse({ data: null }, { status: 200 });
+          },
+        });
+        await assert.rejects(() => purchase(client));
+        assert.equal(posts, 1);
+      });
+    }
+  }
+});
+
+test("AiraloClient marks token preparation failures as not submitted", async () => {
+  let purchasePosts = 0;
+  const client = createTestClient({
+    clientId: "mock", clientSecret: "mock",
+    tokenCache: new MockTokenCache(), rateLimitRetry: { maxRetries: 0 },
+    fetchImplementation: async (url) => {
+      if (String(url).endsWith("/token")) return jsonResponse({ reason: "Unauthorized" }, { status: 401 });
+      purchasePosts++;
+      throw new Error("Purchase must not be sent");
+    },
+  });
+  await assert.rejects(() => client.createOrderResponse({ package_id: "mock", quantity: "1" }), (error: unknown) => {
+    assert.ok(error instanceof AiraloError);
+    assert.equal(error.details.purchaseNotSubmitted, true);
+    return true;
+  });
+  assert.equal(purchasePosts, 0);
+});
+
+test("AiraloClient still retries read-only requests after server errors", async () => {
+  let gets = 0;
+  const client = createTestClient({
+    clientId: "mock", clientSecret: "mock",
+    tokenCache: new MockTokenCache({ token: "mock", expiresAt: Date.now() + 3600000 }),
+    rateLimitRetry: { maxRetries: 1, baseDelayMs: 0, maxDelayMs: 0 },
+    fetchImplementation: async () => {
+      gets++;
+      return gets === 1
+        ? jsonResponse({}, { status: 503 })
+        : jsonResponse({ data: { id: "supplier-order" } }, { status: 200 });
+    },
+  });
+  const order = await client.getOrderById("supplier-order");
+  assert.equal(order.id, "supplier-order");
+  assert.equal(gets, 2);
+});
+
 test("AiraloClient clears the cached token and retries once after a 401", async () => {
   const tokenCache = new MockTokenCache({
     token: "stale-token",
@@ -2100,4 +2182,48 @@ test("AiraloClient sends OAuth token requests as form-urlencoded", async () => {
     tokenBody,
     "client_id=client-id&client_secret=client-secret&grant_type=client_credentials",
   );
+});
+
+test("order lookup includes SIM and status details and normalizes documented status objects", async () => {
+  const requests: URL[] = [];
+  const client = createTestClient({
+    clientId: "test", clientSecret: "test",
+    tokenCache: new MockTokenCache({ token: "test-token", expiresAt: Date.now() + 3600000 }),
+    fetchImplementation: async (input) => {
+      requests.push(new URL(String(input)));
+      return jsonResponse({ data: { id: 123, status: { slug: "completed" }, sims: [{ iccid: "sim-1" }] } }, { status: 200 });
+    },
+  });
+  const result = await client.getOrderById("123");
+  assert.equal(result.status, "completed");
+  assert.equal(requests[0]!.pathname, "/v2/orders/123");
+  assert.equal(requests[0]!.searchParams.get("include"), "sims,status");
+});
+
+test("description recovery search uses documented filters and reads all pages", async () => {
+  const pages: number[] = [];
+  const marker = "[simplify_order_id:local-1]";
+  const client = createTestClient({
+    clientId: "test", clientSecret: "test",
+    tokenCache: new MockTokenCache({ token: "test-token", expiresAt: Date.now() + 3600000 }),
+    fetchImplementation: async (input, init) => {
+      assert.equal(init?.method ?? "GET", "GET");
+      const url = new URL(String(input));
+      assert.equal(url.searchParams.get("filter[description]"), marker);
+      const page = Number(url.searchParams.get("page"));
+      pages.push(page);
+      return jsonResponse({ data: [{ id: page, description: marker }], meta: { last_page: 2 } }, { status: 200 });
+    },
+  });
+  assert.equal((await client.findOrdersByDescription(marker)).length, 2);
+  assert.deepEqual(pages, [1, 2]);
+});
+
+test("description search refuses truncated results instead of choosing a purchase", async () => {
+  const client = createTestClient({
+    clientId: "test", clientSecret: "test",
+    tokenCache: new MockTokenCache({ token: "test-token", expiresAt: Date.now() + 3600000 }),
+    fetchImplementation: async () => jsonResponse({ data: [], meta: { last_page: 4 } }, { status: 200 }),
+  });
+  await assert.rejects(client.findOrdersByDescription("[simplify_order_id:local-1]"), /pagination limit/);
 });

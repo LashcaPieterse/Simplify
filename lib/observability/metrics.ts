@@ -39,7 +39,7 @@ function initialiseRegistry(): Registry {
   return registry;
 }
 
-const meter = metrics.getMeter("simplify-airalo");
+const meter = metrics.getMeter("sim-africa-airalo");
 
 let orderRequestCounter: Counter<string>;
 let orderRequestDuration: Histogram<string>;

@@ -1,21 +1,45 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getPostBySlug, getPosts } from "@/lib/sanity.queries";
 import { urlForImage } from "@/lib/image";
 import { PortableTextRenderer } from "@/components/rich/PortableText";
+import { isCurrentResource } from "@/lib/content/resources";
 
 export const dynamic = "force-static";
 export const revalidate = false;
 
 export async function generateStaticParams() {
   const posts = await getPosts();
-  return posts.map((post) => ({ slug: post.slug }));
+  return posts.filter((post) => isCurrentResource(post)).map((post) => ({ slug: post.slug }));
 }
 
 type PostPageProps = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
+
+export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await getPostBySlug(slug);
+  if (!post || !isCurrentResource(post)) return {};
+  const image = post.coverImage ? urlForImage(post.coverImage)?.width(1200).height(630).url() : undefined;
+  const canonical = `/resources/${slug}`;
+
+  return {
+    title: post.title,
+    description: post.excerpt,
+    alternates: { canonical },
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      type: "article",
+      url: canonical,
+      publishedTime: post.publishedAt,
+      images: image ? [{ url: image, width: 1200, height: 630, alt: post.title }] : undefined,
+    },
+  };
+}
 
 const formatDate = (date?: string) => {
   if (!date) return "";
@@ -23,16 +47,28 @@ const formatDate = (date?: string) => {
 };
 
 export default async function PostPage({ params }: PostPageProps) {
-  const post = await getPostBySlug(params.slug);
+  const { slug } = await params;
+  const post = await getPostBySlug(slug);
 
-  if (!post) {
+  if (!post || !isCurrentResource(post)) {
     notFound();
   }
 
   const coverImage = post.coverImage ? urlForImage(post.coverImage)?.width(1280).height(720).url() : null;
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.excerpt,
+    datePublished: post.publishedAt,
+    image: coverImage ? [coverImage] : undefined,
+    publisher: { "@type": "Organization", name: "SIM.Africa", url: "https://sim.africa" },
+    mainEntityOfPage: `https://sim.africa/resources/${slug}`,
+  };
 
   return (
     <article className="mx-auto w-full max-w-3xl px-6 py-16">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema).replace(/</g, "\\u003c") }} />
       <Link href="/resources" className="text-sm font-semibold text-brand-600 hover:text-brand-800">
         ← Back to resources
       </Link>

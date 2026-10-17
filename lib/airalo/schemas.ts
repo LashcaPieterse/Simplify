@@ -233,7 +233,10 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
         .union([z.string(), z.number(), z.null()])
         .transform((value) => (value == null ? undefined : String(value)))
         .optional(),
-      status: z.string().nullable().optional(),
+      status: z.union([
+        z.string(),
+        z.object({ slug: z.string() }).transform((value) => value.slug),
+      ]).nullable().optional(),
       qr_code: z.string().nullable().optional(),
       qr_code_data: z.string().nullable().optional(),
       smdp_address: z.string().nullable().optional(),
@@ -282,6 +285,12 @@ export const OrderResponseSchema = BaseResponseSchema.extend({
 
 export type OrderResponse = z.infer<typeof OrderResponseSchema>;
 export type Order = OrderResponse["data"];
+
+export const ListOrdersResponseSchema = z.object({
+  data: z.array(OrderResponseSchema.shape.data),
+  meta: z.object({ last_page: z.coerce.number().int().positive().optional() }).passthrough().optional(),
+  links: z.object({ next: z.string().nullable().optional() }).passthrough().optional(),
+}).passthrough();
 
 export const SubmitOrderAsyncResponseSchema = BaseResponseSchema.extend({
   data: z
@@ -372,14 +381,6 @@ function normalizeWebhookPayload(payload: unknown): unknown {
   }
 
   const dataRecord = data as Record<string, unknown>;
-  if (
-    typeof record.event === "string" &&
-    "order_id" in dataRecord &&
-    typeof dataRecord.status === "string"
-  ) {
-    return payload;
-  }
-
   const orderId = normalizeWebhookOrderId(dataRecord);
   if (!orderId) {
     return payload;

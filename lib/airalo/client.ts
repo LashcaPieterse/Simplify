@@ -5,6 +5,7 @@ import {
   ListPackagesDataSchema,
   ListPackagesResponseSchema,
   OrderResponseSchema,
+  ListOrdersResponseSchema,
   SubmitOrderAsyncResponseSchema,
   SimInstallationInstructionsResponseSchema,
   SimResponseSchema,
@@ -454,6 +455,7 @@ export interface AiraloErrorDetails {
   reason?: string | null;
   category?: string;
   retriable?: boolean;
+  purchaseNotSubmitted?: boolean;
 }
 
 export class AiraloError extends Error {
@@ -730,7 +732,6 @@ export class AiraloClient {
   }
 
   private formatTokenForLog(token: string): {
-    preview: string;
     length: number;
     fingerprint: string;
     jwt: {
@@ -743,20 +744,13 @@ export class AiraloClient {
     const trimmed = token.trim();
     if (!trimmed) {
       return {
-        preview: "[EMPTY]",
         length: 0,
         fingerprint: "[EMPTY]",
         jwt: null,
       };
     }
 
-    const preview =
-      trimmed.length <= 12
-        ? trimmed
-        : `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
-
     return {
-      preview,
       length: trimmed.length,
       fingerprint: createHash("sha256")
         .update(trimmed)
@@ -911,9 +905,32 @@ export class AiraloClient {
     }
 
     return this.request({
-      path: `/orders/${encodeURIComponent(orderId)}`,
+      path: `/orders/${encodeURIComponent(orderId)}?include=sims,status`,
       schema: OrderResponseSchema,
     });
+  }
+
+  async findOrdersByDescription(description: string): Promise<Order[]> {
+    if (!description.trim()) throw new Error("An order description is required.");
+    const orders: Order[] = [];
+    for (let page = 1; page <= 3; page += 1) {
+      const query = new URLSearchParams({
+        "filter[description]": description,
+        include: "sims,status",
+        limit: "100",
+        page: String(page),
+      });
+      const response = await this.request({
+        path: `/orders?${query}`,
+        schema: ListOrdersResponseSchema,
+      });
+      orders.push(...response.data);
+      const more = response.meta?.last_page !== undefined
+        ? page < response.meta.last_page
+        : Boolean(response.links?.next) || response.data.length === 100;
+      if (!more) return orders;
+    }
+    throw new Error("Order search exceeded the safe pagination limit; reconcile manually.");
   }
 
   async getOrderById(orderId: string): Promise<Order> {
@@ -1316,7 +1333,10 @@ export class AiraloClient {
     throttle,
   }: AiraloRequestOptions<T>): Promise<T> {
     const url = this.resolveUrl(path);
-    const maxAuthAttempts = requiresAuth ? 3 : 1;
+    // Purchase POSTs have no documented provider idempotency key. Neither
+    // HTTP backoff nor an authentication retry may replay one automatically.
+    const canReplay = ["GET", "HEAD"].includes((init?.method ?? "GET").toUpperCase());
+    const maxAuthAttempts = requiresAuth && canReplay ? 3 : 1;
     let attemptedBearerCaseFallback = false;
     let preserveTokenTypeForNextAttempt = false;
 
@@ -1327,11 +1347,21 @@ export class AiraloClient {
             await throttle();
           }
 
-          const headers = await this.buildHeaders(
-            init?.headers,
-            requiresAuth,
-            preserveTokenTypeForNextAttempt,
-          );
+          let headers: Headers;
+          try {
+            headers = await this.buildHeaders(
+              init?.headers,
+              requiresAuth,
+              preserveTokenTypeForNextAttempt,
+            );
+          } catch (error) {
+            if (canReplay) throw error;
+            // Token acquisition failed before sending the purchase request.
+            throw new AiraloError("Could not prepare the supplier purchase request.", {
+              ...(error instanceof AiraloError ? error.details : { status: 0, statusText: "Not submitted" }),
+              purchaseNotSubmitted: true,
+            });
+          }
           preserveTokenTypeForNextAttempt = false;
           const initWithDefaults: RequestInit = {
             method: "GET",
@@ -1341,7 +1371,7 @@ export class AiraloClient {
 
           return this.fetchFn(url, initWithDefaults);
         },
-        { endpoint },
+        { endpoint, maxRetries: canReplay ? undefined : 0 },
       );
 
       if (response.ok) {
@@ -1367,6 +1397,11 @@ export class AiraloClient {
         continue;
       }
 
+      if (isUnauthorized && !canReplay) {
+        // A later, separately claimed attempt may obtain a fresh token, but
+        // this purchase call itself must not be sent a second time.
+        await this.clearCachedToken();
+      }
       throw await this.buildAiraloError(url, response);
     }
 
@@ -1723,9 +1758,9 @@ export class AiraloClient {
 
   private async executeWithRateLimitRetry(
     makeRequest: () => Promise<Response>,
-    options: { endpoint?: AiraloThrottledEndpoint } = {},
+    options: { endpoint?: AiraloThrottledEndpoint; maxRetries?: number } = {},
   ): Promise<Response> {
-    const maxAttempts = this.rateLimitRetryPolicy.maxRetries + 1;
+    const maxAttempts = (options.maxRetries ?? this.rateLimitRetryPolicy.maxRetries) + 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const response = await makeRequest();

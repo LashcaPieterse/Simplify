@@ -24,7 +24,7 @@ export function AdminShell({ children, adminEmail }: { children: ReactNode; admi
       <aside className="hidden w-64 border-r border-slate-200 bg-white px-4 py-6 lg:block">
         <div className="flex items-center justify-between gap-2 px-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Simplify</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">SIM.Africa</p>
             <p className="text-lg font-semibold text-slate-900">Admin</p>
           </div>
         </div>
@@ -49,7 +49,7 @@ export function AdminShell({ children, adminEmail }: { children: ReactNode; admi
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 lg:px-8">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">SIMPLIFY OPS</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">SIM.AFRICA OPS</p>
             <p className="text-lg font-semibold text-slate-900">Airalo Partner Console</p>
           </div>
           <div className="flex items-center gap-4">

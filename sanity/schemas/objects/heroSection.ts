@@ -68,7 +68,7 @@ export const heroSection = defineType({
           name: "badgeLabel",
           title: "Badge label",
           type: "string",
-          initialValue: "Live match",
+          initialValue: "Plan match",
           validation: (Rule) => Rule.max(40)
         }),
         defineField({
@@ -105,7 +105,7 @@ export const heroSection = defineType({
           name: "noMatchBody",
           title: "No-match body",
           type: "string",
-          initialValue: "Try one of the live African destinations below.",
+          initialValue: "Try one of the currently available African destinations below.",
           validation: (Rule) => Rule.max(180)
         }),
         defineField({
@@ -120,7 +120,7 @@ export const heroSection = defineType({
           name: "emptyStateMessage",
           title: "Empty state message",
           type: "string",
-          initialValue: "Live plans are syncing. Pick a destination to see the best available match.",
+          initialValue: "Current plans are syncing. Pick a destination to see the best available match.",
           validation: (Rule) => Rule.max(180)
         })
       ]

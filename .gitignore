@@ -32,3 +32,10 @@ yarn-error.log*
 # editor
 .vscode
 .idea
+
+*storybook.log
+storybook-static
+
+# Local agent tooling and private security reviews
+/.codex/
+/docs/audits/

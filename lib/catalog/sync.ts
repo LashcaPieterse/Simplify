@@ -748,6 +748,21 @@ export async function syncAiraloCatalog(
               existingPackage.state?.sourceHash !== stateData.sourceHash;
 
             if (!hasPackageChanges && !hasStateChanges) {
+              // Freshness represents a successful supplier observation, not a
+              // content change. Advance it even when the package payload and
+              // price are identical, otherwise healthy unchanged plans age out
+              // of the public catalogue despite successful scheduled syncs.
+              await db.package.update({
+                where: { id: existingPackage.id },
+                data: {
+                  state: {
+                    upsert: {
+                      create: stateData,
+                      update: { lastSyncedAt: now },
+                    },
+                  },
+                },
+              });
               packagesUnchanged.count += 1;
               continue;
             }

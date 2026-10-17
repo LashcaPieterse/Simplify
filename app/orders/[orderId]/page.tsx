@@ -17,6 +17,7 @@ import { createCheckout } from "@/lib/payments/checkouts";
 import { authOptions } from "@/lib/auth/options";
 import { getServerSession } from "next-auth";
 import InstallationInstructions from "@/components/esim/InstallationInstructions";
+import { WhatsAppSupportLink } from "@/components/site/WhatsAppSupportLink";
 import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 import { formatCurrency } from "@/lib/format";
 import {
@@ -27,11 +28,12 @@ import {
   setScopedAccessCookie,
   type SessionLike,
 } from "@/lib/orders/access";
+import { normalizeHttpUrl } from "@/lib/http/safe-url";
 
 type OrderPageParams = {
-  params: {
+  params: Promise<{
     orderId: string;
-  };
+  }>;
 };
 
 function formatDataAmount(value: number | null | undefined): string {
@@ -64,11 +66,12 @@ function hasUsageCounter(
   );
 }
 
-function canAccessOrder(order: OrderWithDetails, session: SessionLike): boolean {
+async function canAccessOrder(order: OrderWithDetails, session: SessionLike): Promise<boolean> {
+  const cookieStore = await cookies();
   return canAccessOwnerScopedRecord(
     order,
     session,
-    hasScopedAccessFromCookieStore(cookies(), "order", order.id),
+    hasScopedAccessFromCookieStore(cookieStore, "order", order.id),
   );
 }
 
@@ -119,7 +122,8 @@ async function purchaseTopUp(
   );
 
   if (canIssueScopedAccessTokens()) {
-    setScopedAccessCookie(cookies(), "checkout", checkout.checkoutId);
+    const cookieStore = await cookies();
+    setScopedAccessCookie(cookieStore, "checkout", checkout.checkoutId);
   }
 
   redirect(`/checkout/${checkout.checkoutId}`);
@@ -150,20 +154,21 @@ function resolveQrCodeUrl(
   payload: Record<string, unknown> | null,
 ): string | null {
   const qrCodeUrl = readPayloadString(payload, "qrCodeUrl");
-  if (qrCodeUrl) {
-    return qrCodeUrl;
-  }
+  const safeQrCodeUrl = normalizeHttpUrl(qrCodeUrl);
+  if (safeQrCodeUrl) return safeQrCodeUrl;
 
   const legacyQrCode = readPayloadString(payload, "qrCode");
-  return legacyQrCode?.startsWith("http") ? legacyQrCode : null;
+  return normalizeHttpUrl(legacyQrCode);
 }
 
 export const metadata: Metadata = {
   title: "Order dashboard",
+  robots: { index: false, follow: false },
 };
 
 export default async function OrderPage({ params }: OrderPageParams) {
-  const identifier = decodeURIComponent(params.orderId);
+  const { orderId } = await params;
+  const identifier = decodeURIComponent(orderId);
   const session = await getServerSession(authOptions);
   const existingOrder = await getOrderWithDetails(identifier);
 
@@ -171,10 +176,10 @@ export default async function OrderPage({ params }: OrderPageParams) {
     notFound();
   }
 
-  if (!canAccessOrder(existingOrder, session)) {
+  if (!(await canAccessOrder(existingOrder, session))) {
     if (!session?.user?.id) {
       redirect(
-        `/auth/signin?callbackUrl=${encodeURIComponent(`/orders/${params.orderId}`)}`,
+        `/auth/signin?callbackUrl=${encodeURIComponent(`/orders/${orderId}`)}`,
       );
     }
 
@@ -222,14 +227,16 @@ export default async function OrderPage({ params }: OrderPageParams) {
     null,
     order.id,
   );
+  const orderReady = Boolean(profile && (qrCodeUrl || qrCodeData || profile.activationCode));
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-10 px-4 py-12">
       <header className="space-y-2">
-        <p className="text-sm uppercase tracking-wide text-sand-500">Order</p>
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-brand-600">Order confirmation</p>
         <h1 className="text-3xl font-semibold text-brand-900">
-          {pkg?.title ?? "eSIM order"}
+          {orderReady ? "Your eSIM is ready" : "We’re preparing your eSIM"}
         </h1>
+        <p className="text-lg font-semibold text-brand-700">{pkg?.title ?? "eSIM order"}</p>
         <div className="text-sm text-sand-600">
           <p>
             Order reference:{" "}
@@ -245,8 +252,19 @@ export default async function OrderPage({ params }: OrderPageParams) {
             <p>Total paid: {formatCurrency(order.totalCents, order.currency)}</p>
           ) : null}
           {order.customerEmail ? <p>Customer email: {order.customerEmail}</p> : null}
+          {pkg ? <p>{pkg.isUnlimited ? "Unlimited data" : pkg.data} · {pkg.day} days · {pkg.operator.country.title}</p> : null}
         </div>
       </header>
+
+      <section className="rounded-3xl border border-brand-100 bg-brand-50 p-6 shadow-sm">
+        <h2 className="text-xl font-semibold text-brand-900">What happens next</h2>
+        <ol className="mt-5 grid gap-4 sm:grid-cols-3">
+          <li className="rounded-2xl bg-white p-4"><span className="text-xs font-black uppercase tracking-wide text-brand-500">Step 1</span><h3 className="mt-2 font-bold text-brand-900">Check your email</h3><p className="mt-2 text-sm leading-6 text-brand-600">Keep this secure page. A transactional email is sent when delivery is configured.</p></li>
+          <li className="rounded-2xl bg-white p-4"><span className="text-xs font-black uppercase tracking-wide text-brand-500">Step 2</span><h3 className="mt-2 font-bold text-brand-900">Install carefully</h3><p className="mt-2 text-sm leading-6 text-brand-600">Use the QR or manual instructions below and do not delete the eSIM prematurely.</p></li>
+          <li className="rounded-2xl bg-white p-4"><span className="text-xs font-black uppercase tracking-wide text-brand-500">Step 3</span><h3 className="mt-2 font-bold text-brand-900">Follow activation rules</h3><p className="mt-2 text-sm leading-6 text-brand-600">{pkg?.operator.activationPolicy?.trim() || "No catalogue activation policy was provided. Contact support before installing if the order instructions are unclear."}</p></li>
+        </ol>
+        <div className="mt-5 flex flex-wrap gap-3"><Link href="/help/installation" className="button-ribbon-primary inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-semibold">View installation guide</Link><a href="mailto:support@sim.africa" className="inline-flex min-h-11 items-center justify-center rounded-full border border-brand-200 bg-white px-5 text-sm font-semibold text-brand-800">Email support</a><WhatsAppSupportLink location="order" showIcon className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 bg-white px-5 text-sm font-semibold text-brand-800" /></div>
+      </section>
 
       {showSaveAccountPrompt ? (
         <section className="rounded-3xl bg-teal-50 p-6 shadow-sm ring-1 ring-teal-100">

@@ -1,6 +1,7 @@
 import { AiraloClient, type GetSimInclude } from "./airalo/client";
 import type { Sim, Simable } from "./airalo/schemas";
 import { resolveSharedTokenCache } from "./airalo/token-cache";
+import { normalizeHttpUrl } from "./http/safe-url";
 
 export interface InstallationGuide {
   language: string;
@@ -130,7 +131,7 @@ function normalizeGuides(guides: Record<string, string> | null | undefined): Ins
   return Object.entries(guides)
     .map(([language, url]) => {
       const normalizedLanguage = language.trim();
-      const normalizedUrl = typeof url === "string" ? url.trim() : "";
+      const normalizedUrl = normalizeHttpUrl(url);
 
       if (!normalizedLanguage || !normalizedUrl) {
         return null;
@@ -195,7 +196,7 @@ function normalizeSimable(simable: Simable | null | undefined): SimableDetails |
       : null,
     sharing: simable.sharing
       ? {
-          link: simable.sharing.link ?? null,
+          link: normalizeHttpUrl(simable.sharing.link),
           accessCode: simable.sharing.access_code ?? null,
         }
       : null,
@@ -211,8 +212,8 @@ function normalizeSim(sim: Sim): AiraloSimDetails {
     lpa: sim.lpa ?? null,
     matchingId: sim.matching_id ?? null,
     qrcode: sim.qrcode ?? null,
-    qrcodeUrl: sim.qrcode_url ?? null,
-    directAppleInstallationUrl: sim.direct_apple_installation_url ?? null,
+    qrcodeUrl: normalizeHttpUrl(sim.qrcode_url),
+    directAppleInstallationUrl: normalizeHttpUrl(sim.direct_apple_installation_url),
     voucherCode: sim.voucher_code ?? null,
     airaloCode: sim.airalo_code ?? null,
     apnType: sim.apn_type ?? null,

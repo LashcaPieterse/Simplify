@@ -152,6 +152,15 @@ export function configuredSellingPriceWhere(): Prisma.PackageWhereInput {
   return { state: { is: { sellingPriceCents: { gt: 0 } } } };
 }
 
+export function freshCatalogPriceWhere(now = new Date()): Prisma.PackageWhereInput {
+  const configuredHours = Number(process.env.CATALOG_MAX_AGE_HOURS ?? "48");
+  const maxAgeHours = Number.isFinite(configuredHours) && configuredHours > 0
+    ? Math.min(configuredHours, 24 * 30)
+    : 48;
+  const cutoff = new Date(now.getTime() - maxAgeHours * 60 * 60 * 1000);
+  return { state: { is: { lastSyncedAt: { gte: cutoff } } } };
+}
+
 export function africaPackageScopeWhere(): Prisma.PackageWhereInput {
   return {
     operator: {
@@ -183,6 +192,7 @@ export function publicSellablePackageWhere(
     { type: NEW_ESIM_PACKAGE_TYPE },
     activePackageWhere(),
     configuredSellingPriceWhere(),
+    freshCatalogPriceWhere(),
     africaPackageScopeWhere(),
     extra,
   );

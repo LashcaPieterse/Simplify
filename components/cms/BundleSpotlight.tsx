@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import type { RegionalBundleSpotlightSection } from "@/lib/sanity.queries";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Map, TrendingUp } from "lucide-react";
@@ -18,7 +19,7 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-500">Coverage spotlight</p>
         <h2 className="mt-3 font-display text-3xl text-brand-900 sm:text-4xl">{section.title}</h2>
         <p className="mt-3 max-w-2xl text-base text-brand-700">
-          Shared data across multiple destinations with seamless handoffs and dependable support from the Simplify crew.
+          Review the package coverage and included data before choosing a regional eSIM.
         </p>
       </div>
 
@@ -64,7 +65,7 @@ export function BundleSpotlight({ section }: { section: RegionalBundleSpotlightS
               </Button>
             ) : null}
             <Button variant="ghost" size="lg" asChild>
-              <a href="/#coverage">Compare all regions</a>
+              <Link href="/regional-esims">Compare all regions</Link>
             </Button>
           </div>
         </div>

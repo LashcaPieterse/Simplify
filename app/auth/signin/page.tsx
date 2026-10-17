@@ -7,8 +7,9 @@ import type { ProviderInfo } from "@/components/auth/AuthForm";
 import { authOptions } from "@/lib/auth/options";
 
 export const metadata: Metadata = {
-  title: "Log in | Simplify",
-  description: "Access your Simplify account to manage eSIMs, orders, and travelers.",
+  title: "Log in",
+  description: "Access your SIM.Africa account to manage eSIMs and orders.",
+  robots: { index: false, follow: false },
 };
 
 function getProviders(): ProviderInfo[] {

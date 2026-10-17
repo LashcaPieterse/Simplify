@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveRequiredAsyncWebhookUrl } from "./airalo-ordering";
+import { resolveRequiredAsyncWebhookUrl, submitAiraloOrder } from "./airalo-ordering";
+import { AiraloError, type AiraloClient } from "../airalo/client";
 
 const WEBHOOK_ENV_KEYS = [
   "AIRALO_ASYNC_WEBHOOK_URL",
@@ -10,6 +11,39 @@ const WEBHOOK_ENV_KEYS = [
   "VERCEL_PROJECT_PRODUCTION_URL",
   "VERCEL_URL",
 ] as const;
+
+test("async-to-sync fallback is limited to an explicit webhook precondition rejection", async (t) => {
+  for (const [name, status, body, syncCallsExpected] of [
+    ["documented missing opt-in", 422, { reason: "User is not opted in and no webhook URL provided." }, 1],
+    ["ambiguous server error", 500, { reason: "webhook URL unavailable" }, 0],
+    ["unexpected business error", 422, { code: 53, reason: "User is not opted in" }, 0],
+    ["other webhook error", 422, { reason: "Invalid webhook URL" }, 0],
+  ] as const) {
+    await t.test(name, async () => {
+      let asyncCalls = 0;
+      let syncCalls = 0;
+      const call = () => submitAiraloOrder({
+        airalo: {
+          createOrderAsyncResponse: async () => {
+            asyncCalls++;
+            throw new AiraloError("Supplier rejection", { status, statusText: "Error", body });
+          },
+          createOrderResponse: async () => {
+            syncCalls++;
+            return { data: { id: "supplier-order" } };
+          },
+        } as unknown as AiraloClient,
+        pkg: { id: "package", airaloPackageId: "supplier-package", title: "Test" },
+        payload: { package_id: "supplier-package", quantity: "1" },
+        submissionMode: "async", asyncWebhookUrl: "https://hooks.example.com/airalo",
+      });
+      if (syncCallsExpected) assert.equal((await call()).resolvedSubmissionMode, "sync");
+      else await assert.rejects(call);
+      assert.equal(asyncCalls, 1);
+      assert.equal(syncCalls, syncCallsExpected);
+    });
+  }
+});
 
 function withWebhookEnv<T>(env: Record<string, string | undefined>, fn: () => T): T {
   const original = new Map(
@@ -47,7 +81,7 @@ test("resolveRequiredAsyncWebhookUrl prefers the explicit async webhook URL", ()
     {
       AIRALO_ASYNC_WEBHOOK_URL: "https://hooks.example.com/airalo",
       AIRALO_WEBHOOK_SECRET: "webhook-secret",
-      NEXT_PUBLIC_APP_URL: "https://simplify.example.com",
+      NEXT_PUBLIC_APP_URL: "https://sim-africa.example.com",
     },
     () => {
       assert.equal(
@@ -62,12 +96,12 @@ test("resolveRequiredAsyncWebhookUrl derives the Airalo webhook from the public 
   withWebhookEnv(
     {
       AIRALO_WEBHOOK_SECRET: "webhook-secret",
-      NEXT_PUBLIC_APP_URL: "https://simplify.example.com/account",
+      NEXT_PUBLIC_APP_URL: "https://sim-africa.example.com/account",
     },
     () => {
       assert.equal(
         resolveRequiredAsyncWebhookUrl({}),
-        "https://simplify.example.com/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
+        "https://sim-africa.example.com/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
       );
     },
   );
@@ -92,12 +126,12 @@ test("resolveRequiredAsyncWebhookUrl derives the Airalo webhook from Vercel URL"
   withWebhookEnv(
     {
       AIRALO_WEBHOOK_SECRET: "webhook-secret",
-      VERCEL_URL: "simplify-git-main-example.vercel.app",
+      VERCEL_URL: "sim-africa-git-main-example.vercel.app",
     },
     () => {
       assert.equal(
         resolveRequiredAsyncWebhookUrl({}),
-        "https://simplify-git-main-example.vercel.app/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
+        "https://sim-africa-git-main-example.vercel.app/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
       );
     },
   );

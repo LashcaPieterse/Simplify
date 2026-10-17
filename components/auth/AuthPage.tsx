@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 
 export function AuthPage({ providers, mode }: { providers: ProviderInfo[]; mode: "signin" | "signup" }) {
   const isSignup = mode === "signup";
-  const title = isSignup ? "Create your Simplify account" : "Welcome back";
+  const title = isSignup ? "Create your SIM.Africa account" : "Welcome back";
   const copy = isSignup
-    ? "Save your travelers, keep receipts together, and activate eSIMs in seconds."
+    ? "Keep your eSIM orders and receipts together for future trips."
     : "Access your saved eSIMs, manage orders, and stay connected across every trip.";
 
   return (
@@ -20,7 +20,7 @@ export function AuthPage({ providers, mode }: { providers: ProviderInfo[]; mode:
         <div className="space-y-8 lg:max-w-xl">
           <Link
             href="/"
-            aria-label="Go to Simplify home page"
+            aria-label="Go to SIM.Africa home page"
             title="Go to home page"
             className="inline-flex h-14 w-14 items-center justify-center rounded-2xl transition hover:bg-white/70 hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
           >
@@ -36,9 +36,9 @@ export function AuthPage({ providers, mode }: { providers: ProviderInfo[]; mode:
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Highlight title="Keep orders together" description="View every eSIM, receipt, and activation in a single profile." />
-            <Highlight title="Fast activation" description="Sign in once and breeze through checkout on your next trip." />
-            <Highlight title="Travel-ready" description="Access on any device and stay signed in while you roam." icon="device" />
-            <Highlight title="Privacy-first" description="We only use your details to deliver and secure your eSIMs." icon="shield" />
+            <Highlight title="Repeat checkout" description="Sign in once to prefill your account email on your next trip." />
+            <Highlight title="Travel-ready" description="Access your order history from any signed-in device." icon="device" />
+            <Highlight title="Clear data handling" description="Our privacy notice explains how account and order data is used." icon="shield" />
           </div>
         </div>
 
@@ -68,7 +68,7 @@ export function AuthPage({ providers, mode }: { providers: ProviderInfo[]; mode:
               <p>Contact support and we will get you signed in quickly.</p>
             </div>
             <Button asChild size="sm" variant="secondary" className="w-full bg-white text-xs sm:w-auto">
-              <a href="mailto:support@simplify.africa">Contact support</a>
+              <a href="mailto:support@sim.africa">Contact support</a>
             </Button>
           </div>
         </div>

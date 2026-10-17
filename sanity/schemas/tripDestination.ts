@@ -91,7 +91,7 @@ export const tripDestination = defineType({
     defineField({
       name: "preferredPackages",
       title: "Preferred packages",
-      description: "Merchandising boosts only. Live Airalo availability and price still decide whether a package can sell.",
+      description: "Merchandising boosts only. Current synchronized Airalo availability and price still decide whether a package can sell.",
       type: "array",
       of: [
         defineField({

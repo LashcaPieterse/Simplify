@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { trackEvent } from "@/lib/analytics";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -55,11 +56,17 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
 
         const redirectOrderId = data.redirectOrderId ?? data.orderId;
         if (redirectOrderId) {
+          const eventKey = `sim-africa-purchase-${checkoutId}`;
+          if (!window.sessionStorage.getItem(eventKey)) {
+            trackEvent("purchase_completed", { checkout_id: checkoutId, order_id: redirectOrderId });
+            window.sessionStorage.setItem(eventKey, "1");
+          }
           router.replace(`/orders/${redirectOrderId}`);
           return;
         }
 
         if ((data.paymentStatus ?? "").toLowerCase() === "failed") {
+          trackEvent("purchase_failed", { checkout_id: checkoutId });
           router.replace(`/checkout/${checkoutId}/failed`);
           return;
         }
@@ -89,10 +96,10 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
   }, [checkoutId, router]);
 
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-slate-600">Processing your payment…</p>
-      <p className="text-xs text-slate-500">Current status: {status}</p>
-      {message ? <p className="text-xs text-red-600">{message}</p> : null}
+    <div className="space-y-2" role="status" aria-live="polite">
+      <p className="text-sm text-brand-600">Processing your payment…</p>
+      <p className="text-xs text-brand-500">Current status: {status}</p>
+      {message ? <p className="text-xs font-semibold text-rose-700">{message}</p> : null}
     </div>
   );
 }

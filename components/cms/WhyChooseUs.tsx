@@ -1,7 +1,8 @@
 import { Sparkles, ShieldCheck, Zap, Globe2, Waves, Compass } from "lucide-react";
+import type { ReactElement } from "react";
 import type { WhyChooseUsSection } from "@/lib/sanity.queries";
 
-const iconMap: Record<string, JSX.Element> = {
+const iconMap: Record<string, ReactElement> = {
   sparkles: <Sparkles className="h-6 w-6 text-brand-600" />,
   shield: <ShieldCheck className="h-6 w-6 text-brand-600" />,
   zap: <Zap className="h-6 w-6 text-brand-600" />,

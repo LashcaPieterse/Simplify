@@ -1,4 +1,5 @@
 import type { Order as AiraloOrder, Sim as AiraloSim } from "../airalo/schemas";
+import { normalizeHttpUrl } from "../http/safe-url";
 
 export interface UsageMetadata {
   usedMb?: number;
@@ -116,7 +117,7 @@ function normalizeShareInfo(sim: AiraloSim | null | undefined) {
     return null;
   }
 
-  const link = resolveStringValue(sharing.link);
+  const link = normalizeHttpUrl(sharing.link);
   const accessCode = resolveStringValue(sharing.access_code);
 
   if (!link && !accessCode) {
@@ -243,13 +244,13 @@ export function createInstallationPayload(
   const activationCode =
     resolveAiraloOrderActivationCode(order, sim) ?? matchingId;
   const qrCodeUrl =
-    resolveStringValue(simRecord?.qrcode_url) ??
-    resolveStringValue(firstSimRecord?.qrcode_url) ??
-    resolveStringValue(orderRecord.qr_code_url);
+    normalizeHttpUrl(simRecord?.qrcode_url) ??
+    normalizeHttpUrl(firstSimRecord?.qrcode_url) ??
+    normalizeHttpUrl(orderRecord.qr_code_url);
   const directAppleUrl =
-    resolveStringValue(simRecord?.direct_apple_installation_url) ??
-    resolveStringValue(firstSimRecord?.direct_apple_installation_url) ??
-    resolveStringValue(orderRecord.direct_apple_installation_url);
+    normalizeHttpUrl(simRecord?.direct_apple_installation_url) ??
+    normalizeHttpUrl(firstSimRecord?.direct_apple_installation_url) ??
+    normalizeHttpUrl(orderRecord.direct_apple_installation_url);
   const simStatus = sim?.simable?.status
     ? {
         name: resolveStringValue(sim.simable.status.name),

@@ -18,8 +18,9 @@ function dateRangeFromParams(range?: string) {
   }
 }
 
-export default async function AdminDashboard({ searchParams }: { searchParams?: Record<string, string | string[]> }) {
-  const rangeKey = typeof searchParams?.range === "string" ? searchParams?.range : "30d";
+export default async function AdminDashboard({ searchParams }: { searchParams?: Promise<Record<string, string | string[]>> }) {
+  const resolvedSearchParams = await searchParams;
+  const rangeKey = typeof resolvedSearchParams?.range === "string" ? resolvedSearchParams.range : "30d";
   const rangeStart = dateRangeFromParams(rangeKey);
 
   const mismatches = await getCatalogMismatches();

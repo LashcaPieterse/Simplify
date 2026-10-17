@@ -192,9 +192,17 @@ export function matchTripPlans(options: TripMatchOptions): TripMatchResult {
     (destinationResolution.matchedDestination?.preferredPackageIds ?? []).map(normalizeKey).filter(Boolean),
   );
   const hasDestination = destinationTerms.length > 0 || destinationWords.length > 0;
+  const requiredCoverageTerms = destinationResolution.matchedDestination
+    ? getDestinationCountryTerms(destinationResolution.matchedDestination)
+    : getDestinationTerms(destination);
 
   const scoredProducts = options.products
     .filter(isSellableProduct)
+    .filter(
+      (product) =>
+        !hasDestination ||
+        productCoversRequiredDestinations(product, requiredCoverageTerms),
+    )
     .map((product) =>
       scoreProduct({
         product,
@@ -333,6 +341,40 @@ function getDestinationCountryTerms(destination: TripDestinationOption): string[
 
 function isMultiDestinationQuery(destination: string): boolean {
   return /\+|,|;|&|\band\b|\bthen\b|\bto\b/i.test(destination);
+}
+
+function productCoversRequiredDestinations(
+  product: EsimProductSummary,
+  requiredTerms: string[],
+): boolean {
+  if (requiredTerms.length === 0) return false;
+
+  const coverageTerms = new Set(
+    [product.country?.title, product.country?.slug]
+      .map(normalize)
+      .filter(Boolean),
+  );
+
+  const metadataCoverage = product.package?.metadata?.coverage;
+  if (Array.isArray(metadataCoverage)) {
+    for (const entry of metadataCoverage) {
+      if (typeof entry === "string") {
+        coverageTerms.add(normalize(entry));
+      } else if (entry && typeof entry === "object") {
+        const record = entry as Record<string, unknown>;
+        for (const key of ["name", "title", "slug", "code", "countryCode"]) {
+          if (typeof record[key] === "string") {
+            coverageTerms.add(normalize(record[key] as string));
+          }
+        }
+      }
+    }
+  }
+
+  return requiredTerms
+    .map(normalize)
+    .filter(Boolean)
+    .every((required) => coverageTerms.has(required));
 }
 
 function isSellableProduct(product: EsimProductSummary): boolean {

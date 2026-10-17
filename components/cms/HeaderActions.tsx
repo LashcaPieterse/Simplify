@@ -82,14 +82,8 @@ export function HeaderActions() {
           <DropdownLink href={"/account/esims" as Route} label="My eSIMs / Orders" primary />
           <DropdownLink href={"/account/receipts" as Route} label="Receipts & billing" />
           <DropdownLink href={"/account/profile" as Route} label="Account & profile" />
-          <DropdownLink href={"/account/payments" as Route} label="Payment methods" />
+          <DropdownLink href={"/account/payments" as Route} label="Payment security" />
           <div className="my-2 h-px bg-brand-100" />
-          <div className="rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-800">
-            No eSIMs yet.{" "}
-            <Link href={"/" as Route} className="font-semibold text-brand-700 hover:text-brand-900">
-              Browse plans
-            </Link>
-          </div>
           <button
             type="button"
             onClick={() => signOut({ callbackUrl: "/" })}

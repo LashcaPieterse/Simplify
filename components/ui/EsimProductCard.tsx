@@ -31,7 +31,7 @@ export function EsimProductCard({
         {product.image?.url ? (
           <Image src={product.image.url} alt={imageAlt} fill className="object-cover" sizes="(max-width: 768px) 100vw, 360px" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-brand-400">Image coming soon</div>
+          <div className="flex h-full w-full items-center justify-center text-sm text-brand-400">No image supplied</div>
         )}
       </div>
       <div className="flex-1 space-y-3">

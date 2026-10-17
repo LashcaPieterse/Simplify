@@ -3,7 +3,8 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { requireAdminSession } from "@/lib/auth";
 
 export const metadata = {
-  title: "Simplify Admin",
+  title: "SIM.Africa Admin",
+  robots: { index: false, follow: false },
 };
 
 // Admin routes must always render on the server at request time since they rely on database access.

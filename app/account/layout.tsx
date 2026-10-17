@@ -6,8 +6,9 @@ import { AccountNav } from "@/components/account/AccountNav";
 import { authOptions } from "@/lib/auth/options";
 
 export const metadata: Metadata = {
-  title: "Account | Simplify",
+  title: "Account",
   description: "Manage your eSIMs, receipts, and account details.",
+  robots: { index: false, follow: false },
 };
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {

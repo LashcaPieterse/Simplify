@@ -300,7 +300,7 @@ class InMemoryCatalogPrisma {
     update: async (args: {
       where: { id: string };
       data: Partial<PackageRecord> & {
-        state?: { upsert: { create: PackageStateRecord; update: PackageStateRecord } };
+        state?: { upsert: { create: PackageStateRecord; update: Partial<PackageStateRecord> } };
       };
     }) => {
       const existing = Array.from(this.packages.values()).find((pkg) => pkg.id === args.where.id);
@@ -311,6 +311,7 @@ class InMemoryCatalogPrisma {
         ...packageData,
         state: state?.upsert
           ? {
+              ...(existing.state ?? state.upsert.create),
               ...state.upsert.update,
               packageId: existing.id,
             }
@@ -609,6 +610,23 @@ test("syncAiraloCatalog follows Airalo pagination metadata and stores documented
   const stalePackage = prisma.packages.get("stale-package");
   assert.equal(stalePackage?.state?.isActive, false);
   assert.equal(stalePackage?.state?.deactivatedAt, now);
+
+  const secondNow = new Date("2026-05-08T13:00:00.000Z");
+  const secondResult = await syncAiraloCatalog({
+    prisma: prisma as unknown as PrismaClient,
+    client: client as unknown as AiraloClient,
+    logger: NOOP_LOGGER,
+    packagesOptions: { includeTopUp: true, limit: 100 },
+    syncRunId: "sync-run-2",
+    now: secondNow,
+  });
+
+  assert.equal(secondResult.packagesUnchanged, 3);
+  assert.equal(
+    prisma.packages.get("world-unlimited-vt")?.state?.lastSyncedAt,
+    secondNow,
+    "an unchanged package must still record the successful supplier observation",
+  );
 });
 
 test("syncAiraloCatalog continues when raw package snapshot column is not migrated yet", async () => {

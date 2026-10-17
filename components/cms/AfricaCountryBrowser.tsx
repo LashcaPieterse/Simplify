@@ -63,7 +63,7 @@ export function AfricaCountryBrowser({ countries, title }: AfricaCountryBrowserP
               {title?.trim() || "Choose your African destination"}
             </h2>
             <p className="mt-3 text-sm leading-6 text-brand-700 sm:text-base">
-              Browse every available African destination. Prices start from the lowest live package.
+              Browse every available African destination. Prices start from the lowest currently sellable package.
             </p>
           </div>
           {countries.length ? (
@@ -154,7 +154,7 @@ export function AfricaCountryBrowser({ countries, title }: AfricaCountryBrowserP
         ) : (
           <div className="mt-8 rounded-2xl border border-dashed border-brand-300 bg-white/70 px-6 py-10 text-center">
             <p className="font-semibold text-brand-900">Destinations are temporarily unavailable.</p>
-            <p className="mt-2 text-sm text-brand-600">Live eSIM plans are syncing. Please check again shortly.</p>
+            <p className="mt-2 text-sm text-brand-600">Current eSIM plans are syncing. Please check again shortly.</p>
           </div>
         )}
       </div>

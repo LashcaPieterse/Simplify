@@ -101,7 +101,7 @@ test("cookie-header helper validates the scoped cookie value", () => {
 test("signed order access links carry a valid scoped token", () => {
   withAccessSecret(() => {
     const issuedAt = Date.now();
-    const link = createOrderAccessLink("order-1", "https://simplify.example", {
+    const link = createOrderAccessLink("order-1", "https://sim-africa.example", {
       issuedAt,
       ttlSeconds: 60,
     });

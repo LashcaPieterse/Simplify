@@ -79,7 +79,7 @@ export function TripPlanWidget({
       ...PINNED_ROUTE_TRIP_DESTINATIONS,
       ...activeDestinations.filter((destination) => !pinnedSlugs.has(destination.slug)),
     ];
-  }, [settings?.popularDestinations]);
+  }, [settings]);
 
   const match = useMemo(
     () =>
@@ -120,7 +120,7 @@ export function TripPlanWidget({
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-600">
-          {settings?.badgeLabel ?? "Live match"}
+          {settings?.badgeLabel ?? "Plan match"}
         </span>
       </div>
 
@@ -410,7 +410,7 @@ function NoMatchState({
         <div>
           <p className="text-sm font-semibold text-brand-900">{title}</p>
           <p className="mt-1 text-sm text-brand-600">
-            {body ?? "Try one of the live African destinations below."}
+            {body ?? "Try one of the currently available African destinations below."}
           </p>
         </div>
       </div>
@@ -435,7 +435,7 @@ function NoMatchState({
 function EmptyState({ message }: { message?: string | null }) {
   return (
     <div className="rounded-2xl border border-brand-100 bg-white px-4 py-4 text-sm text-brand-600 lg:py-3">
-      {message ?? "Live plans are syncing. Pick a destination to see the best available match."}
+      {message ?? "Current plans are syncing. Pick a destination to see the best available match."}
     </div>
   );
 }

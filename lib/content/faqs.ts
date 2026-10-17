@@ -1,0 +1,13 @@
+export const purchaseFaqs = [
+  { question: "What is an eSIM?", answer: "An eSIM is a digital SIM profile installed on a compatible phone. It lets you add travel data without replacing your physical SIM card." },
+  { question: "Will my WhatsApp number change?", answer: "No. WhatsApp normally remains linked to your existing number. When prompted, do not switch the number registered to WhatsApp." },
+  { question: "Can I keep my physical SIM active?", answer: "Most dual-SIM phones let you keep your usual SIM active while using the eSIM for mobile data. Your device settings determine which line handles calls, texts, and data." },
+  { question: "When should I install my eSIM?", answer: "Follow the installation window and activation policy shown for your package. If the supplier does not provide a clear activation rule, contact support before installing." },
+  { question: "When does the validity period begin?", answer: "Activation rules vary by package. The plan page shows the supplier-provided rule when one is available; your order instructions remain the final reference." },
+  { question: "Do I need data roaming turned on?", answer: "Many travel eSIMs require data roaming on for the eSIM line. Follow the package-specific installation instructions in your order." },
+  { question: "Can I use hotspot or tethering?", answer: "Hotspot support depends on the package and network. If the supplier has not provided the attribute, SIM.Africa shows it as unknown rather than assuming support." },
+  { question: "Does the eSIM include a phone number?", answer: "Many travel eSIMs are data-only. Check the Calls, SMS, and phone-number fields on the plan page; unknown means the supplier has not confirmed the feature." },
+  { question: "What happens if I run out of data?", answer: "If the supplier marks the eSIM as rechargeable, eligible top-ups appear in the order dashboard. Otherwise, you can purchase another plan." },
+  { question: "Can I get a refund?", answer: "Refund eligibility depends on fulfilment and activation status. Read the refund information before purchase and contact support with your order reference." },
+  { question: "Which phones support eSIM?", answer: "Many recent iPhone, Samsung Galaxy, Google Pixel, and selected devices from other manufacturers support eSIM. The phone must also generally be carrier unlocked." },
+] as const;

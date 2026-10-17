@@ -1,4 +1,4 @@
-import { createClient, type ClientConfig, type SanityClient } from "next-sanity";
+import { createClient, type ClientConfig, type SanityClient } from "@sanity/client";
 
 export const projectId =
   process.env.SANITY_PROJECT_ID || process.env.NEXT_PUBLIC_SANITY_PROJECT_ID || "";

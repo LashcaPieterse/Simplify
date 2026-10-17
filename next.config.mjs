@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  experimental: {
-    typedRoutes: true
+  typedRoutes: true,
+  turbopack: {
+    root: process.cwd()
   },
   images: {
     remotePatterns: [
@@ -14,11 +15,6 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "*.airalo.com",
-        pathname: "/**"
-      },
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
         pathname: "/**"
       }
     ]

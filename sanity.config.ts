@@ -17,8 +17,8 @@ if (!projectId || !dataset) {
 }
 
 export default defineConfig({
-  name: "simplify-studio",
-  title: "Simplify Studio",
+  name: "sim-africa-studio",
+  title: "SIM.Africa Studio",
   projectId,
   dataset,
   apiVersion: process.env.SANITY_API_VERSION || "2025-01-01",

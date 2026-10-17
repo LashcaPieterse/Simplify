@@ -25,7 +25,7 @@ export const catalogOperator = defineType({
       name: "badge",
       title: "Badge",
       type: "string",
-      description: "Short label such as 'Best coverage'",
+      description: "Optional short, factual label supported by supplier or catalogue data.",
       validation: (Rule) => Rule.max(30)
     }),
     defineField({

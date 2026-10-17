@@ -13,22 +13,9 @@ import {
   canIssueScopedAccessTokens,
   setScopedAccessCookie,
 } from "@/lib/orders/access";
+import { resolveAppBaseUrl } from "@/lib/http/app-base-url";
 
 export const dynamic = "force-dynamic";
-
-function resolveBaseUrl(request: Request): string {
-  const originHeader = request.headers.get("origin");
-  if (originHeader) {
-    return originHeader;
-  }
-
-  try {
-    const url = new URL(request.url);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  }
-}
 
 function resolveCheckoutError(error: unknown): {
   message: string;
@@ -120,7 +107,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseUrl = resolveBaseUrl(request);
+    const baseUrl = resolveAppBaseUrl({
+      requestUrl: request.url,
+      configuredUrl: process.env.NEXT_PUBLIC_APP_URL,
+      authUrl: process.env.NEXTAUTH_URL,
+    });
     const result = await createCheckout(payload, {
       baseUrl,
       userId: session?.user?.id,

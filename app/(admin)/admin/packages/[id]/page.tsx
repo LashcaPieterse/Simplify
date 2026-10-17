@@ -16,9 +16,10 @@ function decimalToCents(value: unknown): number {
   return Math.round(parsed * 100);
 }
 
-export default async function PackageDetailPage({ params }: { params: { id: string } }) {
+export default async function PackageDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const pkg = await prisma.package.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       operator: { include: { country: true } },
       state: true,

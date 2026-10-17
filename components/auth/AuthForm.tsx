@@ -125,7 +125,7 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
                 Password
               </label>
               <a
-                href="mailto:support@simplify.africa?subject=Password%20reset%20help"
+                href="mailto:support@sim.africa?subject=Password%20reset%20help"
                 className="text-sm font-semibold text-brand-700 transition hover:text-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
               >
                 Forgot password?

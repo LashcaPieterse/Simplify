@@ -7,6 +7,7 @@ import type {
   CreateOrderPayload,
   CreateTopUpOrderPayload,
 } from "../airalo/client";
+import { AiraloError } from "../airalo/client";
 import { OrderResponseSchema, type OrderResponse } from "../airalo/schemas";
 import type { CreateOrderOptions } from "../orders/service";
 import {
@@ -167,7 +168,7 @@ class FakeCheckoutDb {
     userId: "user-1",
     packageId: TEST_PACKAGE_ID,
     customerEmail: "checkout@example.com",
-    quantity: 2,
+    quantity: 1,
     totalCents: 2500,
     currency: "UGX",
     status: "paid",
@@ -526,10 +527,10 @@ test("finaliseOrderFromCheckout reserves a local order before Airalo and uses th
   assert.equal(db.checkout.status, "paid");
   assert.equal(airalo.syncPayloads.length, 1);
   assert.equal(airalo.syncPayloads[0]?.package_id, "pkg-test");
-  assert.equal(airalo.syncPayloads[0]?.quantity, "2");
+  assert.equal(airalo.syncPayloads[0]?.quantity, "1");
   assert.equal(
     airalo.syncPayloads[0]?.description,
-    "2 x Test 1GB [simplify_order_id:order-1]",
+    "1 x Test 1GB [simplify_order_id:order-1]",
   );
   assert.equal(db.orders[0]?.totalCents, 2500);
   assert.equal(db.orders[0]?.currency, "UGX");
@@ -593,7 +594,7 @@ test("finaliseOrderFromCheckout submits paid top-ups through the documented endp
   assert.deepEqual(topUpPayload, {
     package_id: "bonbon-mobile-30days-3gb-topup",
     iccid: "8910300000005271146",
-    description: "Topup (8910300000005271146)",
+    description: "Topup (8910300000005271146) [simplify_order_id:order-1]",
   });
   assert.equal(db.orders[0]?.orderNumber, "111");
   assert.equal(db.orders[0]?.requestId, "111");
@@ -657,4 +658,228 @@ test("verifyPaymentTransaction rejects verified DPO amount mismatches before Air
   assert.equal(db.checkout.orderId, null);
   assert.equal(db.orders.length, 0);
   assert.equal(db.paymentEvents[0]?.eventType, "dpo-push-mismatch");
+});
+
+type PurchaseMode = "sync" | "async" | "top-up";
+
+function reservedCheckout(mode: PurchaseMode, status = "pending"): FakeCheckoutDb {
+  const db = new FakeCheckoutDb();
+  db.checkout.orderId = "reserved-order";
+  if (mode === "top-up") {
+    db.checkout.intent = "top-up";
+    db.checkout.quantity = 1;
+    db.checkout.topUpForOrderId = "original-order";
+    db.checkout.topUpForIccid = "8910300000005271146";
+    db.profiles.push({ id: "original-profile", orderId: "original-order", iccid: db.checkout.topUpForIccid });
+  }
+  db.orders.push({
+    id: db.checkout.orderId, status, orderNumber: null, requestId: null,
+    packageId: db.checkout.packageId, userId: db.checkout.userId,
+    quantity: db.checkout.quantity, totalCents: db.checkout.totalCents,
+    currency: db.checkout.currency, customerEmail: db.checkout.customerEmail,
+  });
+  return db;
+}
+
+function purchaseOptions(db: FakeCheckoutDb, mode: PurchaseMode, purchase: () => Promise<OrderResponse>) {
+  return {
+    prisma: db as unknown as PrismaClient,
+    airaloOptions: {
+      airaloClient: {
+        createOrderResponse: purchase,
+        createTopUpOrderResponse: purchase,
+        createOrderAsyncResponse: async () => {
+          await purchase();
+          return { data: { request_id: "supplier-request", accepted_at: "2026-10-17T10:00:00Z" } };
+        },
+      } as unknown as AiraloClient,
+      submissionMode: mode === "async" ? "async" as const : "sync" as const,
+      asyncWebhookUrl: "https://hooks.example.com/airalo",
+    },
+  };
+}
+
+test("concurrent paid purchase retries share one supplier submission", async (t) => {
+  const previousSecret = process.env.AIRALO_WEBHOOK_SECRET;
+  process.env.AIRALO_WEBHOOK_SECRET = "test-webhook-secret";
+  try {
+    for (const mode of ["sync", "async", "top-up"] as const) {
+      for (const status of ["pending", "airalo_rejected"]) {
+        await t.test(`${mode}: ${status}`, async () => {
+          const db = reservedCheckout(mode, status);
+          let calls = 0;
+          let release!: () => void;
+          let signalStarted!: () => void;
+          const started = new Promise<void>(resolve => { signalStarted = resolve; });
+          const held = new Promise<void>(resolve => { release = resolve; });
+          const options = purchaseOptions(db, mode, async () => {
+            calls++;
+            signalStarted();
+            await held;
+            return { data: { id: "supplier-order", status: "completed" } };
+          });
+          const first = finaliseOrderFromCheckout(db.checkout.id, options);
+          await started;
+          try {
+            const concurrent = await finaliseOrderFromCheckout(db.checkout.id, options);
+            assert.equal(concurrent.orderId, "reserved-order");
+            assert.equal(calls, 1);
+            assert.equal(db.orders[0]?.status, "airalo_submitting");
+          } finally {
+            release();
+          }
+          await first;
+          await finaliseOrderFromCheckout(db.checkout.id, options);
+          assert.equal(calls, 1);
+          assert.equal(db.snapshots.length, 1);
+        });
+      }
+    }
+  } finally {
+    if (previousSecret === undefined) delete process.env.AIRALO_WEBHOOK_SECRET;
+    else process.env.AIRALO_WEBHOOK_SECRET = previousSecret;
+  }
+});
+
+test("unknown purchase outcomes cannot be resubmitted by checkout finalization", async (t) => {
+  for (const mode of ["sync", "top-up"] as const) {
+    for (const [name, failure] of [
+      ["server error", new AiraloError("Upstream failure", { status: 500, statusText: "Server error" })],
+      ["lost response", new TypeError("Socket closed after request was sent")],
+      ["malformed success", new SyntaxError("Invalid response JSON")],
+      ["unexpected business failure", new AiraloError("Unexpected error", { status: 422, statusText: "Unprocessable", body: { code: 53 } })],
+    ] as const) {
+      await t.test(`${mode}: ${name}`, async () => {
+        const db = reservedCheckout(mode);
+        let calls = 0;
+        const options = purchaseOptions(db, mode, async () => { calls++; throw failure; });
+        await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options));
+        assert.equal(db.orders[0]?.status, "airalo_outcome_unknown");
+        await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options), /Reconcile the existing order/);
+        assert.equal(calls, 1);
+      });
+    }
+    await t.test(`${mode}: accepted response without a supplier reference`, async () => {
+      const db = reservedCheckout(mode);
+      let calls = 0;
+      const options = purchaseOptions(db, mode, async () => { calls++; return { data: { status: "completed" } }; });
+      await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options));
+      assert.equal(db.orders[0]?.status, "airalo_outcome_unknown");
+      await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options), /Reconcile/);
+      assert.equal(calls, 1);
+    });
+    await t.test(`${mode}: database failure after supplier acceptance`, async () => {
+      const db = reservedCheckout(mode);
+      db.esimOrder.update = async () => { throw new Error("Database unavailable after purchase"); };
+      let calls = 0;
+      const options = purchaseOptions(db, mode, async () => { calls++; return { data: { id: "supplier-order" } }; });
+      await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options));
+      assert.equal(db.orders[0]?.status, "airalo_outcome_unknown");
+      await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options), /Reconcile/);
+      assert.equal(calls, 1);
+    });
+  }
+});
+
+test("confirmed supplier rejection permits a later claimed attempt, but legacy failures do not", async (t) => {
+  for (const mode of ["sync", "top-up"] as const) {
+    await t.test(`${mode}: confirmed rejection`, async () => {
+      const db = reservedCheckout(mode);
+      let calls = 0;
+      const options = purchaseOptions(db, mode, async () => {
+        calls++;
+        if (calls === 1) throw new AiraloError("Rate limited", { status: 429, statusText: "Too Many Requests" });
+        return { data: { id: "supplier-order", status: "completed" } };
+      });
+      await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options));
+      assert.equal(calls, 1, "no nested rate-limit retry may replay this attempt");
+      assert.equal(db.orders[0]?.status, "airalo_rejected");
+      await finaliseOrderFromCheckout(db.checkout.id, options);
+      await finaliseOrderFromCheckout(db.checkout.id, options);
+      assert.equal(calls, 2);
+    });
+    await t.test(`${mode}: legacy failure`, async () => {
+      const db = reservedCheckout(mode, "airalo_failed");
+      let calls = 0;
+      const options = purchaseOptions(db, mode, async () => { calls++; return { data: { id: "unexpected" } }; });
+      await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options), /Reconcile/);
+      assert.equal(calls, 0);
+    });
+  }
+});
+
+test("async acceptance uncertainty is retained without resubmitting or falling back to sync", async (t) => {
+  const previousSecret = process.env.AIRALO_WEBHOOK_SECRET;
+  process.env.AIRALO_WEBHOOK_SECRET = "test-webhook-secret";
+  try {
+    for (const failure of ["server error", "lost response", "empty acknowledgement", "persistence failure"] as const) {
+      await t.test(failure, async () => {
+        const db = reservedCheckout("async");
+        let calls = 0;
+        const options = purchaseOptions(db, "async", async () => { throw new Error("Sync fallback must not run"); });
+        options.airaloOptions.airaloClient.createOrderAsyncResponse = async () => {
+          calls++;
+          if (failure === "server error") throw new AiraloError("Upstream failure", { status: 500, statusText: "Server error" });
+          if (failure === "lost response") throw new TypeError("Socket closed");
+          return {
+            data: { request_id: failure === "empty acknowledgement" ? "" : "supplier-request", accepted_at: "2026-10-17T10:00:00Z" },
+            meta: { message: "success" },
+          };
+        };
+        if (failure === "persistence failure") {
+          const updateMany = db.esimOrder.updateMany;
+          db.esimOrder.updateMany = async (args) => {
+            if (args.data.requestId === "supplier-request") throw new Error("Database unavailable after acceptance");
+            return updateMany(args);
+          };
+        }
+        await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options));
+        assert.equal(db.orders[0]?.status, "airalo_outcome_unknown");
+        await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options), /Reconcile/);
+        assert.equal(calls, 1);
+      });
+    }
+  } finally {
+    if (previousSecret === undefined) delete process.env.AIRALO_WEBHOOK_SECRET;
+    else process.env.AIRALO_WEBHOOK_SECRET = previousSecret;
+  }
+});
+
+test("a lost outcome-state write leaves the submission claim closed", async (t) => {
+  for (const mode of ["sync", "top-up"] as const) {
+    await t.test(mode, async () => {
+      const db = reservedCheckout(mode);
+      const updateMany = db.esimOrder.updateMany;
+      db.esimOrder.updateMany = async (args) => {
+        if (args.data.status === "airalo_outcome_unknown") throw new Error("Cannot persist outcome");
+        return updateMany(args);
+      };
+      let calls = 0;
+      const options = purchaseOptions(db, mode, async () => {
+        calls++;
+        throw new TypeError("Response was lost");
+      });
+      await assert.rejects(() => finaliseOrderFromCheckout(db.checkout.id, options));
+      assert.equal(db.orders[0]?.status, "airalo_submitting");
+      await finaliseOrderFromCheckout(db.checkout.id, options);
+      assert.equal(calls, 1);
+    });
+  }
+});
+
+test("createCheckout rejects multiple-SIM requests before payment creation", async () => {
+  const db = new FakeCreateCheckoutDb();
+  await assert.rejects(createCheckout({ packageId: TEST_PACKAGE_ID, quantity: 2 }, {
+    prisma: db as unknown as PrismaClient, baseUrl: "https://example.com",
+  }), /one eSIM per checkout/);
+  assert.equal(db.lastWhere, null);
+});
+
+test("legacy paid multiple-SIM checkouts cannot submit a partial supplier purchase", async () => {
+  const db = new FakeCheckoutDb();
+  db.checkout.quantity = 2;
+  const airalo = createSyncAiraloClient();
+  await assert.rejects(finaliseOrderFromCheckout("checkout-1", createFinaliseOptions(db, airalo)));
+  assert.equal(airalo.syncPayloads.length, 0);
+  assert.equal(airalo.topUpPayloads.length, 0);
 });

@@ -6,6 +6,7 @@ import type {
   PlatformInstallationInstructions,
 } from "./schemas";
 import { resolveSharedTokenCache } from "./token-cache";
+import { normalizeHttpUrl } from "@/lib/http/safe-url";
 
 const FAQ_URL =
   "https://airalopartners.zendesk.com/hc/en-us/sections/13207524820893-FAQ";
@@ -195,9 +196,9 @@ function normalizePlatform(
       ? {
           steps: normalizeSteps(qrSection.steps),
           qrCodeData: qrSection.qr_code_data ?? null,
-          qrCodeUrl: qrSection.qr_code_url ?? null,
+          qrCodeUrl: normalizeHttpUrl(qrSection.qr_code_url),
           directAppleInstallationUrl:
-            qrSection.direct_apple_installation_url ?? null,
+            normalizeHttpUrl(qrSection.direct_apple_installation_url),
         }
       : null,
     manual: manualSection

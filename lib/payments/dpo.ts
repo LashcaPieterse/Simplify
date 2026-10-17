@@ -115,8 +115,8 @@ export class DpoClient {
     ).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
     const ptl = input.paymentTimeLimitMinutes ?? 5;
-    const serviceDescription = input.serviceDescription ?? input.serviceName ?? "Simplify eSIM plan";
-    const serviceName = input.serviceName ?? "Simplify eSIM";
+    const serviceDescription = input.serviceDescription ?? input.serviceName ?? "SIM.Africa eSIM plan";
+    const serviceName = input.serviceName ?? "SIM.Africa eSIM";
     const serviceId = input.serviceId ?? input.reference;
 
     const xml = [

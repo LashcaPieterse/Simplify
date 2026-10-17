@@ -102,7 +102,11 @@ export async function findPackageDisplayByIdentifier(
 }
 
 export function getPackagePrice(pkg: PackageWithPrice): PackagePrice | null {
-  if (typeof pkg.state?.sellingPriceCents !== "number") {
+  if (
+    typeof pkg.state?.sellingPriceCents !== "number" ||
+    !Number.isFinite(pkg.state.sellingPriceCents) ||
+    pkg.state.sellingPriceCents <= 0
+  ) {
     return null;
   }
 

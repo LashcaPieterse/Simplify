@@ -1,12 +1,28 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Theme } from "@radix-ui/themes";
-import "@radix-ui/themes/styles.css";
 import { Providers } from "./providers";
+import { SiteChrome } from "@/components/site/SiteChrome";
 
 export const metadata: Metadata = {
-  title: "Simplify eSIMs",
-  description: "Global eSIM marketplace for instant travel connectivity.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://sim.africa"),
+  title: {
+    default: "SIM.Africa | Travel eSIMs for Africa",
+    template: "%s | SIM.Africa",
+  },
+  description: "Compare prepaid travel eSIM data plans for African destinations, install online, and connect when you arrive.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "SIM.Africa",
+    title: "SIM.Africa | Travel eSIMs for Africa",
+    description: "Africa-focused travel eSIMs from a current supplier catalogue.",
+    url: "/",
+  },
+  twitter: {
+    card: "summary",
+    title: "SIM.Africa | Travel eSIMs for Africa",
+    description: "Africa-focused travel eSIMs from a current supplier catalogue.",
+  },
   icons: {
     icon: [{ url: "/favicon.png", type: "image/png", sizes: "500x500" }],
     shortcut: "/favicon.png",
@@ -22,9 +38,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="bg-sand-50 text-brand-900 antialiased font-sans">
-        <Theme accentColor="teal" grayColor="mauve" radius="large" scaling="95%">
-          <Providers>{children}</Providers>
-        </Theme>
+        <Providers>
+          <SiteChrome>{children}</SiteChrome>
+        </Providers>
       </body>
     </html>
   );

@@ -23,8 +23,8 @@ interface Params {
   checkoutId: string;
 }
 
-export async function GET(request: Request, context: { params: Params }) {
-  const { checkoutId } = context.params;
+export async function GET(request: Request, context: { params: Promise<Params> }) {
+  const { checkoutId } = await context.params;
 
   if (!checkoutId) {
     return jsonBadRequest("checkout_id_required", "Checkout ID is required.");

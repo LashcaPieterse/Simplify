@@ -1,171 +1,154 @@
-import Image from "next/image";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Clock3, Gauge, Router, SignalHigh, Star, Wifi } from "lucide-react";
-import { OrderButton } from "@/components/orders/OrderButton";
-import { Button } from "@/components/ui/button";
-import { formatMoneyAmount } from "@/lib/format";
-import {
-  getCatalogPackageId,
-  getCountryBySlug,
-  getCountriesList,
-  getPlansForCountry,
-  type PlanDetail
-} from "@/lib/sanity.queries";
-import { urlForImage } from "@/lib/image";
+import { ChevronRight, CircleDollarSign, LockKeyhole, MailCheck } from "lucide-react";
+
+import { TrackView } from "@/components/analytics/TrackView";
+import { PlanExplorer } from "@/components/plans/PlanExplorer";
+import { UsageRecommender } from "@/components/plans/UsageRecommender";
+import { getStorefrontPlansForCountry } from "@/lib/catalog/storefront";
 
 export const dynamic = "force-static";
 export const revalidate = 300;
 
-export async function generateStaticParams() {
-  const countries = await getCountriesList();
-  return countries.map((country) => ({ slug: country.slug }));
+type CountryPageProps = { params: Promise<{ slug: string }> };
+
+// Catalogue routes use lazy ISR. Prebuilding every destination multiplies remote
+// database reads during deploys and can exhaust a pooled connection.
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
 }
 
-type CountryPageProps = {
-  params: { slug: string };
-};
+export async function generateMetadata({ params }: CountryPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const plans = await getStorefrontPlansForCountry(slug);
+  const country = plans[0]?.destination;
+  if (!country) return {};
+
+  const title = `eSIM for ${country.title} | Prepaid Travel Data`;
+  const description = `Buy an eSIM for ${country.title} before you travel. Compare currently available prepaid data plans, install online, and follow the package activation instructions.`;
+  return {
+    title,
+    description,
+    alternates: { canonical: `/country/${country.slug}` },
+    openGraph: { title, description, url: `/country/${country.slug}`, type: "website" },
+  };
+}
 
 export default async function CountryPage({ params }: CountryPageProps) {
-  const country = await getCountryBySlug(params.slug);
+  const { slug } = await params;
+  const plans = await getStorefrontPlansForCountry(slug);
+  if (!plans.length) notFound();
+  const country = plans[0]!.destination;
+  const packageOperators = Array.from(new Set(plans.map((plan) => plan.operatorName).filter((value): value is string => Boolean(value)))).sort();
+  const namedCarriers = Array.from(new Set(plans.flatMap((plan) => plan.networks))).sort();
+  const networkTypes = Array.from(new Set(plans.flatMap((plan) => plan.networkTypes)));
+  const rechargeablePlanCount = plans.filter((plan) => plan.topUpAvailable === true).length;
 
-  if (!country) {
-    notFound();
-  }
-
-  const plans = await getPlansForCountry(params.slug);
-  const heroImage = country.coverImage ? urlForImage(country.coverImage)?.width(800).height(480).url() : null;
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: "https://sim.africa" },
+      { "@type": "ListItem", position: 2, name: "Destinations", item: "https://sim.africa/destinations" },
+      { "@type": "ListItem", position: 3, name: country.title, item: `https://sim.africa/country/${country.slug}` },
+    ],
+  };
+  const countryFaqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: `When should I install an eSIM for ${country.title}?`,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Use the installation window and activation policy shown on the selected package page because supplier rules can vary by package.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: `Can I keep WhatsApp while using an eSIM in ${country.title}?`,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "On most dual-SIM phones, WhatsApp can stay registered to the existing number while the eSIM is selected for mobile data.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: `Does my phone need to be unlocked for a ${country.title} eSIM?`,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "The phone needs eSIM support and generally must be carrier or network unlocked.",
+        },
+      },
+    ],
+  };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-16 lg:px-10">
-      <div className="grid gap-10 lg:grid-cols-[1fr,0.9fr] lg:items-center">
-        <div className="space-y-6">
-          <span className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">
-            Country guide
-          </span>
-          <h1 className="font-display text-4xl text-brand-900 sm:text-5xl">eSIM plans for {country.title}</h1>
-          <p className="text-lg text-brand-700">{country.summary}</p>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-brand-600">
-            {country.badge ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-600">
-                <Star className="h-4 w-4 text-brand-400" />
-                {country.badge}
-              </span>
-            ) : null}
-            {country.carriers?.length ? <span>{country.carriers.length} partner carriers</span> : null}
-            {plans.length ? <span>{plans.length} curated plans</span> : null}
+    <div>
+      <TrackView event="country_view" properties={{ country: country.title, country_code: country.countryCode }} />
+      <div className="border-b border-brand-100 bg-brand-50">
+        <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6 lg:px-8 lg:py-16">
+          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-brand-600">
+            <Link href="/">Home</Link><ChevronRight className="h-4 w-4" aria-hidden /><Link href="/destinations">Destinations</Link><ChevronRight className="h-4 w-4" aria-hidden /><span aria-current="page">{country.title}</span>
+          </nav>
+          <p className="mt-9 text-xs font-black uppercase tracking-[0.2em] text-brand-600">{country.countryCode} travel connectivity</p>
+          <h1 className="mt-3 text-4xl font-black tracking-tight text-brand-900 sm:text-6xl">eSIM for {country.title}</h1>
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-brand-700">Stay connected in {country.title} without relying on your home network&apos;s international roaming. Compare the available plans below.</p>
+          <div className="mt-8 flex flex-wrap gap-3 text-sm font-semibold text-brand-700">
+            <span className="rounded-full border border-brand-200 bg-white px-4 py-2">{plans.length} active plan{plans.length === 1 ? "" : "s"}</span>
+            <span className="rounded-full border border-brand-200 bg-white px-4 py-2">Current catalogue pricing</span>
           </div>
         </div>
-        {heroImage ? (
-          <div className="relative h-72 w-full overflow-hidden rounded-[2rem] border border-brand-100/80 bg-sand-100/60 shadow-card">
-            <Image src={heroImage} alt={`${country.title} cover`} fill className="object-cover" />
-          </div>
-        ) : null}
       </div>
 
-      {country.carriers?.length ? (
-        <section className="mt-16">
-          <h2 className="text-2xl font-semibold text-brand-900">Featured carriers</h2>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {country.carriers.map((carrier) => {
-              const logoUrl = carrier.logo ? urlForImage(carrier.logo)?.width(160).height(160).url() : null;
-              return (
-                <div key={carrier._id} className="flex items-center gap-4 rounded-2xl border border-brand-100 bg-white px-5 py-4 shadow-card">
-                  {logoUrl ? (
-                    <Image src={logoUrl} alt={carrier.title} width={48} height={48} className="rounded-full" />
-                  ) : (
-                    <Wifi className="h-6 w-6 text-brand-400" />
-                  )}
-                  <div>
-                    <p className="font-semibold text-brand-800">{carrier.title}</p>
-                    <p className="text-xs text-brand-500">Trusted Simplify partner</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="mt-20">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-2xl font-semibold text-brand-900">Plans that travellers love</h2>
-          <Link href="/#store" className="text-sm font-semibold text-brand-600 hover:text-brand-800">
-            Browse all plans
-          </Link>
+      <section className="mx-auto max-w-7xl px-5 py-12 sm:px-6 lg:px-8 lg:py-16" aria-labelledby="available-plans">
+        <div className="mb-8 max-w-3xl"><h2 id="available-plans" className="text-3xl font-black text-brand-900 sm:text-4xl">Available {country.title} eSIM plans</h2><p className="mt-3 leading-7 text-brand-600">Unknown plan attributes are labelled as unknown. Recommendation labels use explicit price, data, validity, and trip-estimate calculations within this eligible result set.</p></div>
+        <div className="mb-10">
+          <UsageRecommender country={country.title} plans={plans} />
         </div>
-        {plans.length ? (
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            {plans.map((plan) => (
-              <PlanCard key={plan._id} plan={plan} />
-            ))}
-          </div>
-        ) : (
-          <div className="mt-8 rounded-3xl border border-dashed border-brand-200 bg-brand-50 px-6 py-12 text-center">
-            <h3 className="text-lg font-semibold text-brand-900">Plans are temporarily unavailable</h3>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-brand-600">
-              Live eSIM packages for {country.title} are currently syncing. Browse another destination or check back shortly.
-            </p>
-            <Button asChild variant="secondary" size="sm" className="mt-6">
-              <Link href="/#store">Browse African destinations</Link>
-            </Button>
-          </div>
-        )}
+        <PlanExplorer plans={plans} />
       </section>
+
+      <section className="border-y border-brand-100 bg-brand-50">
+        <div className="mx-auto max-w-7xl px-5 py-12 sm:px-6 lg:px-8">
+          <div className="max-w-3xl"><p className="text-xs font-black uppercase tracking-[0.18em] text-brand-600">Current catalogue snapshot</p><h2 className="mt-2 text-3xl font-black text-brand-900">What the available {country.title} packages tell us</h2><p className="mt-3 text-sm leading-6 text-brand-600">These details are derived only from the currently sellable supplier package records. A missing value is left unknown.</p></div>
+          <dl className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <SnapshotFact label="Package operator(s)" value={packageOperators.length ? packageOperators.join(", ") : "Not supplied"} />
+            <SnapshotFact label="Named carrier(s)" value={namedCarriers.length ? namedCarriers.join(", ") : "Not supplied"} />
+            <SnapshotFact label="Network types" value={networkTypes.length ? networkTypes.join(" / ") : "Not supplied"} />
+            <SnapshotFact label="Top-up availability" value={rechargeablePlanCount ? `${rechargeablePlanCount} of ${plans.length} plans marked available` : "No current plan marked available"} />
+          </dl>
+        </div>
+      </section>
+
+      <section className="border-y border-brand-100 bg-white">
+        <div className="mx-auto grid max-w-7xl gap-4 px-5 py-10 sm:px-6 md:grid-cols-3 lg:px-8">
+          <CountryTrust icon={CircleDollarSign} title="Transparent price" body="The displayed selling price comes from the current active package record." />
+          <CountryTrust icon={LockKeyhole} title="Secure checkout" body="Payment is handled by the configured provider; raw card details are not stored here." />
+          <CountryTrust icon={MailCheck} title="Order instructions" body="Your fulfilled order includes the available installation and activation information." />
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-4xl px-5 py-16 sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-black text-brand-900">Using an eSIM in {country.title}</h2>
+        <div className="mt-8 divide-y divide-brand-100 rounded-3xl border border-brand-100 bg-white px-6">
+          <details className="py-5"><summary className="cursor-pointer font-bold text-brand-900">When should I install it?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Use the installation window and activation policy shown on the individual package page. These rules can vary between supplier packages.</p></details>
+          <details className="py-5"><summary className="cursor-pointer font-bold text-brand-900">Can I keep WhatsApp and my normal SIM?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Yes, on most dual-SIM devices. Keep WhatsApp registered to your existing number and select the eSIM as the mobile-data line.</p></details>
+          <details className="py-5"><summary className="cursor-pointer font-bold text-brand-900">Is my phone compatible?</summary><p className="mt-3 text-sm leading-6 text-brand-600">Your device needs eSIM support and generally must be carrier unlocked. <Link href="/compatibility" className="font-bold text-brand-700 underline">Check the compatibility tool</Link>.</p></details>
+        </div>
+      </section>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, "\\u003c") }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(countryFaqSchema).replace(/</g, "\\u003c") }} />
     </div>
   );
 }
 
-function PlanCard({ plan }: { plan: PlanDetail }) {
-  const livePrice = plan.price?.source === "airalo" ? plan.price : null;
-  const hasLivePrice = Boolean(livePrice && typeof livePrice.amount === "number");
-  const formattedPrice = hasLivePrice
-    ? formatMoneyAmount(livePrice?.amount, livePrice?.currency ?? "USD")
-    : "Unavailable";
+function CountryTrust({ icon: Icon, title, body }: { icon: typeof CircleDollarSign; title: string; body: string }) {
+  return <div className="rounded-2xl bg-brand-50 p-5"><Icon className="h-6 w-6 text-brand-600" aria-hidden /><h3 className="mt-4 font-black text-brand-900">{title}</h3><p className="mt-2 text-sm leading-6 text-brand-600">{body}</p></div>;
+}
 
-  return (
-    <div className="flex h-full flex-col justify-between rounded-3xl border border-brand-100/80 bg-white p-6 shadow-card">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-500">{plan.provider?.title}</p>
-        {plan.label ? (
-          <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold uppercase text-brand-600">{plan.label}</span>
-        ) : null}
-      </div>
-      <div className="mt-4 space-y-2">
-        <h3 className="font-display text-2xl text-brand-900">{plan.title}</h3>
-        <p className="text-sm text-brand-600">{plan.shortBlurb}</p>
-      </div>
-      <ul className="mt-6 space-y-2 text-sm text-brand-600">
-        <li className="flex items-center gap-2">
-          <Gauge className="h-5 w-5 text-brand-400" />
-          {plan.dataGB}GB high-speed data
-        </li>
-        <li className="flex items-center gap-2">
-          <Clock3 className="h-5 w-5 text-brand-400" />
-          {plan.validityDays}-day validity
-        </li>
-        <li className="flex items-center gap-2">
-          <Router className="h-5 w-5 text-brand-400" />
-          {plan.hotspot ? "Hotspot enabled" : "Hotspot not supported"}
-        </li>
-        <li className="flex items-center gap-2">
-          <SignalHigh className="h-5 w-5 text-brand-400" />
-          {plan.fiveG ? "5G where available" : "4G/LTE coverage"}
-        </li>
-      </ul>
-      <div className="mt-6 space-y-3">
-        <p className="text-2xl font-semibold text-brand-900">{formattedPrice}</p>
-        <OrderButton
-          packageId={getCatalogPackageId(plan.package)}
-          label="Get this plan"
-          pendingLabel="Processing…"
-          size="sm"
-          fullWidth
-        />
-        <Button asChild variant="ghost" size="sm" className="text-xs font-semibold">
-          <Link href={`/plan/${plan.slug}`}>View details</Link>
-        </Button>
-      </div>
-    </div>
-  );
+function SnapshotFact({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-2xl border border-brand-100 bg-white p-5"><dt className="text-xs font-black uppercase tracking-wide text-brand-500">{label}</dt><dd className="mt-2 break-words text-sm font-semibold leading-6 text-brand-900">{value}</dd></div>;
 }

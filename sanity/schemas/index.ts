@@ -3,7 +3,6 @@ import { countryGridSection } from "./objects/countryGridSection";
 import { heroSection } from "./objects/heroSection";
 import { iconBullet } from "./objects/iconBullet";
 import { link } from "./objects/link";
-import { liveNetworkWidgetSection } from "./objects/liveNetworkWidgetSection";
 import { newsletterSection } from "./objects/newsletterSection";
 import { regionalBundleSpotlightSection } from "./objects/regionalBundleSpotlightSection";
 import { stepsSection } from "./objects/stepsSection";
@@ -41,7 +40,6 @@ export const schemaTypes = [
   whyChooseUsSection,
   stepsSection,
   regionalBundleSpotlightSection,
-  liveNetworkWidgetSection,
   newsletterSection,
   articlesSection
 ];

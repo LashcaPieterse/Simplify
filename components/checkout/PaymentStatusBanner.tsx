@@ -49,7 +49,7 @@ export function PaymentStatusBanner({ status, message }: PaymentStatusBannerProp
   const tone = copy.tone;
 
   return (
-    <div className={`rounded-md border p-4 ${toneClasses(tone)}`}>
+    <div className={`rounded-2xl border p-4 ${toneClasses(tone)}`} role="status">
       <p className="text-sm font-semibold">{copy.title}</p>
       <p className="mt-1 text-sm">{message ?? copy.description}</p>
     </div>

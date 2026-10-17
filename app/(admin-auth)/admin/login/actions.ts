@@ -36,6 +36,6 @@ export async function loginAdmin(formData: FormData) {
 }
 
 export async function logoutAdmin() {
-  clearAdminSession();
+  await clearAdminSession();
   redirect("/admin/login");
 }

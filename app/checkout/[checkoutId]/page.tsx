@@ -14,7 +14,7 @@ import {
 import { getCheckoutSummary } from "@/lib/payments/checkouts";
 
 interface CheckoutPageProps {
-  params: { checkoutId: string };
+  params: Promise<{ checkoutId: string }>;
 }
 
 async function requireCheckoutAccess(checkoutId: string): Promise<void> {
@@ -28,8 +28,9 @@ async function requireCheckoutAccess(checkoutId: string): Promise<void> {
   }
 
   const session = await getServerSession(authOptions);
+  const cookieStore = await cookies();
   const hasCheckoutToken = hasScopedAccessFromCookieStore(
-    cookies(),
+    cookieStore,
     "checkout",
     checkoutId,
   );
@@ -48,18 +49,19 @@ async function requireCheckoutAccess(checkoutId: string): Promise<void> {
 }
 
 export default async function CheckoutPage({ params }: CheckoutPageProps) {
-  await requireCheckoutAccess(params.checkoutId);
-  const summary = await getCheckoutSummary(params.checkoutId);
+  const { checkoutId } = await params;
+  await requireCheckoutAccess(checkoutId);
+  const summary = await getCheckoutSummary(checkoutId);
 
   if (!summary) {
     notFound();
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
+    <div className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-14 sm:px-6 lg:px-8 lg:py-16">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold text-slate-900">Complete your purchase</h1>
-        <p className="text-sm text-slate-600">
+        <h1 className="text-4xl font-black tracking-tight text-brand-900 sm:text-5xl">Complete your purchase</h1>
+        <p className="text-sm leading-6 text-brand-600">
           You&apos;re almost there. Review your plan and continue to the secure payment page.
         </p>
       </div>
@@ -70,6 +72,10 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
         quantity={summary.quantity}
         totalCents={summary.totalCents}
         currency={summary.currency}
+        destination={summary.destination}
+        dataLabel={summary.dataLabel}
+        validityDays={summary.validityDays}
+        customerEmail={summary.customerEmail}
       />
       {summary.paymentUrl ? <CheckoutRedirector paymentUrl={summary.paymentUrl} /> : null}
     </div>

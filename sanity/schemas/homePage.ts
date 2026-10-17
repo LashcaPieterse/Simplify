@@ -22,7 +22,6 @@ export const homePage = defineType({
         { type: "whyChooseUsSection" },
         { type: "stepsSection" },
         { type: "regionalBundleSpotlightSection" },
-        { type: "liveNetworkWidgetSection" },
         { type: "newsletterSection" },
         { type: "articlesSection" }
       ],

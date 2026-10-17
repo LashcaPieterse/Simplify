@@ -9,7 +9,7 @@ export const createOrderInputSchema = z.object({
     .number({ invalid_type_error: "Quantity must be a number." })
     .int("Quantity must be an integer.")
     .positive("Quantity must be at least 1.")
-    .max(MAX_QUANTITY, `You can order up to ${MAX_QUANTITY} eSIMs per checkout.`)
+    .max(MAX_QUANTITY, "You can purchase one eSIM per checkout.")
     .default(DEFAULT_QUANTITY)
     .optional(),
   customerEmail: z.string().email("Enter a valid email address.").optional(),

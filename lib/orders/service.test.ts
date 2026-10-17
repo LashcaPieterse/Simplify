@@ -20,6 +20,7 @@ import {
   type CreateOrderOptions,
 } from "./service";
 import { createInstallationPayload } from "./airalo-metadata";
+import { persistOrderRecords } from "./persistence";
 
 const TEST_PACKAGE_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -393,7 +394,7 @@ test("createOrder sends /orders-async webhook_url and persists request_id with r
 
       const result = await createTestOrder(
         {
-          quantity: 2,
+          quantity: 1,
           customerEmail: "customer@example.com",
         },
         {
@@ -409,7 +410,7 @@ test("createOrder sends /orders-async webhook_url and persists request_id with r
         airalo.asyncPayloads[0]?.webhook_url,
         "https://example.com/api/airalo/webhooks?airalo_webhook_secret=webhook-secret",
       );
-      assert.equal(airalo.asyncPayloads[0]?.quantity, "2");
+      assert.equal(airalo.asyncPayloads[0]?.quantity, "1");
       assert.equal(airalo.asyncPayloads[0]?.brand_settings_name, undefined);
       assert.equal(airalo.asyncPayloads[0]?.to_email, "customer@example.com");
       assert.deepEqual(airalo.asyncPayloads[0]?.["sharing_option[]"], ["link"]);
@@ -606,7 +607,7 @@ test("createOrder hydrates a reserved checkout order using the checkout price sn
     packageId: TEST_PACKAGE_ID,
     status: "pending",
     customerEmail: "checkout@example.com",
-    quantity: 2,
+    quantity: 1,
     totalCents: 2500,
     currency: "UGX",
   });
@@ -640,7 +641,7 @@ test("createOrder hydrates a reserved checkout order using the checkout price sn
         packageId: TEST_PACKAGE_ID,
         airaloPackageId: "pkg-test",
         packageTitle: "Test 1GB",
-        quantity: 2,
+        quantity: 1,
         totalCents: 2500,
         currency: "UGX",
         customerEmail: "checkout@example.com",
@@ -650,10 +651,10 @@ test("createOrder hydrates a reserved checkout order using the checkout price sn
 
   assert.equal(result.orderId, "reserved-order-1");
   assert.equal(airalo.syncPayloads.length, 1);
-  assert.equal(airalo.syncPayloads[0]?.quantity, "2");
+  assert.equal(airalo.syncPayloads[0]?.quantity, "1");
   assert.equal(
     airalo.syncPayloads[0]?.description,
-    "2 x Test 1GB [simplify_order_id:reserved-order-1]",
+    "1 x Test 1GB [simplify_order_id:reserved-order-1]",
   );
   assert.equal(airalo.syncPayloads[0]?.to_email, "checkout@example.com");
   assert.equal(db.orders.length, 1);
@@ -729,7 +730,7 @@ test("createInstallationPayload maps Get eSIM response fields", () => {
       apn_value: "globaldata",
       is_roaming: true,
       confirmation_code: "5751",
-      brand_settings_name: "Simplify",
+      brand_settings_name: "SIM.Africa",
       recycled: true,
       recycled_at: "2025-05-05 10:52:39",
       simable: {
@@ -740,7 +741,7 @@ test("createInstallationPayload maps Get eSIM response fields", () => {
         validity: "7",
         status: { name: "Completed", slug: "completed" },
         sharing: {
-          link: "https://esims.cloud/simplify/a4g5ht",
+          link: "https://esims.cloud/sim-africa/a4g5ht",
           access_code: "4812",
         },
       },
@@ -758,7 +759,7 @@ test("createInstallationPayload maps Get eSIM response fields", () => {
   assert.equal(payload.isRoaming, true);
   assert.equal(payload.recycled, true);
   assert.deepEqual(payload.share, {
-    link: "https://esims.cloud/simplify/a4g5ht",
+    link: "https://esims.cloud/sim-africa/a4g5ht",
     accessCode: "4812",
   });
 });
@@ -804,7 +805,7 @@ test("ensureOrderInstallation hydrates an existing ICCID through Get eSIM", asyn
         id: 9647,
         status: { name: "Completed", slug: "completed" },
         sharing: {
-          link: "https://esims.cloud/simplify/a4g5ht",
+          link: "https://esims.cloud/sim-africa/a4g5ht",
           access_code: "4812",
         },
       },
@@ -917,4 +918,59 @@ test("createOrder maps documented Airalo 422 validation responses", async (t) =>
       );
     });
   }
+});
+
+test("createOrder rejects multiple-SIM requests before supplier submission", async () => {
+  const db = new FakeOrderDb();
+  const airalo = new FakeAiraloClient({});
+  await assert.rejects(createTestOrder({ quantity: 2 }, { db, airalo, submissionMode: "sync" }), /Invalid order request/);
+  assert.equal(airalo.syncPayloads.length, 0);
+  assert.equal(airalo.asyncPayloads.length, 0);
+  assert.equal(db.orders.length, 0);
+});
+
+test("a late async acknowledgement preserves an order already fulfilled by its webhook", async () => {
+  for (const requestId of [null, "async-request-1"]) {
+    const db = new FakeOrderDb();
+    db.orders.push({ id: "reserved-1", orderNumber: "123", requestId, status: "completed" });
+    const ack = { request_id: "async-request-1", accepted_at: "2026-10-17T00:00:00Z" };
+    const result = await persistOrderRecords(db as unknown as Parameters<typeof persistOrderRecords>[0], {
+      reservedOrder: {
+        orderId: "reserved-1", packageId: TEST_PACKAGE_ID, airaloPackageId: "pkg-test",
+        packageTitle: "Test 1GB", quantity: 1, totalCents: 1250, currency: "USD",
+      },
+      pkg: db.packageRecord, quantity: 1, totalCents: 1250, currency: "USD",
+      airaloAsyncResponse: { data: ack, meta: { message: "success" } },
+      airaloAck: ack, airaloOrderResponse: null, airaloOrder: null,
+    });
+    assert.equal(result.orderNumber, "123");
+    assert.equal(result.requestId, "async-request-1");
+    assert.equal(db.orders[0]?.status, "completed");
+    assert.equal(db.orders[0]?.orderNumber, "123");
+  }
+});
+
+test("synchronous fulfillment never reassigns an existing customer's SIM", async () => {
+  const db = new FakeOrderDb();
+  db.profiles.push({ id: "existing-profile", iccid: "sim-1", orderId: "another-customer" });
+  const airalo = new FakeAiraloClient({ syncResponse: OrderResponseSchema.parse({ data: {
+    id: 123, status: "completed", iccid: "sim-1",
+  } }) });
+  await assert.rejects(createTestOrder({}, { db, airalo, submissionMode: "sync" }), /already belongs/);
+  assert.equal(db.profiles[0]?.orderId, "another-customer");
+  assert.equal(db.installationPayloads.length, 0);
+});
+
+test("installation hydration rejects a supplier SIM that conflicts with the saved profile", async () => {
+  const db = new FakeOrderDb();
+  db.orders.push({ id: "local-1", orderNumber: "123", requestId: null, status: "completed" });
+  db.profiles.push({ id: "profile-1", orderId: "local-1", iccid: "existing-sim" });
+  const airalo = new FakeAiraloClient({ orderResponse: OrderResponseSchema.parse({ data: {
+    id: 123, status: "completed", iccid: "different-sim",
+  } }) });
+  await assert.rejects(ensureOrderInstallation("local-1", {
+    prisma: db as unknown as CreateOrderOptions["prisma"], airaloClient: airalo as unknown as AiraloClient,
+  }), /conflicts with the existing installation/);
+  assert.equal(db.installationPayloads.length, 0);
+  assert.equal(airalo.simLookups.length, 0);
 });

@@ -1,4 +1,4 @@
-import { groq } from "next-sanity";
+import groq from "groq";
 import type { Prisma } from "@prisma/client";
 import { getSanityClient } from "./sanity.client";
 import { getCatalogProductSummaries } from "./catalog/query";
@@ -87,12 +87,6 @@ export type RegionalBundleSpotlightSection = {
   bundle: RegionBundle;
 };
 
-export type LiveNetworkWidgetSection = {
-  _type: "liveNetworkWidgetSection";
-  title: string;
-  regions: LiveRegion[];
-};
-
 export type NewsletterSection = {
   _type: "newsletterSection";
   title: string;
@@ -113,7 +107,6 @@ export type HomeSection =
   | WhyChooseUsSection
   | StepsSection
   | RegionalBundleSpotlightSection
-  | LiveNetworkWidgetSection
   | NewsletterSection
   | ArticlesSection;
 
@@ -524,11 +517,6 @@ const homePageQuery = groq`
           ${REGION_BUNDLE_FIELDS}
         }
       },
-      _type == "liveNetworkWidgetSection" => {
-        _type,
-        title,
-        regions[]{name, latencyMs, signalQuality}
-      },
       _type == "newsletterSection" => {
         _type,
         title,
@@ -789,7 +777,9 @@ async function getLivePackageSnapshots(
   }
 
   const records = await prisma.package.findMany({
-    where: { airaloPackageId: { in: externalIds } },
+    where: publicSellablePackageWhere({
+      airaloPackageId: { in: externalIds },
+    }),
     select: PUBLIC_CATALOG_SNAPSHOT_SELECT,
   });
 

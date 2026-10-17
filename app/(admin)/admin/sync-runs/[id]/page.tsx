@@ -4,21 +4,22 @@ import prisma from "@/lib/db/client";
 import { notFound } from "next/navigation";
 import { formatDate } from "@/lib/format";
 
-export default async function SyncRunDetailsPage({ params }: { params: { id: string } }) {
+export default async function SyncRunDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const [run, items, responseSnapshots, packageSnapshots] = await Promise.all([
-    prisma.syncRun.findUnique({ where: { id: params.id } }),
+    prisma.syncRun.findUnique({ where: { id } }),
     prisma.syncRunItem.findMany({
-      where: { runId: params.id },
+      where: { runId: id },
       orderBy: [{ createdAt: "desc" }],
       take: 200,
     }),
     prisma.entitySnapshot.findMany({
-      where: { runId: params.id, entityType: "airalo_response" },
+      where: { runId: id, entityType: "airalo_response" },
       orderBy: { createdAt: "asc" },
       take: 200,
     }),
     prisma.entitySnapshot.findMany({
-      where: { runId: params.id, entityType: "package" },
+      where: { runId: id, entityType: "package" },
       orderBy: [{ createdAt: "desc" }],
       take: 1000,
     }),

@@ -5,6 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import {
   findActivePackageByIdentifier,
   findPackageDisplayByIdentifier,
+  getPackagePrice,
 } from "./package-resolver";
 
 type TestPackage = {
@@ -192,4 +193,19 @@ test("display lookup can still resolve historical top-up packages", async () => 
   const pkg = await findPackageDisplayByIdentifier(prisma(db), "ke-1gb-7d-topup");
 
   assert.equal(pkg?.airaloPackageId, "ke-1gb-7d-topup");
+});
+
+test("price resolution accepts only positive finite checkout prices", () => {
+  const valid = makePackage() as unknown as Parameters<typeof getPackagePrice>[0];
+  assert.deepEqual(getPackagePrice(valid), {
+    sellingPriceCents: 800,
+    currencyCode: "USD",
+  });
+
+  for (const sellingPriceCents of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const invalid = makePackage({
+      state: { isActive: true, sellingPriceCents, currencyCode: "USD" },
+    }) as unknown as Parameters<typeof getPackagePrice>[0];
+    assert.equal(getPackagePrice(invalid), null);
+  }
 });

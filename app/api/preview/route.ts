@@ -12,7 +12,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: "Invalid preview secret" }, { status: 401 });
   }
 
-  draftMode().enable();
+  const preview = await draftMode();
+  preview.enable();
 
   const redirectUrl = slug.startsWith("/") ? slug : `/${slug}`;
 

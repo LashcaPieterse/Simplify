@@ -1,4 +1,4 @@
-import { groq } from "next-sanity";
+import groq from "groq";
 
 import prisma from "@/lib/db/client";
 import { getSanityClient } from "@/lib/sanity.client";

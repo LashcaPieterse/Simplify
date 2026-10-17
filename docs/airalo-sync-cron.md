@@ -16,7 +16,7 @@ This project supports triggering `/api/airalo-sync` from an external scheduler. 
    - `DATABASE_URL`
 
 3. In GitHub, add these repository **Actions secrets**:
-   - `AIRALO_SYNC_URL` = `https://<your-production-domain>/api/airalo-sync` (example: `https://simplify-pink.vercel.app/api/airalo-sync`)
+   - `AIRALO_SYNC_URL` = `https://<your-production-domain>/api/airalo-sync` (example: `https://sim.africa/api/airalo-sync`)
    - `AIRALO_SYNC_CRON_TOKEN` = same value as Vercel `AIRALO_SYNC_CRON_TOKEN`
 
    Use a stable production alias/custom domain, **not** a single deployment URL.
@@ -81,7 +81,7 @@ Without notification settings enabled, failed runs will not automatically email 
 The sync endpoint now acts as the **single source of truth** for package availability and pricing:
 
 - Sync writes latest Airalo package details into Prisma (including updated prices).
-- Sync uses paginated `GET /v2/packages` requests with `include=topup` and `limit=100` rather than the no-limit full-catalog response. The Airalo export in [`Airalo API/getPackages.md`](<Airalo API/getPackages.md>) allows either approach; Simplify chooses pagination to keep serverless memory predictable while still following Airalo's documented `links.next` / `meta.current_page` / `meta.last_page` pagination contract.
+- Sync uses paginated `GET /v2/packages` requests with `include=topup` and `limit=100` rather than the no-limit full-catalog response. The Airalo export in [`Airalo API/getPackages.md`](<Airalo API/getPackages.md>) allows either approach; SIM.Africa chooses pagination to keep serverless memory predictable while still following Airalo's documented `links.next` / `meta.current_page` / `meta.last_page` pagination contract.
 - Each Airalo page response is stored as a raw JSON snapshot on `package_sync_pages.raw_payload_json` alongside the extracted `links`, `meta`, and `pricing` envelopes once the latest database migration has been deployed. If the column is not present yet, sync continues without raw snapshots and logs a warning.
 - Packages missing from the latest upstream dataset are automatically marked inactive (`isActive=false`).
 - After a successful sync, the route triggers `revalidatePath` for home/country/plan pages so static pages refresh without a full redeploy.
