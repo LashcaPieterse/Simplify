@@ -2,9 +2,7 @@ name: Airalo Order Recovery
 run-name: Airalo recovery (${{ github.event_name }})
 
 on:
-  schedule:
-    # Keep the five-minute interval away from the busy start of the hour.
-    - cron: "2-59/5 * * * *"
+  # Automatic recovery runs in Supabase Cron. Keep this manual fallback only.
   workflow_dispatch:
 
 permissions:
@@ -24,7 +22,6 @@ jobs:
           AIRALO_SYNC_URL: ${{ secrets.AIRALO_SYNC_URL }}
           AIRALO_RECOVERY_URL: ${{ secrets.AIRALO_RECOVERY_URL }}
           AIRALO_SYNC_CRON_TOKEN: ${{ secrets.AIRALO_SYNC_CRON_TOKEN }}
-          RECOVERY_SCHEDULE: ${{ github.event.schedule }}
         run: |
           python3 - <<'PY'
           import json
@@ -35,7 +32,6 @@ jobs:
 
           print(json.dumps({
               "event": os.environ.get("GITHUB_EVENT_NAME"),
-              "schedule": os.environ.get("RECOVERY_SCHEDULE") or None,
               "run_id": os.environ.get("GITHUB_RUN_ID"),
               "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
           }), flush=True)
