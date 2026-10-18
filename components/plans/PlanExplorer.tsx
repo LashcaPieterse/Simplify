@@ -18,7 +18,6 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
   const [validityFilter, setValidityFilter] = useState<ValidityFilter>("all");
   const [networkTypeFilter, setNetworkTypeFilter] = useState("all");
   const [carrierFilter, setCarrierFilter] = useState("all");
-  const [hotspotFilter, setHotspotFilter] = useState<KnownBooleanFilter>("all");
   const [callsFilter, setCallsFilter] = useState<KnownBooleanFilter>("all");
   const [topUpFilter, setTopUpFilter] = useState<KnownBooleanFilter>("all");
 
@@ -28,7 +27,6 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
   const carriers = Array.from(
     new Set(plans.flatMap((plan) => plan.networks)),
   ).sort((left, right) => left.localeCompare(right));
-  const hasKnownHotspot = plans.some((plan) => plan.hotspot !== null);
   const hasKnownCalls = plans.some((plan) => plan.callsAndSms !== null);
   const hasKnownTopUp = plans.some((plan) => plan.topUpAvailable !== null);
 
@@ -62,9 +60,6 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
         plan.networkTypes.includes(networkTypeFilter);
       const carrierMatches =
         carrierFilter === "all" || plan.networks.includes(carrierFilter);
-      const hotspotMatches =
-        hotspotFilter === "all" ||
-        plan.hotspot === (hotspotFilter === "yes");
       const callsMatch =
         callsFilter === "all" ||
         plan.callsAndSms === (callsFilter === "yes");
@@ -77,7 +72,6 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
         validityMatches &&
         networkTypeMatches &&
         carrierMatches &&
-        hotspotMatches &&
         callsMatch &&
         topUpMatches
       );
@@ -96,18 +90,16 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
     validityFilter !== "all" ||
     networkTypeFilter !== "all" ||
     carrierFilter !== "all" ||
-    hotspotFilter !== "all" ||
     callsFilter !== "all" ||
     topUpFilter !== "all";
 
-  const advancedFilterCount = [networkTypeFilter, carrierFilter, hotspotFilter, callsFilter, topUpFilter].filter((value) => value !== "all").length;
+  const advancedFilterCount = [networkTypeFilter, carrierFilter, callsFilter, topUpFilter].filter((value) => value !== "all").length;
 
   const resetFilters = () => {
     setDataFilter("all");
     setValidityFilter("all");
     setNetworkTypeFilter("all");
     setCarrierFilter("all");
-    setHotspotFilter("all");
     setCallsFilter("all");
     setTopUpFilter("all");
   };
@@ -127,7 +119,6 @@ export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
         {showAdvanced ? <div id="advanced-plan-filters" className="mt-5 grid gap-3 border-t border-brand-100 pt-5 sm:grid-cols-2 lg:grid-cols-3">
           {networkTypes.length ? <FilterSelect label="Network type" value={networkTypeFilter} onChange={setNetworkTypeFilter} options={[["all", "Any network type"], ...networkTypes.map((type) => [type, type] as [string, string])]} /> : null}
           {carriers.length ? <FilterSelect label="Carrier" value={carrierFilter} onChange={setCarrierFilter} options={[["all", "Any named carrier"], ...carriers.map((carrier) => [carrier, carrier] as [string, string])]} /> : null}
-          {hasKnownHotspot ? <FilterSelect label="Hotspot" value={hotspotFilter} onChange={(value) => setHotspotFilter(value as KnownBooleanFilter)} options={[["all", "Any hotspot status"], ["yes", "Available"], ["no", "Not available"]]} /> : null}
           {hasKnownCalls ? <FilterSelect label="Calls & SMS" value={callsFilter} onChange={(value) => setCallsFilter(value as KnownBooleanFilter)} options={[["all", "Any calls status"], ["yes", "Included"], ["no", "Data only"]]} /> : null}
           {hasKnownTopUp ? <FilterSelect label="Top-up" value={topUpFilter} onChange={(value) => setTopUpFilter(value as KnownBooleanFilter)} options={[["all", "Any top-up status"], ["yes", "Available"], ["no", "Not available"]]} /> : null}
         </div> : null}

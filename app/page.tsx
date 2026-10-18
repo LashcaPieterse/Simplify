@@ -143,7 +143,7 @@ export default async function HomePage() {
       </section>
 
       <section className="section-space">
-        <div className="page-container"><SectionHeading eyebrow="Your trip. Your way." title="For every kind of explorer." /><div className="mt-9 grid gap-4 lg:grid-cols-3"><TravelCard icon={Luggage} title="Out-of-office adventures" body="Maps, bookings, and moments worth sharing. Data for the good kind of getting lost." href="/destinations" cta="Explore travel plans" /><TravelCard icon={Briefcase} title="Business, without borders" body="Keep work moving. Compare data and hotspot options for your next business trip." href="/business" cta="Explore business travel" /><TravelCard icon={Route} title="One trip. More Africa." body="Cross a few borders. Find the right combination of plans for your whole route." href="/route-builder" cta="Build your route" /></div></div>
+        <div className="page-container"><SectionHeading eyebrow="Your trip. Your way." title="For every kind of explorer." /><div className="mt-9 grid gap-4 lg:grid-cols-3"><TravelCard icon={Luggage} title="Out-of-office adventures" body="Maps, bookings, and moments worth sharing. Data for the good kind of getting lost." href="/destinations" cta="Explore travel plans" /><TravelCard icon={Briefcase} title="Business, without borders" body="Keep work moving. Compare data plans for your next business trip." href="/business" cta="Explore business travel" /><TravelCard icon={Route} title="One trip. More Africa." body="Cross a few borders. Find the right combination of plans for your whole route." href="/route-builder" cta="Build your route" /></div></div>
       </section>
 
       <section className="bg-brand-900 text-white">

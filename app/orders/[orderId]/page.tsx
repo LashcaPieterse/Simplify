@@ -29,6 +29,7 @@ import {
   type SessionLike,
 } from "@/lib/orders/access";
 import { normalizeHttpUrl } from "@/lib/http/safe-url";
+import { formatActivationPolicy } from "@/lib/esim/activation";
 
 type OrderPageParams = {
   params: Promise<{
@@ -261,7 +262,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
         <ol className="mt-5 grid gap-4 sm:grid-cols-3">
           <li className="rounded-2xl bg-white p-4"><span className="text-xs font-black uppercase tracking-wide text-brand-500">Step 1</span><h3 className="mt-2 font-bold text-brand-900">Check your email</h3><p className="mt-2 text-sm leading-6 text-brand-600">Keep this secure page. A transactional email is sent when delivery is configured.</p></li>
           <li className="rounded-2xl bg-white p-4"><span className="text-xs font-black uppercase tracking-wide text-brand-500">Step 2</span><h3 className="mt-2 font-bold text-brand-900">Install carefully</h3><p className="mt-2 text-sm leading-6 text-brand-600">Use the QR or manual instructions below and do not delete the eSIM prematurely.</p></li>
-          <li className="rounded-2xl bg-white p-4"><span className="text-xs font-black uppercase tracking-wide text-brand-500">Step 3</span><h3 className="mt-2 font-bold text-brand-900">Follow activation rules</h3><p className="mt-2 text-sm leading-6 text-brand-600">{pkg?.operator.activationPolicy?.trim() || "No catalogue activation policy was provided. Contact support before installing if the order instructions are unclear."}</p></li>
+          <li className="rounded-2xl bg-white p-4"><span className="text-xs font-black uppercase tracking-wide text-brand-500">Step 3</span><h3 className="mt-2 font-bold text-brand-900">When your days start</h3><p className="mt-2 text-sm leading-6 text-brand-600">{formatActivationPolicy(pkg?.operator.activationPolicy ?? null)}</p></li>
         </ol>
         <div className="mt-5 flex flex-wrap gap-3"><Link href="/help/installation" className="button-ribbon-primary inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-semibold">View installation guide</Link><a href="mailto:support@sim.africa" className="inline-flex min-h-11 items-center justify-center rounded-full border border-brand-200 bg-white px-5 text-sm font-semibold text-brand-800">Email support</a><WhatsAppSupportLink location="order" showIcon className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand-200 bg-white px-5 text-sm font-semibold text-brand-800" /></div>
       </section>

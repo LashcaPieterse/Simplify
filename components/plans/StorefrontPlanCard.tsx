@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, Database, Radio, RefreshCw, Router, Phone } from "lucide-react";
+import { ArrowUpRight, Database, Radio, RefreshCw, Phone } from "lucide-react";
 
 import { AddToCartButton } from "@/components/cart/AddToCartButton";
 import { formatMoneyAmount } from "@/lib/format";
@@ -35,7 +35,6 @@ export function StorefrontPlanCard({
       <dl className="mt-7 flex items-end gap-3 border-b border-brand-100 pb-6"><div><dt className="sr-only">Data</dt><dd className="text-4xl font-medium tracking-[-0.05em] text-brand-900">{plan.dataLabel}</dd></div><div className="pb-1"><dt className="sr-only">Validity</dt><dd className="text-xs text-brand-500">/ {plan.validityDays ? `${plan.validityDays} days` : "Unknown validity"}</dd></div></dl>
       <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-5 text-sm">
         <PlanFact icon={Radio} label="Network" value={networkLabel} />
-        <PlanFact icon={Router} label="Hotspot" value={formatKnownBoolean(plan.hotspot)} />
         {!compact ? <PlanFact icon={Phone} label="Calls & SMS" value={callsLabel} /> : null}
         {!compact ? <PlanFact icon={RefreshCw} label="Top-up" value={formatKnownBoolean(plan.topUpAvailable, { yes: "Available", no: "Not available" })} /> : null}
       </dl>

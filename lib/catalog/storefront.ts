@@ -76,6 +76,17 @@ export type StorefrontPlan = {
 
 type JsonRecord = Record<string, unknown>;
 
+const countryNames = new Intl.DisplayNames(["en"], { type: "region", fallback: "none" });
+
+function countryDisplayName(name: string | null, code: string | null): string | null {
+  if (name && !/^[a-z]{2}$/i.test(name)) return name;
+  const region = code ?? name;
+  if (region && /^[a-z]{2}$/i.test(region)) {
+    return countryNames.of(region.toUpperCase()) ?? name ?? region;
+  }
+  return name ?? region;
+}
+
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -142,7 +153,7 @@ export function extractCoverageDestinations(value: unknown): CoverageDestination
     if (!code && !name) return;
 
     const normalizedCode = code?.toUpperCase() ?? null;
-    const normalizedName = name ?? normalizedCode;
+    const normalizedName = countryDisplayName(name, normalizedCode);
     if (!normalizedName) return;
 
     const slug = slugify(normalizedName);
@@ -248,7 +259,7 @@ function toCountry(record: StorefrontPackageRecord): StorefrontCountry {
 
   return {
     id: country.id,
-    title: country.title,
+    title: countryDisplayName(country.title, country.countryCode) ?? country.title,
     slug: country.slug,
     countryCode: country.countryCode,
     image: country.imageJson ?? null,
@@ -262,6 +273,9 @@ function toCountry(record: StorefrontPackageRecord): StorefrontCountry {
 
 export function mapStorefrontPlan(record: StorefrontPackageRecord): StorefrontPlan {
   const destination = toCountry(record);
+  const isRegional = (AFRICA_ROUTE_REGION_SLUGS as readonly string[]).includes(
+    destination.slug,
+  );
   const extractedCoverage = [
     ...extractCoverageDestinations(record.operator.countriesJson),
     ...extractCoverageDestinations(record.operator.coveragesJson),
@@ -273,12 +287,9 @@ export function mapStorefrontPlan(record: StorefrontPackageRecord): StorefrontPl
     code: destination.countryCode?.toUpperCase() || null,
     slug: destination.slug,
   };
-  coverage.set(baseDestination.code ?? baseDestination.slug, baseDestination);
+  if (!isRegional) coverage.set(baseDestination.code ?? baseDestination.slug, baseDestination);
   extractedCoverage.forEach((entry) => coverage.set(entry.code ?? entry.slug, entry));
 
-  const isRegional = (AFRICA_ROUTE_REGION_SLUGS as readonly string[]).includes(
-    destination.slug,
-  );
   const normalizedPlanType = record.operator.planType?.trim().toLowerCase() ?? "";
   const hasVoiceOrText =
     (typeof record.voice === "number" && record.voice > 0) ||

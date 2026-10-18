@@ -1,6 +1,8 @@
 import { compile } from "html-to-text";
 import { resolveAiraloApnSettings, type AiraloApnSettings } from "../airalo/apn";
 
+export { formatActivationPolicy as formatReceiptActivationPolicy } from "../esim/activation";
+
 const readableText = compile({
   wordwrap: false,
   preserveNewlines: true,
@@ -40,24 +42,6 @@ function isConsumerStoreInstruction(line: string): boolean {
     /\bairalo(?:['’]s)?\s+(?:website|app)\b/i.test(line) ||
     /\bmy\s+e[\s-]*sims\b/i.test(line)
   );
-}
-
-export function formatReceiptActivationPolicy(value: string | null): string {
-  const policy = value?.trim();
-  switch (policy?.toLowerCase()) {
-    case "first-usage":
-      return "Your plan's validity starts when the eSIM first connects to a supported network in its coverage area. For a regional plan, this can happen in any covered country.";
-    case "installation":
-      return "Your plan's validity starts as soon as you install the eSIM, even if you have not reached your destination. Install it only when you are ready for the validity period to begin.";
-    default: {
-      // Preserve descriptive supplier policies; do not guess the meaning of
-      // an unknown machine label or assume first-usage activation.
-      const text = policy ? readableText(policy).trim() : "";
-      return /\s/.test(text)
-        ? text
-        : "Check the activation policy on your secure order page before installing. Contact support if it is unclear.";
-    }
-  }
 }
 
 export function formatReceiptApn(value: string | null, deviceSettings?: AiraloApnSettings | null): string {

@@ -25,13 +25,13 @@ export const USAGE_PROFILES: readonly UsageProfile[] = [
   {
     id: "business",
     label: "Business",
-    detail: "Email, Teams or Zoom, cloud tools, and hotspot",
+    detail: "Email, Teams or Zoom, and cloud tools",
     perDayMb: 1200,
   },
   {
     id: "heavy",
     label: "Heavy",
-    detail: "Video, hotspot, large uploads, and streaming",
+    detail: "Video, large uploads, and streaming",
     perDayMb: 2000,
   },
 ] as const;
