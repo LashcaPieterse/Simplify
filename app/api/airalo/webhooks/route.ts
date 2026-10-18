@@ -30,6 +30,7 @@ import {
 } from "@/lib/orders/airalo-metadata";
 import { ensureOrderInstallation } from "@/lib/orders/installation";
 import { sendOrderReceipt } from "@/lib/notifications/receipts";
+import { stampAffiliateFulfilment, safelyAccrueCommission } from "@/lib/affiliates/accounting";
 import {
   findOrderForWebhook,
   resolveWebhookRequestId,
@@ -295,6 +296,7 @@ export async function POST(request: Request) {
         orderId: order?.id ?? null,
         payload,
       });
+      if (order) await stampAffiliateFulfilment(tx, order.id);
 
       await tx.webhookEvent.update({
         where: { id: eventRecord.id },
@@ -312,6 +314,7 @@ export async function POST(request: Request) {
 
     if (result.orderId) {
       await attemptOrderDeliveryEmail(result.orderId);
+      await safelyAccrueCommission(result.orderId);
     }
 
     if (result.status === "duplicate") {

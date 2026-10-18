@@ -251,6 +251,8 @@ model EsimOrder {
   receiptSentAt        DateTime?                  @map("receipt_sent_at")
   recoveryAttempts     EsimOrderRecoveryAttempt[]
   airaloSnapshots      AiraloOrderSnapshot[]
+  fulfilledAt          DateTime?
+  affiliateCommission  AffiliateCommission?
 }
 
 model EsimProfile {
@@ -359,6 +361,16 @@ model CheckoutSession {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   payments        PaymentTransaction[]
+  affiliate       AffiliateProfile? @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+  affiliateId     String?
+  affiliateCode   String?
+  affiliateRateBps Int?
+  affiliateSource String?
+  affiliateCheckedAt DateTime?
+  affiliateCommission AffiliateCommission?
+  affiliateAdjustments AffiliateSaleAdjustment[]
+
+  @@index([affiliateId, createdAt])
 }
 
 model PaymentTransaction {
@@ -435,6 +447,153 @@ model User {
   orders       EsimOrder[]
   payments     PaymentTransaction[]
   identities   UserIdentity[]
+  affiliate    AffiliateProfile?
+}
+
+model AffiliateProgramSettings {
+  id             String   @id @default("program")
+  enabled        Boolean  @default(false)
+  defaultRateBps Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model AffiliateProfile {
+  id              String @id @default(cuid())
+  userId          String @unique
+  user            User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  code            String @unique
+  legalName       String
+  publicName      String
+  country         String
+  contactEmail    String
+  phone           String
+  businessName    String?
+  promotion       String
+  status          String @default("pending")
+  rateOverrideBps Int?
+  termsVersion    String
+  termsAcceptedAt DateTime @default(now())
+  statusReason    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  checkouts       CheckoutSession[]
+  commissions     AffiliateCommission[]
+  ledger          AffiliateLedgerEntry[]
+  payouts         AffiliatePayout[]
+  notifications   AffiliateNotification[]
+}
+
+model AffiliateCommission {
+  id                String @id @default(cuid())
+  checkoutId        String @unique
+  checkout          CheckoutSession @relation(fields: [checkoutId], references: [id], onDelete: Restrict)
+  orderId           String @unique
+  order             EsimOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  affiliateId       String
+  affiliate         AffiliateProfile @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+  currency          String
+  saleCents         Int
+  rateBps           Int
+  commissionCents   Int
+  refundedSaleCents Int @default(0)
+  onHold            Boolean @default(false)
+  holdReason        String?
+  fulfilledAt       DateTime
+  availableAt       DateTime
+  createdAt         DateTime @default(now())
+  ledger            AffiliateLedgerEntry[]
+
+  @@index([affiliateId, availableAt])
+}
+
+model AffiliateLedgerEntry {
+  id             String @id @default(cuid())
+  affiliateId    String
+  affiliate      AffiliateProfile @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+  commissionId   String
+  commission     AffiliateCommission @relation(fields: [commissionId], references: [id], onDelete: Restrict)
+  kind           String
+  amountCents    Int
+  currency       String
+  availableAt    DateTime
+  reason         String?
+  reference      String?
+  saleRefundCents Int @default(0)
+  adjustmentId   String? @unique
+  adjustment     AffiliateSaleAdjustment? @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+  idempotencyKey String @unique
+  createdAt      DateTime @default(now())
+  allocations    AffiliatePayoutAllocation[]
+
+  @@index([affiliateId, currency, availableAt])
+}
+
+model AffiliateSaleAdjustment {
+  id              String @id @default(cuid())
+  checkoutId      String
+  checkout        CheckoutSession @relation(fields: [checkoutId], references: [id], onDelete: Restrict)
+  saleRefundCents Int
+  reference       String
+  reason          String
+  actorEmail      String
+  idempotencyKey  String @unique
+  createdAt       DateTime @default(now())
+  ledgerEntry     AffiliateLedgerEntry?
+
+  @@index([checkoutId, createdAt])
+}
+
+model AffiliatePayout {
+  id                     String @id @default(cuid())
+  affiliateId            String
+  affiliate              AffiliateProfile @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+  currency               String
+  amountCents            Int
+  status                 String @default("prepared")
+  period                 String
+  note                   String?
+  preparedBy             String
+  transferReference      String?
+  paidAt                 DateTime?
+  transferAmount         Decimal? @db.Decimal(20, 6)
+  transferCurrency       String?
+  exchangeRate           Decimal? @db.Decimal(20, 10)
+  fees                   Decimal? @db.Decimal(20, 6)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  allocations            AffiliatePayoutAllocation[]
+
+  @@index([affiliateId, createdAt])
+}
+
+model AffiliatePayoutAllocation {
+  id            String @id @default(cuid())
+  payoutId      String
+  payout        AffiliatePayout @relation(fields: [payoutId], references: [id], onDelete: Restrict)
+  ledgerEntryId String
+  ledgerEntry   AffiliateLedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+  releasedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([ledgerEntryId])
+  @@index([payoutId])
+}
+
+model AffiliateNotification {
+  id             String @id @default(cuid())
+  affiliateId    String
+  affiliate      AffiliateProfile @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+  idempotencyKey String @unique
+  recipient      String
+  subject        String
+  text           String
+  attempts       Int @default(0)
+  nextAttemptAt  DateTime @default(now())
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([sentAt, nextAttemptAt])
 }
 
 model UserIdentity {

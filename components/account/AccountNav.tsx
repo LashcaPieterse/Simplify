@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/account/receipts", label: "Receipts" },
   { href: "/account/profile", label: "Profile" },
   { href: "/account/payments", label: "Payments" },
+  { href: "/account/affiliate", label: "Guide earnings" },
 ] as const;
 
 export function AccountNav() {

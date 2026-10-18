@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { stampAffiliateFulfilment } from "../affiliates/accounting";
 
 import type { AiraloClient } from "../airalo/client";
 import type {
@@ -327,6 +328,7 @@ export async function ensureOrderInstallation(
         payload,
       },
     });
+    await stampAffiliateFulfilment(tx, existing.id);
   };
 
   if (isPrismaClient(db)) {

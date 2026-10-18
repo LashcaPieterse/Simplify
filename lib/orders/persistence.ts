@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { stampAffiliateFulfilment } from "../affiliates/accounting";
 
 import type {
   SubmitOrderAsyncAck,
@@ -313,6 +314,7 @@ export async function persistOrderRecords(
       }
     }
 
+    await stampAffiliateFulfilment(tx, orderRecord.id);
     return orderRecord;
   };
 

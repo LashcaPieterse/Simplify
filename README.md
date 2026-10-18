@@ -117,6 +117,10 @@ RECEIPT_EMAIL_FROM=receipts@<your-domain>
 METRICS_BEARER_TOKEN=<long-random-string>
 ```
 
+## Tour guide affiliates
+
+The affiliate program ships disabled. See [the affiliate operations guide](docs/operations/affiliate-program.md) for migration/configuration, guide approval, commission rules, refunds, monitoring, and monthly manual payouts. The public application is `/affiliates`, guide earnings are at `/account/affiliate`, and administration is at `/admin/affiliates`.
+
 ## Customer OAuth
 
 NextAuth and the Google OAuth client must use the same canonical production

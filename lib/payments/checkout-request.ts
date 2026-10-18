@@ -2,6 +2,7 @@ export class CheckoutRequestError extends Error {
   constructor(
     message: string,
     readonly status = 422,
+    readonly field?: string,
   ) {
     super(message);
     this.name = "CheckoutRequestError";

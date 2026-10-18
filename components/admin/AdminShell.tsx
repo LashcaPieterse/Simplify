@@ -15,6 +15,7 @@ const navItems = [
   { href: "/admin/pricing-audits" as Route, label: "Pricing Audits" },
   { href: "/admin/settings" as Route, label: "Settings" },
   { href: "/admin/operations" as Route, label: "Operations" },
+  { href: "/admin/affiliates" as Route, label: "Affiliates" },
 ] satisfies { href: Route; label: string }[];
 
 export function AdminShell({ children, adminEmail }: { children: ReactNode; adminEmail: string }) {

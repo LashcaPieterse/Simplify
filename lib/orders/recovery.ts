@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { stampAffiliateFulfilment, safelyAccrueCommission } from "../affiliates/accounting";
 
 import type { AiraloClient } from "../airalo/client";
 import { WebhookPayloadSchema, type Order } from "../airalo/schemas";
@@ -127,6 +128,7 @@ export async function applyRecoveredPurchase(
   await tx.esimOrderRecoveryAttempt.create({
     data: { orderId: order.id, identifier: data.order_id, result: "success" },
   });
+  await stampAffiliateFulfilment(tx, order.id);
 }
 
 export async function recoverAiraloOrders(options: {
@@ -164,6 +166,7 @@ export async function recoverAiraloOrders(options: {
       const purchase = await resolveRecoveryPurchase(order, airalo);
       if (!purchase) throw new Error("No exact supplier purchase found; keep submission blocked and reconcile manually.");
       await db.$transaction((tx) => applyRecoveredPurchase(tx, order, purchase));
+      await safelyAccrueCommission(order.id, db);
       summary.recovered += 1;
     } catch (error) {
       summary.unresolved += 1;

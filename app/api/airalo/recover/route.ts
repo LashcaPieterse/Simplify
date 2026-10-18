@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { recoverAiraloOrders } from "@/lib/orders/recovery";
 import { authenticateRecoveryRequest } from "@/lib/orders/recovery-auth";
+import { reconcileAffiliateCommissions } from "@/lib/affiliates/accounting";
+import { deliverAffiliateNotifications } from "@/lib/affiliates/notifications";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -11,8 +13,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const result = await recoverAiraloOrders({ limit: 5 });
-    return NextResponse.json(result);
+    // Accounting continues even when the supplier is unavailable, and cannot invalidate its acknowledgements.
+    const [recovery, affiliateWork] = await Promise.allSettled([recoverAiraloOrders({ limit: 5 }), (async () => {
+      const commissions = await reconcileAffiliateCommissions();
+      const notifications = await deliverAffiliateNotifications();
+      return { ...commissions, notifications };
+    })()]);
+    if (affiliateWork.status === "rejected") console.error("affiliate.recovery.failed");
+    if (recovery.status === "rejected") throw recovery.reason;
+    return NextResponse.json({ ...recovery.value, ...(affiliateWork.status === "fulfilled" ? { affiliates: affiliateWork.value } : {}) });
   } catch (error) {
     console.error("Airalo recovery job failed", {
       message: error instanceof Error ? error.message : "Unknown error",

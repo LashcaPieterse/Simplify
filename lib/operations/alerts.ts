@@ -37,6 +37,7 @@ export type MonitorSnapshot = {
     responseValid: boolean;
   };
   monitor: { active: boolean | null; lastSuccess: Date | null };
+  affiliates?: { overdueCommissions: number; overdueNotifications: number };
 };
 
 const minutes = (now: Date, then: Date | null) => then ? (now.getTime() - then.getTime()) / 60000 : Infinity;
@@ -55,6 +56,8 @@ export function firstPaymentApproval(history: string | null, fallback: Date): Da
 
 export function findProductionIncidents(snapshot: MonitorSnapshot, now: Date): Incident[] {
   const incidents: Incident[] = [];
+  if (snapshot.affiliates?.overdueCommissions) incidents.push({ key: "affiliates:commissions", category: "affiliate_commissions_delayed", entityId: null, title: "Affiliate commission reconciliation is delayed", detail: `${snapshot.affiliates.overdueCommissions} fulfilled paid referrals have waited over thirty minutes for commission posting. Review Admin → Affiliates and the protected recovery scheduler.` });
+  if (snapshot.affiliates?.overdueNotifications) incidents.push({ key: "affiliates:notifications", category: "affiliate_notifications_delayed", entityId: null, title: "Affiliate email delivery is delayed", detail: `${snapshot.affiliates.overdueNotifications} affiliate emails have waited over an hour. Review Admin → Affiliates and the email sender configuration.` });
   const manualOrders = new Set<string>();
   for (const order of snapshot.supplierOrders) {
     const age = minutes(now, order.createdAt);

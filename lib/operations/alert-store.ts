@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { affiliateInfrastructureEnabled } from "../affiliates/referral";
 
 import type { SendEmailOptions } from "../notifications/email";
 import { resolveReceiptDeliveryDetails } from "../notifications/receipts";
@@ -72,6 +73,11 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
             (SELECT max(completed_at) FROM recovery_ops.monitor_requests WHERE http_status = 200 AND response_valid) AS "monitorSuccess"`,
       ]);
       const health = healthRows[0];
+      const now = Date.now();
+      const affiliates = affiliateInfrastructureEnabled() ? {
+        overdueCommissions: await db.checkoutSession.count({ where: { affiliateId: { not: null }, affiliateCommission: null, order: { is: { fulfilledAt: { lte: new Date(now - 30 * 60_000) } } }, payments: { some: { status: "approved" } } } }),
+        overdueNotifications: await db.affiliateNotification.count({ where: { sentAt: null, createdAt: { lte: new Date(now - 60 * 60_000) } } }),
+      } : undefined;
       let responseValid = false;
       try {
         const summary = JSON.parse(health.responseBody ?? "null");
@@ -79,6 +85,7 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
       } catch { /* A 200 HTML/error response is not a successful recovery response. */ }
       return {
         activatedAt: config.activatedAt,
+        affiliates,
         checkouts: checkouts.map(checkout => ({
           id: checkout.id, intent: checkout.intent,
           paidAt: firstPaymentApproval(checkout.payments[0]?.statusHistory ?? null, checkout.payments[0]?.updatedAt ?? checkout.updatedAt),

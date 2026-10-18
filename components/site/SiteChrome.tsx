@@ -83,6 +83,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
             <Link className="w-fit hover:text-accent-200" href="/route-builder">Build your route</Link>
             <Link className="w-fit hover:text-accent-200" href="/compatibility">Device compatibility</Link>
             <Link className="w-fit hover:text-accent-200" href="/business">Business travel</Link>
+            <Link className="w-fit hover:text-accent-200" href="/affiliates">Tour guide partners</Link>
           </div></div>
           <div><h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-200">Here to help</h2><div className="mt-6 grid gap-3 text-sm text-brand-100">
             <Link className="w-fit hover:text-accent-200" href="/help">Help centre</Link>

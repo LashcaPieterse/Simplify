@@ -37,6 +37,14 @@ test("healthy recovery and deliveries produce no production alerts", () => {
   assert.deepEqual(findProductionIncidents(snapshot, now), []);
 });
 
+test("affiliate monitoring reports overdue accounting and notification queues", () => {
+  const snapshot = healthy();
+  snapshot.affiliates = { overdueCommissions: 2, overdueNotifications: 1 };
+  assert.deepEqual(findProductionIncidents(snapshot, now).map(incident => incident.key), ["affiliates:commissions", "affiliates:notifications"]);
+  snapshot.affiliates = { overdueCommissions: 0, overdueNotifications: 0 };
+  assert.deepEqual(findProductionIncidents(snapshot, now), []);
+});
+
 test("paid checkouts alert only after the payment grace period", () => {
   const snapshot = healthy();
   snapshot.checkouts = [checkout(), { ...checkout(), id: "newly-paid", paidAt: ago(9) }];

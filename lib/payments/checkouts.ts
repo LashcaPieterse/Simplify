@@ -1,4 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { resolveCheckoutReferral } from "../affiliates/program";
+import { safelyAccrueCommission } from "../affiliates/accounting";
 import { z } from "zod";
 
 import {
@@ -64,6 +66,7 @@ const checkoutInputSchema = z.object({
   topUpForOrderId: z.string().min(1).optional(),
   topUpForIccid: z.string().min(1).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  affiliateCode: z.string().trim().max(32).optional(),
 });
 
 export type CreateCheckoutInput = z.infer<typeof checkoutInputSchema>;
@@ -128,7 +131,7 @@ async function resolveCheckoutUserId(
 
 export async function createCheckout(
   rawInput: CreateCheckoutInput,
-  options: { prisma?: PrismaClient; baseUrl: string; userId?: string },
+  options: { prisma?: PrismaClient; baseUrl: string; userId?: string; referralToken?: string | null; dpoClient?: Pick<DpoClient, "createTransaction"> },
 ): Promise<CreateCheckoutResult> {
   const parsed = checkoutInputSchema.safeParse(rawInput);
 
@@ -202,6 +205,12 @@ export async function createCheckout(
   const priceCents = packagePrice.sellingPriceCents;
   const totalCents = priceCents * quantity;
 
+  const referral = await resolveCheckoutReferral({
+    affiliateCode: input.affiliateCode, referralToken: options.referralToken,
+    userId: checkoutUserId, customerEmail: input.customerEmail, intent: input.intent ?? "purchase",
+    topUpForOrderId: input.topUpForOrderId, topUpForIccid: input.topUpForIccid,
+  }, db);
+
   const checkout = await db.checkoutSession.create({
     data: {
       userId: checkoutUserId,
@@ -215,6 +224,7 @@ export async function createCheckout(
       topUpForOrderId: input.topUpForOrderId ?? null,
       topUpForIccid: input.topUpForIccid ?? null,
       metadata: input.metadata ? serialise(input.metadata) : null,
+      ...referral,
     },
   });
 
@@ -222,7 +232,7 @@ export async function createCheckout(
   const cancelUrl = `${options.baseUrl}/checkout/${checkout.id}`;
   const callbackUrl = `${options.baseUrl}/api/payments/dpo/push`;
 
-  const dpoClient = resolveDpoClient();
+  const dpoClient = options.dpoClient ?? resolveDpoClient();
   const amount = centsToMajorUnits(totalCents);
 
   logOrderInfo("payments.checkout.create", {
@@ -453,6 +463,7 @@ async function verifyCheckoutPaymentRecord(
     prisma: PrismaClient;
     source: string;
     dpoClient?: Pick<DpoClient, "verifyTransaction">;
+    airaloOptions?: CreateOrderOptions;
   },
 ): Promise<VerifyPaymentTransactionResult> {
   const db = options.prisma;
@@ -462,6 +473,7 @@ async function verifyCheckoutPaymentRecord(
       const order = await finaliseOrderFromCheckout(checkout.id, {
         prisma: db,
         forceStatus: STATUS_APPROVED,
+        airaloOptions: options.airaloOptions,
       });
       return {
         paymentStatus: payment.status,
@@ -605,6 +617,7 @@ async function verifyCheckoutPaymentRecord(
       const order = await finaliseOrderFromCheckout(checkout.id, {
         prisma: db,
         forceStatus: normalizedStatus,
+        airaloOptions: options.airaloOptions,
       });
       orderId = order.orderId;
       redirectOrderId = order.redirectOrderId ?? order.orderId;
@@ -636,6 +649,7 @@ export async function verifyPaymentTransaction(
     prisma?: PrismaClient;
     source?: string;
     dpoClient?: Pick<DpoClient, "verifyTransaction">;
+    airaloOptions?: CreateOrderOptions;
   } = {},
 ): Promise<VerifyPaymentTransactionResult> {
   const db = options.prisma ?? prismaClient;
@@ -670,6 +684,7 @@ export async function verifyPaymentTransaction(
     prisma: db,
     source: options.source ?? "verify",
     dpoClient: options.dpoClient,
+    airaloOptions: options.airaloOptions,
   });
 }
 
@@ -1030,6 +1045,7 @@ export async function finaliseOrderFromCheckout(
             order: result,
           });
         }
+        if (checkout.affiliateId) await safelyAccrueCommission(result.orderId, db);
         sendOrderReceipt(result.orderId, {
           prisma: options.prisma ?? prismaClient,
         }).catch((error) => {
@@ -1081,6 +1097,8 @@ export async function finaliseOrderFromCheckout(
       orderId: order.orderId,
       paymentId: payment.id,
     });
+
+    if (checkout.affiliateId) await safelyAccrueCommission(order.orderId, db);
 
     sendOrderReceipt(order.orderId, { prisma: options.prisma ?? prismaClient }).catch((error) => {
       logOrderError("payments.receipt.send_failed", {

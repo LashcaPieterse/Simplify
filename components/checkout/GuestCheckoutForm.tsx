@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,7 @@ import Link from "next/link";
 type CheckoutResponseBody = {
   checkoutId?: string;
   message?: string;
+  field?: string;
   issues?: { message?: string; path?: (string | number)[] }[];
 };
 
@@ -30,6 +31,24 @@ export function GuestCheckoutForm({
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [affiliateEnabled, setAffiliateEnabled] = useState(false);
+  const [affiliateCode, setAffiliateCode] = useState("");
+  const [affiliateError, setAffiliateError] = useState<string | null>(null);
+  const [guide, setGuide] = useState<{ publicName: string; code: string } | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/affiliates/referral${affiliateCode.trim() ? `?code=${encodeURIComponent(affiliateCode.trim())}` : ""}`, { signal: controller.signal });
+        if (!response.ok) return;
+        const data = await response.json();
+        setAffiliateEnabled(Boolean(data.enabled));
+        setGuide(data.guide ?? null);
+      } catch { /* Checkout remains usable if optional referral preview is unavailable. */ }
+    }, affiliateCode ? 300 : 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [affiliateCode]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +58,7 @@ export function GuestCheckoutForm({
     }
 
     setError(null);
+    setAffiliateError(null);
     setIsPending(true);
 
     try {
@@ -49,12 +69,17 @@ export function GuestCheckoutForm({
           packageId,
           customerEmail: email,
           quantity,
+          ...(affiliateCode.trim() ? { affiliateCode: affiliateCode.trim() } : {}),
         }),
       });
       trackEvent("checkout_started", { package_id: packageId, quantity });
       const data = (await response.json().catch(() => ({}))) as CheckoutResponseBody;
 
       if (!response.ok) {
+        if (data.field === "affiliateCode") {
+          setAffiliateError(data.message ?? "Check this referral code.");
+          return;
+        }
         setError(
           data.issues?.[0]?.message ??
             data.message ??
@@ -109,6 +134,14 @@ export function GuestCheckoutForm({
           disabled={isPending}
         />
       </label>
+
+      {affiliateEnabled ? <div className="rounded-2xl border border-brand-100 p-4">
+        <label htmlFor="affiliate-code" className="block text-sm font-bold text-brand-900">Guide referral code (optional)</label>
+        <input id="affiliate-code" name="affiliateCode" value={affiliateCode} maxLength={32} onChange={event => { setAffiliateCode(event.target.value); setAffiliateError(null); setGuide(null); }} disabled={isPending} aria-invalid={Boolean(affiliateError)} aria-describedby="affiliate-code-help" autoComplete="off" className="mt-2 h-12 w-full rounded-xl border border-brand-200 px-3.5 text-base uppercase text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-200" />
+        <p id="affiliate-code-help" className="mt-2 text-xs leading-6 text-brand-600">{guide ? `Referred by ${guide.publicName}. Your guide may earn commission at no extra cost to you.` : "Enter your guide’s code. Referral codes provide attribution, with no change to the price."}</p>
+        {guide && !affiliateCode.trim() ? <button type="button" className="mt-1 text-xs font-semibold text-brand-600 underline" disabled={isPending} onClick={async () => { const response = await fetch("/api/affiliates/referral", { method: "DELETE" }); if (response.ok) setGuide(null); }}>Forget remembered guide</button> : null}
+        {affiliateError ? <p role="alert" className="mt-2 text-sm font-semibold text-rose-700">{affiliateError}</p> : null}
+      </div> : null}
 
       <label className="flex items-start gap-3 rounded-2xl bg-brand-50 p-4 text-sm leading-6 text-brand-700">
         <input type="checkbox" required checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-4 w-4 rounded border-brand-300 text-brand-700 focus:ring-brand-500" disabled={isPending} />

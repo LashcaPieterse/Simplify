@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
+import { REFERRAL_COOKIE } from "@/lib/affiliates/referral";
 import { getServerSession } from "next-auth";
 
 import { Prisma } from "@prisma/client";
@@ -20,6 +21,7 @@ export const dynamic = "force-dynamic";
 function resolveCheckoutError(error: unknown): {
   message: string;
   status: number;
+  field?: string;
 } {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     console.error("Checkout failed with Prisma known request error", {
@@ -67,7 +69,7 @@ function resolveCheckoutError(error: unknown): {
 
   if (error instanceof Error) {
     if (error instanceof CheckoutRequestError) {
-      return { message: error.message, status: error.status };
+      return { message: error.message, status: error.status, field: error.field };
     }
 
     return { message: error.message, status: 422 };
@@ -76,7 +78,7 @@ function resolveCheckoutError(error: unknown): {
   return { message: "Failed to create checkout.", status: 422 };
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.json();
     const session = await getServerSession(authOptions);
@@ -115,6 +117,7 @@ export async function POST(request: Request) {
     const result = await createCheckout(payload, {
       baseUrl,
       userId: session?.user?.id,
+      referralToken: request.cookies.get(REFERRAL_COOKIE)?.value,
     });
 
     const response = NextResponse.json(result, { status: 201 });
@@ -126,7 +129,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const resolved = resolveCheckoutError(error);
     return NextResponse.json(
-      { message: resolved.message },
+      { message: resolved.message, field: resolved.field },
       { status: resolved.status },
     );
   }
