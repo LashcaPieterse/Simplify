@@ -629,6 +629,78 @@ test("syncAiraloCatalog follows Airalo pagination metadata and stores documented
   );
 });
 
+for (const type of ["sim", "topup"] as const) {
+  test(`syncAiraloCatalog keeps ${type} selling prices aligned with current retail`, async () => {
+    const id = type === "sim" ? "cellsa-15days-unlimited" : "cellsa-15days-unlimited-topup";
+    const pkg = {
+      id,
+      type,
+      title: "Unlimited - 15 days",
+      data: "Unlimited",
+      day: 15,
+      is_unlimited: true,
+      // The explicit multi-currency retail price takes precedence over this legacy field.
+      price: 68,
+      prices: {
+        net_price: { USD: 56.5 },
+        recommended_retail_price: { EUR: 60, USD: 68 },
+      },
+    };
+    const country = {
+      country_code: "ZA",
+      slug: "south-africa",
+      title: "South Africa",
+      operators: [{ id: 100, title: "CellSA", packages: [pkg] }],
+    };
+    const client = new MockPackageTreeClient({
+      1: {
+        rawResponse: { data: [country], meta: { current_page: 1, last_page: 1 } },
+        countries: [country],
+      },
+    });
+    const prisma = new InMemoryCatalogPrisma();
+    const sync = () => syncAiraloCatalog({
+      prisma: prisma as unknown as PrismaClient,
+      client: client as unknown as AiraloClient,
+      logger: NOOP_LOGGER,
+      syncRunId: `retail-sync-${type}`,
+    });
+    const assertPrices = (retail: number) => {
+      const record = prisma.packages.get(id);
+      assert(record?.state);
+      assert.equal(record.price, retail);
+      assert.equal(record.state.sellingPriceCents, Math.round(retail * 100));
+      assert.equal(record.state.sellPriceDecimal, retail);
+      assert.equal(record.state.currencyCode, "USD");
+      assert.equal(record.netPrice, 56.5);
+      assert.equal(record.state.basePriceCents, 5650);
+    };
+
+    assert.equal((await sync()).packagesCreated, 1);
+    assertPrices(68);
+
+    // A retail reduction must also reach selling prices when it falls below cost.
+    pkg.prices.recommended_retail_price = { EUR: 45, USD: 51 };
+    assert.equal((await sync()).packagesUpdated, 1);
+    assertPrices(51);
+
+    pkg.prices.recommended_retail_price = { EUR: 65, USD: 74.5 };
+    assert.equal((await sync()).packagesUpdated, 1);
+    assertPrices(74.5);
+
+    // Repair existing drift even when the supplier's package has not changed.
+    const record = prisma.packages.get(id);
+    assert(record?.state);
+    record.state.sellingPriceCents = 9900;
+    record.state.sellPriceDecimal = 99;
+    assert.equal((await sync()).packagesUpdated, 1);
+    assertPrices(74.5);
+
+    assert.equal((await sync()).packagesUnchanged, 1);
+    assertPrices(74.5);
+  });
+}
+
 test("syncAiraloCatalog continues when raw package snapshot column is not migrated yet", async () => {
   const now = new Date("2026-05-08T12:30:00.000Z");
   const warnings: string[] = [];

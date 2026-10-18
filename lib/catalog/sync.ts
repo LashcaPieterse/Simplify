@@ -686,17 +686,15 @@ export async function syncAiraloCatalog(
               include: { state: true },
             });
 
-            const previousSellCents = existingPackage?.state?.sellingPriceCents ?? null;
-            const previousSellDecimal = decimalToNumber(existingPackage?.state?.sellPriceDecimal);
-
             const stateData = {
               isActive: true,
               deactivatedAt: null as Date | null,
               basePriceCents: normalized.basePriceCents,
-              sellingPriceCents: previousSellCents ?? normalized.defaultSellingPriceCents,
+              // Selling prices always follow Airalo's current recommended retail price.
+              sellingPriceCents: normalized.defaultSellingPriceCents,
               currencyCode: normalized.currency,
               sourcePriceDecimal: normalized.sourcePriceDecimal,
-              sellPriceDecimal: previousSellDecimal ?? normalized.defaultSellPriceDecimal,
+              sellPriceDecimal: normalized.defaultSellPriceDecimal,
               lastSyncedAt: now,
               sourceHash: normalized.sourceHash,
             };
