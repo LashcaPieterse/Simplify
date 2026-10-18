@@ -28,9 +28,13 @@ export const metadata: Metadata = {
     description: "Africa-focused travel eSIMs from a current supplier catalogue.",
   },
   icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }, { url: "/favicon.png", type: "image/png", sizes: "500x500" }],
-    shortcut: "/favicon.png",
-    apple: [{ url: "/favicon.png", type: "image/png", sizes: "500x500" }]
+    icon: [
+      { url: "/favicon.ico?v=2", type: "image/x-icon", sizes: "16x16 32x32 48x48" },
+      { url: "/favicon.png?v=2", type: "image/png", sizes: "500x500" },
+      { url: "/favicon.svg?v=2", type: "image/svg+xml", sizes: "any" }
+    ],
+    shortcut: "/favicon.ico?v=2",
+    apple: [{ url: "/apple-touch-icon.png?v=2", type: "image/png", sizes: "180x180" }]
   }
 };
 
