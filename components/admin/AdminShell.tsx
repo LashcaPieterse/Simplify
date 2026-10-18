@@ -32,11 +32,14 @@ export function AdminShell({ children, adminEmail }: { children: ReactNode; admi
         </div>
         <nav className="mt-8 space-y-1">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const isActive =
+              pathname === item.href ||
+              (item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
                   isActive ? "bg-brand-900 text-white" : "text-slate-700 hover:bg-slate-50"
                 }`}
