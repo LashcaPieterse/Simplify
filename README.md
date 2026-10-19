@@ -107,8 +107,10 @@ NEXT_PUBLIC_APP_URL=https://<your-domain>
 NEXTAUTH_URL=https://<your-domain>
 NEXTAUTH_SECRET=<long-random-string>
 ORDER_ACCESS_SECRET=<long-random-string>
-DPO_COMPANY_TOKEN=<dpo-company-token>
-DPO_SERVICE_TYPE=<dpo-service-type>
+DPO_TEST_COMPANY_TOKEN=<dpo-test-company-id>
+DPO_TEST_SERVICE_TYPE=<dpo-test-service-id>
+DPO_LIVE_COMPANY_TOKEN=<dpo-live-company-id>
+DPO_LIVE_SERVICE_TYPE=<dpo-live-service-id>
 DPO_SERVICE_URL=https://secure.3gdirectpay.com/API/v6
 DPO_PAYMENT_URL=https://secure.3gdirectpay.com
 DPO_IPN_SECRET=<long-random-string>
@@ -116,6 +118,8 @@ RESEND_API_KEY=<resend-api-key>
 RECEIPT_EMAIL_FROM=receipts@<your-domain>
 METRICS_BEARER_TOKEN=<long-random-string>
 ```
+
+Apply the DPO gateway migration before deployment. The main admin dashboard switches all new checkouts between test and live; existing payments retain their original mode. Initial mode is test, and the old `DPO_COMPANY_TOKEN` / `DPO_SERVICE_TYPE` pair remains a test-only fallback. See the [DPO runbook](docs/operations/dpo-payments.md) for rollout and callback configuration.
 
 ## Tour guide affiliates
 

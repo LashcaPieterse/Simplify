@@ -46,6 +46,7 @@ import {
   type DpoClient,
   type VerifyDpoTransactionResult,
 } from "./dpo";
+import { getActiveDpoMode } from "./dpo-settings";
 
 const checkoutInputSchema = z.object({
   packageId: z.string().min(1, "A package selection is required."),
@@ -211,6 +212,10 @@ export async function createCheckout(
     topUpForOrderId: input.topUpForOrderId, topUpForIccid: input.topUpForIccid,
   }, db);
 
+  // Snapshot once: an admin switch during the DPO request must not relabel it.
+  const dpoMode = await getActiveDpoMode(db);
+  const dpoClient = options.dpoClient ?? resolveDpoClient(dpoMode);
+
   const checkout = await db.checkoutSession.create({
     data: {
       userId: checkoutUserId,
@@ -232,7 +237,6 @@ export async function createCheckout(
   const cancelUrl = `${options.baseUrl}/checkout/${checkout.id}`;
   const callbackUrl = `${options.baseUrl}/api/payments/dpo/push`;
 
-  const dpoClient = options.dpoClient ?? resolveDpoClient();
   const amount = centsToMajorUnits(totalCents);
 
   logOrderInfo("payments.checkout.create", {
@@ -240,6 +244,7 @@ export async function createCheckout(
     packageId: checkout.packageId,
     amount,
     currency: checkout.currency,
+    dpoMode,
   });
 
   let response: Awaited<ReturnType<typeof dpoClient.createTransaction>>;
@@ -274,6 +279,7 @@ export async function createCheckout(
     data: {
       user: checkoutUserId ? { connect: { id: checkoutUserId } } : undefined,
       provider: PROVIDER,
+      dpoMode,
       providerReference: response.transactionRef ?? response.reference ?? null,
       transactionToken: response.token,
       redirectUrl: response.redirectUrl,
@@ -498,13 +504,13 @@ async function verifyCheckoutPaymentRecord(
     }
   }
 
-  const dpoClient = options.dpoClient ?? resolveDpoClient();
   if (!payment.transactionToken) {
     throw new Error("Payment transaction has no DPO transaction token.");
   }
 
   let verification;
   try {
+    const dpoClient = options.dpoClient ?? resolveDpoClient(payment.dpoMode);
     verification = await dpoClient.verifyTransaction(payment.transactionToken, checkout.id);
     // Log key verification fields to help debug DPO responses in callback and return flows.
     console.info("dpo.verifyTransaction", {

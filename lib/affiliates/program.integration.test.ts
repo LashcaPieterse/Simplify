@@ -49,6 +49,7 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
   await server.start();
   const database = new PrismaClient({ datasources: { db: { url: `postgresql://postgres:postgres@${server.getServerConn()}/postgres?sslmode=disable&connection_limit=1&pool_timeout=30` } } });
   resources.db = database;
+  await database.dpoSettings.create({ data: { id: "dpo" } });
   const actorEmail = "admin@example.test";
   const user = await database.user.create({ data: { email: "guide@example.test", name: "Guide One" } });
   const traveller = await database.user.create({ data: { email: "traveller@example.test", emailVerifiedAt: new Date() } });

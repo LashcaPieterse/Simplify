@@ -8,12 +8,31 @@ Set the following environment variables in production and non-production environ
 
 | Variable | Description |
 | --- | --- |
-| `DPO_COMPANY_TOKEN` | Company token supplied by DPO for API access. |
-| `DPO_SERVICE_TYPE` | Service type identifier supplied by DPO for the product being sold. |
+| `DPO_TEST_COMPANY_TOKEN` | Test Company ID/token supplied by DPO (`CompanyToken` in XML). |
+| `DPO_TEST_SERVICE_TYPE` | Test Service ID supplied by DPO (`ServiceType` in XML). |
+| `DPO_LIVE_COMPANY_TOKEN` | Live Company ID/token supplied by DPO. |
+| `DPO_LIVE_SERVICE_TYPE` | Live Service ID supplied by DPO. |
+| `DPO_COMPANY_TOKEN`, `DPO_SERVICE_TYPE` | Legacy test-only pair, used only when both `DPO_TEST_*` values are empty. Partial explicit test pairs are rejected, and live mode never uses these variables. |
 | `DPO_SERVICE_URL` | Base URL for the DPO API (defaults to `https://secure.3gdirectpay.com/API/v6`). |
 | `DPO_PAYMENT_URL` | Base URL for hosted payment pages (defaults to `https://secure.3gdirectpay.com`). |
 | `NEXTAUTH_SECRET` | Secret used by NextAuth sessions. |
 | `ORDER_ACCESS_SECRET` | Secret used to sign scoped checkout/order access cookies for guest checkouts. |
+
+### Dashboard gateway switch
+
+The main `/admin` dashboard shows the active DPO mode, credential configuration status, and **Switch to live** or **Switch to test**. Only authenticated admins can change it. The button is disabled until the target mode has both credential values. Configuration status confirms presence, not that DPO has accepted the credentials.
+
+The mode is persisted in the singleton `DpoSettings` record. All new purchases and top-ups read it at payment creation, without a process cache or redeployment. Each `PaymentTransaction.dpoMode` preserves the chosen mode; browser return verification, status polling and push callbacks use that saved mode even after an admin switches gateways. Missing settings, missing credentials, and database errors stop creation; verification errors preserve the current payment state for retry. Switches are recorded in `AuditLog` with the previous mode, new mode and admin email, without credentials.
+
+Approved test payments retain normal fulfilment, including Airalo purchases/top-ups, receipts and any supplier charges.
+
+### Initial rollout
+
+1. Configure both credential pairs as server-side deployment secrets. Keep the existing `DPO_SERVICE_URL` and `DPO_PAYMENT_URL`; DPO selects the merchant gateway through the credential pair.
+2. Apply migrations with `npx prisma migrate deploy` before deploying the new application. Migration `20261019120000_add_dpo_gateway_mode` initializes test mode, marks existing DPO transactions as test, and restricts settings-table access to the backend.
+3. Deploy the application. Existing legacy credentials continue to work for test mode until the explicit test pair is configured.
+4. Sign in to `/admin`, verify the configuration status, and use the button to select the desired mode. Verify the hosted gateway redirect. Later switches require no redeployment.
+5. Keep both pairs configured while payments from either mode remain in progress. Configure the Push Payments Callback for both DPO merchant accounts using the URL below.
 
 `NEXT_PUBLIC_APP_URL` or `NEXTAUTH_URL` must point to the canonical public HTTPS origin so checkout creation can construct trusted absolute callback URLs. Production checkout fails closed when neither is configured and never trusts a client-supplied `Origin` header for payment callbacks.
 
@@ -66,8 +85,8 @@ See DPO's [Push Payments Callback contract](https://docs.dpopay.com/dpo-pay-by-n
 ### Credential rotation
 
 1. Request new credentials from DPO (company token, service type).
-2. Update platform secrets and redeploy.
-3. Verify health by creating a checkout in the sandbox environment and ensuring it moves to `approved` status.
+2. Update the relevant `DPO_TEST_*` or `DPO_LIVE_*` platform secrets as a complete pair and redeploy. Pending payments require access to the original merchant account; the mode snapshot does not version rotated credentials.
+3. Verify health by creating a checkout in the corresponding mode and checking its hosted gateway. Complete payment verification in a controlled test.
 
 ## Metrics and logging
 

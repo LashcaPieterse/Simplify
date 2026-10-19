@@ -3,9 +3,12 @@ import type { Prisma } from "@prisma/client";
 import { SimpleBarChart } from "@/components/admin/SimpleBarChart";
 import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
 import { RunSanitySyncButton } from "@/components/admin/RunSanitySyncButton";
+import { DpoGatewayControl } from "@/components/admin/DpoGatewayControl";
 import prisma from "@/lib/db/client";
 import { formatCurrency } from "@/lib/format";
 import { getCatalogMismatches } from "@/lib/catalog/mismatches";
+import { getActiveDpoMode } from "@/lib/payments/dpo-settings";
+import { getDpoCredentialStatus } from "@/lib/payments/dpo";
 
 function dateRangeFromParams(range?: string) {
   const now = new Date();
@@ -23,7 +26,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   const rangeKey = typeof resolvedSearchParams?.range === "string" ? resolvedSearchParams.range : "30d";
   const rangeStart = dateRangeFromParams(rangeKey);
 
-  const mismatches = await getCatalogMismatches();
+  const [mismatches, dpoMode] = await Promise.all([getCatalogMismatches(), getActiveDpoMode()]);
 
   const orders = await prisma.esimOrder.findMany({
     where: { createdAt: { gte: rangeStart } },
@@ -131,6 +134,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
           </button>
         </form>
       </div>
+
+      <DpoGatewayControl activeMode={dpoMode} configured={getDpoCredentialStatus()} />
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-sm font-semibold text-slate-900">Catalog publish</p>

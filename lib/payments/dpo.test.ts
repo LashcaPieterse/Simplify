@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DpoClient } from "./dpo";
+import { DpoClient, getDpoCredentialStatus, resolveDpoClient } from "./dpo";
 
 function xmlResponse(body: string): Response {
   return new Response(body, {
@@ -182,4 +182,60 @@ test("DpoClient parses documented v6 verifyToken payment fields", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("DPO mode selects a complete credential pair and never falls back to another account", async t => {
+  const values: Record<string, string> = {
+    DPO_TEST_COMPANY_TOKEN: "test-company",
+    DPO_TEST_SERVICE_TYPE: "test-service",
+    DPO_LIVE_COMPANY_TOKEN: "live-company",
+    DPO_LIVE_SERVICE_TYPE: "live-service",
+    DPO_COMPANY_TOKEN: "legacy-company",
+    DPO_SERVICE_TYPE: "legacy-service",
+    DPO_SERVICE_URL: "https://dpo.example/API/v6",
+    DPO_PAYMENT_URL: "https://pay.example",
+  };
+  const previous = Object.fromEntries(Object.keys(values).map(key => [key, process.env[key]]));
+  Object.assign(process.env, values);
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = async (_url, init) => {
+    requests.push(String(init?.body));
+    return xmlResponse("<API3G><Result>000</Result><TransToken>token-123</TransToken></API3G>");
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+    for (const key of Object.keys(values)) {
+      if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+    }
+  });
+
+  const create = (mode: "test" | "live") => resolveDpoClient(mode).createTransaction({
+    amount: 10, currency: "USD", reference: "checkout-1",
+    redirectUrl: "https://example.test/return", cancelUrl: "https://example.test/cancel", callbackUrl: "https://example.test/push",
+  });
+  assert.deepEqual(getDpoCredentialStatus(), { test: true, live: true });
+  assert.equal((await create("test")).redirectUrl, "https://pay.example/payv2.php?ID=token-123");
+  await create("live");
+  assert.match(requests[0], /<CompanyToken>test-company<\/CompanyToken>/);
+  assert.match(requests[0], /<ServiceType>test-service<\/ServiceType>/);
+  assert.match(requests[1], /<CompanyToken>live-company<\/CompanyToken>/);
+  assert.match(requests[1], /<ServiceType>live-service<\/ServiceType>/);
+
+  delete process.env.DPO_TEST_COMPANY_TOKEN;
+  assert.deepEqual(getDpoCredentialStatus(), { test: false, live: true });
+  assert.throws(() => resolveDpoClient("test"), /test credentials are not fully configured/);
+  delete process.env.DPO_TEST_SERVICE_TYPE;
+  await create("test");
+  assert.match(requests[2], /<CompanyToken>legacy-company<\/CompanyToken>/);
+  assert.match(requests[2], /<ServiceType>legacy-service<\/ServiceType>/);
+
+  delete process.env.DPO_LIVE_SERVICE_TYPE;
+  assert.deepEqual(getDpoCredentialStatus(), { test: true, live: false });
+  assert.throws(() => resolveDpoClient("live"), /live credentials are not fully configured/);
+  delete process.env.DPO_LIVE_COMPANY_TOKEN;
+  assert.throws(() => resolveDpoClient("live"), /live credentials are not fully configured/);
+  assert.throws(() => resolveDpoClient(null), /no valid DPO mode/);
+  delete process.env.DPO_SERVICE_TYPE;
+  assert.deepEqual(getDpoCredentialStatus(), { test: false, live: false });
 });

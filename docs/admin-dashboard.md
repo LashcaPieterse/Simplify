@@ -41,6 +41,7 @@ See the full schema in [`prisma/schema.prisma`](../prisma/schema.prisma).
 
 ## Admin components
 
+- `components/admin/DpoGatewayControl.tsx`: shows test/live DPO mode and credential readiness, and switches all new purchases and top-ups through an authenticated server action. Settings persist in `DpoSettings`; existing payments retain `PaymentTransaction.dpoMode`. See the [DPO runbook](operations/dpo-payments.md) for secrets and migration rollout.
 - `components/admin/AdminShell.tsx`: sidebar/top-bar shell.
 - `components/admin/RunSyncButton.tsx`: starts the server-side Airalo sync audit job through `app/api/admin/sync/route.ts`.
 - `components/admin/RunSanitySyncButton.tsx`: starts Sanity catalog publishing.

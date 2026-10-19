@@ -1,3 +1,5 @@
+import type { DpoMode } from "@prisma/client";
+
 export type DpoClientOptions = {
   companyToken: string;
   serviceUrl: string;
@@ -244,15 +246,46 @@ export class DpoClient {
   }
 }
 
-export function resolveDpoClient(): DpoClient {
-  const companyToken = process.env.DPO_COMPANY_TOKEN;
-  const serviceType = process.env.DPO_SERVICE_TYPE;
-  const serviceUrl = process.env.DPO_SERVICE_URL ?? "https://secure.3gdirectpay.com/API/v6";
-  const paymentUrl = process.env.DPO_PAYMENT_URL ?? "https://secure.3gdirectpay.com";
+export function isDpoMode(value: unknown): value is DpoMode {
+  return value === "test" || value === "live";
+}
+
+function resolveDpoCredentials(mode: DpoMode | null) {
+  if (!isDpoMode(mode)) {
+    throw new Error("Payment transaction has no valid DPO mode.");
+  }
+
+  const prefix = mode === "live" ? "DPO_LIVE" : "DPO_TEST";
+  const explicitToken = process.env[`${prefix}_COMPANY_TOKEN`]?.trim();
+  const explicitServiceType = process.env[`${prefix}_SERVICE_TYPE`]?.trim();
+  // Fall back as a complete pair only; never combine credentials from accounts.
+  const useLegacy = mode === "test" && !explicitToken && !explicitServiceType;
+  const companyToken = useLegacy ? process.env.DPO_COMPANY_TOKEN?.trim() : explicitToken;
+  const serviceType = useLegacy ? process.env.DPO_SERVICE_TYPE?.trim() : explicitServiceType;
 
   if (!companyToken || !serviceType) {
-    throw new Error("DPO_COMPANY_TOKEN and DPO_SERVICE_TYPE must be configured to create payments.");
+    throw new Error(`DPO ${mode} credentials are not fully configured.`);
   }
+
+  return { companyToken, serviceType };
+}
+
+export function getDpoCredentialStatus(): Record<DpoMode, boolean> {
+  const configured = (mode: DpoMode) => {
+    try {
+      resolveDpoCredentials(mode);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  return { test: configured("test"), live: configured("live") };
+}
+
+export function resolveDpoClient(mode: DpoMode | null): DpoClient {
+  const { companyToken, serviceType } = resolveDpoCredentials(mode);
+  const serviceUrl = process.env.DPO_SERVICE_URL ?? "https://secure.3gdirectpay.com/API/v6";
+  const paymentUrl = process.env.DPO_PAYMENT_URL ?? "https://secure.3gdirectpay.com";
 
   return new DpoClient({
     companyToken,
