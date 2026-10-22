@@ -9,7 +9,7 @@ export async function GET(request: NextRequest, { params: paramsPromise }: { par
 
   const MAX_ENTITY_SNAPSHOTS = 500;
 
-  const [run, items, responseSnapshots, entitySnapshots, totalEntitySnapshots, audits] = await Promise.all([
+  const [run, items, responseSnapshots, entitySnapshots, totalEntitySnapshots] = await Promise.all([
     prisma.syncRun.findUnique({ where: { id: params.id } }),
     prisma.syncRunItem.findMany({ where: { runId: params.id }, orderBy: { createdAt: "asc" } }),
     prisma.entitySnapshot.findMany({
@@ -24,7 +24,6 @@ export async function GET(request: NextRequest, { params: paramsPromise }: { par
     prisma.entitySnapshot.count({
       where: { runId: params.id, NOT: { entityType: "airalo_response" } },
     }),
-    prisma.pricingAudit.findMany({ where: { runId: params.id }, orderBy: { createdAt: "asc" } }),
   ]);
 
   if (!run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
@@ -33,7 +32,7 @@ export async function GET(request: NextRequest, { params: paramsPromise }: { par
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
   );
 
-  return NextResponse.json({ run, items, snapshots, audits, snapshotLimits: { entitySnapshots: MAX_ENTITY_SNAPSHOTS, totalEntitySnapshots } }, {
+  return NextResponse.json({ run, items, snapshots, snapshotLimits: { entitySnapshots: MAX_ENTITY_SNAPSHOTS, totalEntitySnapshots } }, {
     headers: { "content-disposition": `attachment; filename=sync-run-${params.id}.json` },
   });
 }

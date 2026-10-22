@@ -12,7 +12,6 @@ const navItems = [
   { href: "/admin/packages" as Route, label: "Packages" },
   { href: "/admin/sync" as Route, label: "Sync Center" },
   { href: "/admin/sync-runs" as Route, label: "Sync Runs" },
-  { href: "/admin/pricing-audits" as Route, label: "Pricing Audits" },
   { href: "/admin/settings" as Route, label: "Settings" },
   { href: "/admin/operations" as Route, label: "Operations" },
   { href: "/admin/affiliates" as Route, label: "Affiliates" },

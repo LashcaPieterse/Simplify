@@ -14,7 +14,6 @@ export default defineConfig([...nextVitals, ...nextTypescript, {
 }, globalIgnores([
   ".next/**",
   "node_modules/**",
-  "sanity/**",
   "scripts/**",
   "types/**/*.d.ts",
   "airalo-debug.ts",

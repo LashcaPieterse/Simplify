@@ -9,6 +9,9 @@ When a SIM.Africa doc appears to conflict with the Airalo API exports, update th
 
 ## Current App Docs
 
+- [`content-resources.md`](content-resources.md): local Markdown guide authoring, metadata, and images.
+- [`operations/editorial-removal.md`](operations/editorial-removal.md): verified content export and staged database/service cutover.
+
 - [`admin-dashboard.md`](admin-dashboard.md): admin routes, schema areas, components, and auth.
 - [`airalo-sync-cron.md`](airalo-sync-cron.md): scheduled package sync setup and troubleshooting.
 - [`get-packages-schema-review.md`](get-packages-schema-review.md): how local catalog tables align to Airalo `GET /v2/packages`.

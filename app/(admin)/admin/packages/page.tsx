@@ -44,14 +44,9 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
   const rows = hasNext ? packages.slice(0, PAGE_SIZE) : packages;
   const nextCursor = hasNext ? rows[rows.length - 1].id : null;
 
-  const states = await prisma.publishingState.findMany({
-    where: { packageAiraloId: { in: rows.map((row) => row.airaloPackageId) } },
-  });
-  const statesByPackage = new Map(states.map((item) => [item.packageAiraloId, item]));
-
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Packages pricing integrity</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Package pricing</h1>
       <form className="flex gap-2">
         <input defaultValue={q} name="q" placeholder="Search package/operator/country" className="w-full rounded border border-slate-200 px-3 py-2 text-sm" />
         <button className="button-ribbon-primary rounded-full px-3 py-2 text-sm font-semibold">Search</button>
@@ -60,12 +55,11 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
-              <th className="px-3 py-2 text-left">Package</th><th className="px-3 py-2 text-left">Operator / Country</th><th className="px-3 py-2 text-left">Source</th><th className="px-3 py-2 text-left">DB</th><th className="px-3 py-2 text-left">Published</th><th className="px-3 py-2 text-left">Last synced</th>
+              <th className="px-3 py-2 text-left">Package</th><th className="px-3 py-2 text-left">Operator / Country</th><th className="px-3 py-2 text-left">Source</th><th className="px-3 py-2 text-left">DB</th><th className="px-3 py-2 text-left">Last synced</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((pkg) => {
-              const state = statesByPackage.get(pkg.airaloPackageId);
               const currency = pkg.state?.currencyCode ?? "USD";
               const source = pkg.state?.sourcePriceDecimal?.toString() ?? pkg.netPrice?.toString() ?? "-";
               const dbPrice =
@@ -79,7 +73,6 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
                   <td className="px-3 py-2">{pkg.operator.title} / {pkg.operator.country.title}</td>
                   <td className="px-3 py-2">{source} {currency}</td>
                   <td className="px-3 py-2">{dbPrice} {currency}</td>
-                  <td className="px-3 py-2">{state?.publishedPrice?.toString() ?? "-"} {state?.publishedCurrency ?? currency}</td>
                   <td className="px-3 py-2">{pkg.state?.lastSyncedAt ? formatDate(pkg.state.lastSyncedAt) : "-"}</td>
                 </tr>
               );

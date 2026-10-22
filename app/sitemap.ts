@@ -1,8 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getStorefrontCountries, getStorefrontPlanIdentifiers } from "@/lib/catalog/storefront";
-import { getPosts } from "@/lib/sanity.queries";
-import { isCurrentResource } from "@/lib/content/resources";
+import { getResourcePosts, isCurrentResource } from "@/lib/content/resources";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [countries, planIds, posts] = await Promise.all([
     getStorefrontCountries().catch(() => []),
     getStorefrontPlanIdentifiers().catch(() => []),
-    getPosts().catch(() => []),
+    getResourcePosts(),
   ]);
   const staticPages = [
     "",

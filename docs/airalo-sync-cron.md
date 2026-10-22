@@ -87,4 +87,4 @@ The sync endpoint now acts as the **single source of truth** for package availab
 - Packages missing from the latest upstream dataset are automatically marked inactive (`isActive=false`).
 - After a successful sync, the route triggers `revalidatePath` for home/country/plan pages so static pages refresh without a full redeploy.
 
-This means a scheduler run updates what customers can buy without requiring Sanity edits or a deployment cycle.
+This means a scheduler run updates what customers can buy without manual content edits or a deployment cycle.

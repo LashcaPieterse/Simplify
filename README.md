@@ -1,6 +1,6 @@
 # SIM.Africa
 
-Production eSIM marketplace for African travellers. The storefront uses the synced Airalo/Postgres catalogue as the source of truth for sellable packages, while Sanity manages editorial content and merchandising.
+Production eSIM marketplace for African travellers. The storefront uses the synced Airalo/Postgres catalogue as the source of truth for sellable packages. Travel guides and their images are maintained in this repository.
 
 ## Getting started
 
@@ -13,69 +13,15 @@ npm run dev
 
 Then open http://localhost:3000 to explore the experience.
 
-## Sanity Studio
+## Travel guides
 
-Editorial content and merchandising live in Sanity and are managed through the separately deployed Studio. Package availability, coverage, pricing, and checkout eligibility come from the synced Postgres catalogue; never create sellable packages only in Sanity. The customer runtime intentionally uses only the Sanity API client so Studio CLI dependencies are not shipped with the storefront.
-
-### Configure environment variables
-
-Create `.env.local` and populate the following values:
-
-```
-SANITY_PROJECT_ID=<your-sanity-project-id>
-SANITY_DATASET=production
-SANITY_API_VERSION=2025-01-01
-SANITY_READ_TOKEN=<sanity-token-with-write-access>
-SANITY_STUDIO_BASE_PATH=/studio
-SANITY_PREVIEW_SECRET=<long-random-string>
-SANITY_WEBHOOK_SECRET=<long-random-string>
-```
-
-> Already using `NEXT_PUBLIC_SANITY_PROJECT_ID`/`NEXT_PUBLIC_SANITY_DATASET`? Those environment variables remain supported as a
-> fallback, but the app now prefers the server-only `SANITY_*` variants above.
-
-> Tip: Set `SANITY_STUDIO_PREVIEW_BASE_URL` if the Studio is hosted separately and needs to open the live preview on a specific origin.
-
-### Initialise the dataset
-
-Run the seed script only when intentionally creating the development editorial dataset. Do not run it against production without reviewing the content it will create.
-
-```bash
-npx tsx scripts/seed.ts
-```
-
-### Start the Studio locally
-
-```bash
-npx sanity dev --single --studio-config ./sanity.config.ts
-```
-
-Use `npx sanity deploy --config ./sanity.config.ts` to publish the Studio to its own managed URL when the schema is ready.
+Guides live in `content/resources/*.md` with local images in `public/images/resources/`. Edit Markdown and metadata, run the content tests and build, then deploy. See [the authoring guide](docs/content-resources.md). No external CMS or credentials are required.
 
 ## Database (Supabase/Postgres across environments)
 
 - **Single Prisma schema:** `prisma/schema.prisma` now targets Postgres/Supabase everywhere, backed by the migrations in `prisma/migrations`.
-- **Local + production workflow:** point `DATABASE_URL` at your Supabase Postgres URL (include `?sslmode=require`) and run `npx prisma migrate dev` locally to evolve the schema. Deploy the same migrations to Supabase with `npx prisma migrate deploy` once you’re ready.
+- **Local + production workflow:** point `DATABASE_URL` at your Supabase Postgres URL (include `?sslmode=require`) and run `npx prisma migrate dev` locally to evolve the schema. Deploy the same migrations to Supabase with `npx prisma migrate deploy` once you’re ready. The editorial-publishing removal migration must run **after** the new application is deployed and verified; follow [its rollout procedure](docs/operations/editorial-removal.md).
 - **Safety while shipping the MVP:** until you spin up a separate dev Supabase project, be careful not to point your local environment at the production database. As soon as the MVP stabilizes, create a dedicated dev Supabase project (or schema) so you can iterate without touching production data.
-
-## ISR revalidation webhook
-
-Configure a Vercel deploy hook or generic HTTP request webhook in Sanity that POSTs to `/api/revalidate` with the following JSON body:
-
-```json
-{
-  "_type": "<documentType>",
-  "slug": { "current": "<document-slug>" },
-  "secret": "<SANITY_WEBHOOK_SECRET>"
-}
-```
-
-The handler revalidates the homepage, individual country, plan, bundle, and resource routes. Include `paths` if you need to trigger additional revalidation targets.
-
-## Draft previews
-
-- `/api/preview?secret=<SANITY_PREVIEW_SECRET>&slug=/country/namibia` enables preview mode and redirects to the requested slug.
-- In Studio, use the “Open preview” document action to open a live preview tab for supported document types.
 
 ## Useful commands
 

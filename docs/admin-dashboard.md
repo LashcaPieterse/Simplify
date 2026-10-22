@@ -11,7 +11,6 @@ app/(admin)/admin/
   packages/page.tsx
   packages/[id]/page.tsx
   operations/page.tsx
-  pricing-audits/page.tsx
   settings/page.tsx
   sync/page.tsx
   sync-runs/page.tsx
@@ -22,10 +21,7 @@ app/(admin-auth)/admin/login/
   actions.ts
 
 app/api/admin/
-  catalog-mismatches/route.ts
   health/sync/route.ts
-  publishing-state/route.ts
-  sanity-sync/route.ts
   sync/route.ts
 ```
 
@@ -33,7 +29,6 @@ app/api/admin/
 
 - `Country`, `Operator`, `Package`, `PackageState`: Airalo catalog data plus SIM.Africa selling/availability state.
 - `SyncRun`, `SyncRunItem`, `EntitySnapshot`, `PackageSyncPage`: catalog sync audit trail and raw Airalo page snapshots.
-- `PricingAudit`, `PublishingState`: price drift and Sanity publishing integrity checks.
 - `AdminUser`, `AuditLog`, `SyncJob`: legacy/admin support tables that still exist in the schema.
 - `EsimOrder`, `EsimProfile`, `CheckoutSession`, `PaymentTransaction`: order/payment records surfaced in operational views.
 
@@ -44,10 +39,11 @@ See the full schema in [`prisma/schema.prisma`](../prisma/schema.prisma).
 - `components/admin/DpoGatewayControl.tsx`: shows test/live DPO mode and credential readiness, and switches all new purchases and top-ups through an authenticated server action. Settings persist in `DpoSettings`; existing payments retain `PaymentTransaction.dpoMode`. See the [DPO runbook](operations/dpo-payments.md) for secrets and migration rollout.
 - `components/admin/AdminShell.tsx`: sidebar/top-bar shell.
 - `components/admin/RunSyncButton.tsx`: starts the server-side Airalo sync audit job through `app/api/admin/sync/route.ts`.
-- `components/admin/RunSanitySyncButton.tsx`: starts Sanity catalog publishing.
 - `components/admin/BulkPriceEditor.tsx`: bulk price adjustment controls.
 - `components/admin/KpiCard.tsx`, `SimpleBarChart.tsx`, `SimpleLineChart.tsx`, `StatusBadge.tsx`, `TagPill.tsx`: reusable UI pieces.
 
 ## Auth
 
 Admin login uses `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET`, and optional `ADMIN_ALLOWED_EMAILS`. Successful login creates the HTTP-only `simplify-admin-session` cookie. `lib/admin/guards.ts` protects `/api/admin/*`; page-level admin access is enforced by the admin layout/session helpers.
+
+Sync-run report downloads contain `run`, `items`, `snapshots`, and `snapshotLimits`. Catalogue publishing and published-price comparisons have been retired; storefront and checkout read the supplier catalogue directly.

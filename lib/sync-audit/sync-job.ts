@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import prisma from "@/lib/db/client";
-import type { Prisma } from "@prisma/client";
 import {
   AiraloClient,
   type AiraloCountryNode,
@@ -10,18 +9,11 @@ import {
 import { resolveSharedTokenCache } from "@/lib/airalo/token-cache";
 import { syncAiraloCatalog } from "@/lib/catalog/sync";
 import { logOrderInfo, logOrderWarn } from "@/lib/observability/logging";
-import { getAuditSeverity } from "./utils";
-
-export interface SyncThresholds {
-  deltaPct: number;
-  deltaAbs: number;
-}
 
 export interface RunSyncOptions {
   triggeredBy: string;
   continueOnError?: boolean;
   notes?: string;
-  thresholds?: SyncThresholds;
 }
 
 export interface LegacyAiraloSyncResult {
@@ -63,14 +55,6 @@ function operatorMergeKey(operator: AiraloOperatorNode): string {
 
 function packageMergeKey(pkg: AiraloPackageNode): string {
   return String(pkg.id ?? pkg.slug ?? pkg.title ?? pkg.name ?? "unknown").toLowerCase();
-}
-
-function decimalToNumber(value: Prisma.Decimal | number | string | null | undefined): number | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function mergeAiraloCountryTrees(pages: AiraloCountryNode[][]): AiraloCountryNode[] {
@@ -169,82 +153,6 @@ export async function runSyncAuditJob(options: RunSyncOptions): Promise<RunSyncA
         limit: PACKAGES_PAGE_LIMIT,
       },
     });
-
-    const thresholds = options.thresholds ?? { deltaAbs: 0.5, deltaPct: 1 };
-    const syncedPackages = await prisma.package.findMany({
-      where: {
-        state: {
-          is: {
-            lastSyncedAt: {
-              gte: startedAt,
-            },
-          },
-        },
-      },
-      select: {
-        airaloPackageId: true,
-        price: true,
-        state: {
-          select: {
-            sellPriceDecimal: true,
-            sellingPriceCents: true,
-            sourcePriceDecimal: true,
-            currencyCode: true,
-          },
-        },
-      },
-    });
-
-    const publishingStates = await prisma.publishingState.findMany({
-      where: {
-        packageAiraloId: {
-          in: syncedPackages.map((pkg) => pkg.airaloPackageId),
-        },
-      },
-      select: {
-        packageAiraloId: true,
-        publishedPrice: true,
-      },
-    });
-    const publishingMap = new Map(
-      publishingStates.map((item) => [item.packageAiraloId, item]),
-    );
-
-    for (const pkg of syncedPackages) {
-      const sourcePrice =
-        decimalToNumber(pkg.state?.sourcePriceDecimal) ??
-        decimalToNumber(pkg.price) ??
-        0;
-      const dbPrice =
-        decimalToNumber(pkg.state?.sellPriceDecimal) ??
-        (typeof pkg.state?.sellingPriceCents === "number"
-          ? pkg.state.sellingPriceCents / 100
-          : sourcePrice);
-
-      const publishedRaw = publishingMap.get(pkg.airaloPackageId)?.publishedPrice;
-      const publishedPrice = decimalToNumber(publishedRaw);
-      const deltaAbs = publishedPrice === null ? 0 : Math.abs(dbPrice - publishedPrice);
-      const baseline = publishedPrice || dbPrice || 1;
-      const deltaPct = (deltaAbs / baseline) * 100;
-
-      if (deltaAbs > thresholds.deltaAbs || deltaPct > thresholds.deltaPct) {
-        await prisma.pricingAudit.create({
-          data: {
-            id: randomUUID(),
-            packageAiraloId: pkg.airaloPackageId,
-            runId: run.id,
-            sourcePrice,
-            dbPrice,
-            publishedPrice,
-            currency: pkg.state?.currencyCode ?? "USD",
-            deltaAbs,
-            deltaPct,
-            severity: getAuditSeverity(deltaPct, deltaAbs),
-            status: "open",
-          },
-        });
-      }
-    }
 
     const inserted = syncResult.countriesCreated + syncResult.operatorsCreated + syncResult.packagesCreated;
     const updated = syncResult.countriesUpdated + syncResult.operatorsUpdated + syncResult.packagesUpdated;

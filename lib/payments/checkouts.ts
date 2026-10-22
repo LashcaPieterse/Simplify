@@ -188,7 +188,7 @@ export async function createCheckout(
     userId: options.userId ?? null,
   });
 
-  // Accept either the Prisma package id or the external id from catalog/Sanity.
+  // Accept either the Prisma package id or the supplier's external catalogue id.
   const pkg = await findActivePackageByIdentifier(
     db,
     input.packageId,

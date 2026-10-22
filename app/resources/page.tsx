@@ -2,9 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowUpRight } from "lucide-react";
-import { getPosts } from "@/lib/sanity.queries";
-import { urlForImage } from "@/lib/image";
-import { isCurrentResource } from "@/lib/content/resources";
+import { getResourcePosts, isCurrentResource } from "@/lib/content/resources";
 
 export const dynamic = "force-static";
 export const revalidate = false;
@@ -27,7 +25,7 @@ const formatDate = (date?: string) => {
 };
 
 export default async function ResourcesPage() {
-  const posts = (await getPosts()).filter((post) => isCurrentResource(post));
+  const posts = (await getResourcePosts()).filter((post) => isCurrentResource(post));
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-16 lg:px-10">
@@ -46,9 +44,9 @@ export default async function ResourcesPage() {
 
       <div className="mt-12 grid gap-10 md:grid-cols-2">
         {posts.map((post) => {
-          const imageUrl = post.coverImage ? urlForImage(post.coverImage)?.width(640).height(420).url() : null;
+          const imageUrl = post.coverImage;
           return (
-            <article key={post._id} className="flex h-full flex-col overflow-hidden rounded-3xl border border-brand-100/80 bg-white shadow-card">
+            <article key={post.slug} className="flex h-full flex-col overflow-hidden rounded-3xl border border-brand-100/80 bg-white shadow-card">
               {imageUrl ? (
                 <div className="relative h-64 w-full">
                   <Image src={imageUrl} alt={post.title} fill className="object-cover" sizes="(max-width: 768px) 100vw, 640px" />

@@ -47,9 +47,3 @@ export function applyMarkupRule(sourcePrice: number, rule: MarkupRule): number {
   const raw = sourcePrice + sourcePrice * (rule.percent / 100) + rule.fixed;
   return Math.round(raw * 10000) / 10000;
 }
-
-export function getAuditSeverity(deltaPct: number, deltaAbs: number): "low" | "medium" | "high" {
-  if (deltaPct >= 8 || deltaAbs >= 2) return "high";
-  if (deltaPct >= 3 || deltaAbs >= 1) return "medium";
-  return "low";
-}

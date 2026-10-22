@@ -13,7 +13,7 @@ export default async function SyncCenterPage() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Sync Center</p>
           <h1 className="text-3xl font-bold text-slate-900">Airalo integration</h1>
-          <p className="text-sm text-slate-600">Run idempotent sync jobs with full snapshots and pricing audits.</p>
+          <p className="text-sm text-slate-600">Run idempotent sync jobs with full source snapshots and change history.</p>
         </div>
         <RunSyncButton />
       </div>

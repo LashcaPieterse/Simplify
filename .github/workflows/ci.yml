@@ -17,8 +17,6 @@ jobs:
       NEXTAUTH_SECRET: ci-nextauth-secret
       METRICS_BEARER_TOKEN: ci-metrics-token
       DPO_IPN_SECRET: ci-dpo-ipn-secret
-      NEXT_PUBLIC_SANITY_PROJECT_ID: aaaaaaaa
-      NEXT_PUBLIC_SANITY_DATASET: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4

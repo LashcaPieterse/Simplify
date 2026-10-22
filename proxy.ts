@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requestHasValidSession } from "./lib/auth";
 
-const ADMIN_WEBHOOK_PATHS = new Set(["/api/admin/publishing-state"]);
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const normalizedPathname =
@@ -19,11 +17,6 @@ export async function proxy(request: NextRequest) {
   }
 
   if (normalizedPathname.startsWith("/api/admin")) {
-    // These routes use shared-secret webhook auth in-route instead of admin sessions.
-    if (ADMIN_WEBHOOK_PATHS.has(normalizedPathname)) {
-      return NextResponse.next();
-    }
-
     const hasSession = await requestHasValidSession(request);
     if (!hasSession) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

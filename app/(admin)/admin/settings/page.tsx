@@ -8,12 +8,7 @@ export default async function AdminSettingsPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Sync settings</h1>
       <div className="rounded border border-slate-200 bg-white p-4 text-sm">
-        <p>Audit thresholds are configured via env vars:</p>
-        <ul className="list-disc pl-4">
-          <li>PRICING_AUDIT_DELTA_PCT (default 1)</li>
-          <li>PRICING_AUDIT_DELTA_ABS (default 0.50)</li>
-          <li>DEFAULT_PRICE_MARKUP_PERCENT / DEFAULT_PRICE_MARKUP_FIXED</li>
-        </ul>
+        <p>Storefront and checkout prices come from the synced supplier retail catalogue. Sync runs retain their results and source snapshots for investigation.</p>
       </div>
       <div className="rounded border border-slate-200 bg-white p-4 text-sm">
         <p>Last successful sync: {latestSuccess?.finishedAt?.toISOString() ?? "never"}</p>

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { ArrowUpRight, Menu, ShoppingBag, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { HeaderActions } from "@/components/cms/HeaderActions";
+import { HeaderActions } from "@/components/site/HeaderActions";
 import { CurrencySelector } from "@/components/currency/CurrencyProvider";
 import { useCart } from "@/components/cart/CartProvider";
 import { WhatsAppSupportLink } from "@/components/site/WhatsAppSupportLink";
