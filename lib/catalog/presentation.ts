@@ -12,6 +12,7 @@ export function storefrontPlanToCartItem(
     validityLabel: plan.validityDays ? `${plan.validityDays} days` : "Validity unavailable",
     unitPriceCents: plan.price.cents,
     currency: plan.price.currency,
+    retailPrices: plan.retailPrices,
   };
 }
 

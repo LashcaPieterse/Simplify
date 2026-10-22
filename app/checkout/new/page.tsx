@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ type CheckoutNewPageProps = {
   searchParams: Promise<{
     packageId?: string | string[];
     quantity?: string | string[];
+    intent?: string | string[];
+    topUpForOrderId?: string | string[];
   }>;
 };
 
@@ -34,6 +37,8 @@ export default async function NewCheckoutPage({
   const resolvedSearchParams = await searchParams;
   const requestedPackageId = readSearchParam(resolvedSearchParams.packageId);
   const quantity = 1;
+  const intent = readSearchParam(resolvedSearchParams.intent) === "top-up" ? "top-up" : "purchase";
+  const topUpForOrderId = readSearchParam(resolvedSearchParams.topUpForOrderId);
 
   if (!requestedPackageId) {
     return <PlanUnavailable />;
@@ -44,8 +49,8 @@ export default async function NewCheckoutPage({
     prisma.package.findFirst({
       where: buildPackageIdentifierWhere(requestedPackageId, {
         activeOnly: true,
-        packageType: "sim",
-        publicCatalogOnly: true,
+        packageType: intent === "top-up" ? "topup" : "sim",
+        publicCatalogOnly: intent !== "top-up",
       }),
       include: {
         state: true,
@@ -62,6 +67,11 @@ export default async function NewCheckoutPage({
     return <PlanUnavailable />;
   }
 
+  if (intent === "top-up") {
+    if (!session?.user?.id) redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/checkout/new?packageId=${requestedPackageId}&intent=top-up&topUpForOrderId=${topUpForOrderId ?? ""}`)}`);
+    const ownerOrder = topUpForOrderId ? await prisma.esimOrder.findFirst({ where: { id: topUpForOrderId, userId: session.user.id }, select: { id: true } }) : null;
+    if (!ownerOrder) return <PlanUnavailable />;
+  }
   const price = getPackagePrice(pkg);
 
   if (!price) {
@@ -72,7 +82,7 @@ export default async function NewCheckoutPage({
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-14 sm:px-6 lg:px-8 lg:py-16">
       <div className="space-y-2">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-brand-600">
-          Guest checkout
+          {intent === "top-up" ? "eSIM top-up" : "Guest checkout"}
         </p>
         <h1 className="text-4xl font-black tracking-tight text-brand-900 sm:text-5xl">
           Complete your eSIM purchase
@@ -92,6 +102,7 @@ export default async function NewCheckoutPage({
         quantity={quantity}
         totalCents={price.sellingPriceCents * quantity}
         currency={price.currencyCode}
+        hideTotal
         destination={pkg.operator.country.title}
         dataLabel={pkg.isUnlimited ? "Unlimited" : pkg.data}
         validityDays={pkg.day}
@@ -101,6 +112,8 @@ export default async function NewCheckoutPage({
         packageId={pkg.id}
         defaultEmail={session?.user?.email ?? ""}
         quantity={quantity}
+        intent={intent}
+        topUpForOrderId={topUpForOrderId ?? undefined}
       />
     </div>
   );

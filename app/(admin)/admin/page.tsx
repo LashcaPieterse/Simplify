@@ -6,6 +6,7 @@ import { RunSanitySyncButton } from "@/components/admin/RunSanitySyncButton";
 import { DpoGatewayControl } from "@/components/admin/DpoGatewayControl";
 import prisma from "@/lib/db/client";
 import { formatCurrency } from "@/lib/format";
+import { supplierCostCents } from "@/lib/affiliates/queries";
 import { getCatalogMismatches } from "@/lib/catalog/mismatches";
 import { getActiveDpoMode } from "@/lib/payments/dpo-settings";
 import { getDpoCredentialStatus } from "@/lib/payments/dpo";
@@ -28,7 +29,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
   const [mismatches, dpoMode] = await Promise.all([getCatalogMismatches(), getActiveDpoMode()]);
 
-  const orders = await prisma.esimOrder.findMany({
+  const allOrders = await prisma.esimOrder.findMany({
     where: { createdAt: { gte: rangeStart } },
     select: {
       id: true,
@@ -39,6 +40,11 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
       createdAt: true,
     },
   });
+
+  const currencies = Array.from(new Set(allOrders.map(order => order.currency ?? "USD"))).sort();
+  const requestedCurrency = typeof resolvedSearchParams?.currency === "string" ? resolvedSearchParams.currency : "NAD";
+  const currencyCode = /^[A-Z]{3}$/.test(requestedCurrency) ? requestedCurrency : "NAD";
+  const orders = allOrders.filter(order => (order.currency ?? "USD") === currencyCode);
 
   const uuidRegex =
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -64,13 +70,13 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
   const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
   const packageByExternalId = new Map(packages.map((pkg) => [pkg.airaloPackageId, pkg]));
   const totalRevenue = orders.reduce((sum, order) => sum + (order.totalCents ?? 0), 0);
+  let missingCosts = 0;
   const totalCost = orders.reduce((sum, order) => {
     const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
-    const basePriceCents =
-      pkg?.state?.basePriceCents ??
-      Math.round(Number(pkg?.netPrice ?? pkg?.price ?? 0) * 100);
-    const base = basePriceCents * order.quantity;
-    return sum + base;
+    const cost = supplierCostCents(pkg?.pricesNetPrice, currencyCode === "NAD" ? "ZAR" : currencyCode)
+      ?? (pkg?.state?.currencyCode === currencyCode ? pkg.state.basePriceCents : null);
+    if (cost === null) { missingCosts++; return sum; }
+    return sum + cost * order.quantity;
   }, 0);
   const totalOrders = orders.length;
   const averageOrderValue = totalOrders === 0 ? 0 : totalRevenue / totalOrders;
@@ -119,7 +125,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Sales & Analytics</p>
           <h1 className="text-3xl font-bold text-slate-900">Performance overview</h1>
-          <p className="text-sm text-slate-600">Aggregated from Airalo-powered eSIM orders.</p>
+          <p className="text-sm text-slate-600">Amounts shown in {currencyCode}. Historical currencies are reported separately.</p>
         </div>
         <form method="get" className="flex items-center gap-3 text-sm text-slate-700">
           <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
@@ -129,6 +135,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
               <option value="30d">Last 30 days</option>
             </select>
           </label>
+          <label>Currency <select name="currency" defaultValue={currencyCode} className="rounded border border-slate-200 p-2">{Array.from(new Set(["NAD", ...currencies])).map(code => <option key={code} value={code}>{code}</option>)}</select></label>
           <button type="submit" className="button-ribbon-primary rounded-full px-4 py-2 font-semibold">
             Apply
           </button>
@@ -148,10 +155,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total revenue" value={formatCurrency(totalRevenue, "USD")} helper={`Across ${packages.length} packages`} />
-        <KpiCard label="Total profit" value={formatCurrency(totalRevenue - totalCost, "USD")} helper="Selling - wholesale" tone="success" />
+        <KpiCard label="Total revenue" value={formatCurrency(totalRevenue, currencyCode)} helper={`Across ${packages.length} packages`} />
+        <KpiCard label="Total profit" value={missingCosts ? "Unavailable" : formatCurrency(totalRevenue - totalCost, currencyCode)} helper="Estimated from current same-currency supplier prices" tone="success" />
         <KpiCard label="Total orders" value={`${totalOrders}`} helper={rangeKey === "7d" ? "Last 7 days" : "Last 30 days"} />
-        <KpiCard label="Average order value" value={formatCurrency(Math.round(averageOrderValue), "USD")} helper="Blended" />
+        <KpiCard label="Average order value" value={formatCurrency(Math.round(averageOrderValue), currencyCode)} helper={currencyCode} />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

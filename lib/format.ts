@@ -12,6 +12,12 @@ export function formatCurrency(amountCents: number, currency = "USD") {
   }
 }
 
+export function formatCurrencyWithCode(amountCents: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "code", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amountCents / 100);
+  } catch { return `${currency} ${(amountCents / 100).toFixed(2)}`; }
+}
+
 export function formatNullableCurrency(
   amountCents: number | null | undefined,
   currency?: string | null,

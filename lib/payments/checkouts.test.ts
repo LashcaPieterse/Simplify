@@ -923,3 +923,21 @@ test("legacy paid multiple-SIM checkouts cannot submit a partial supplier purcha
   assert.equal(airalo.syncPayloads.length, 0);
   assert.equal(airalo.topUpPayloads.length, 0);
 });
+
+
+test("NAD verification rejects USD and fulfils the frozen NAD sale exactly once", async () => {
+  const db = new FakeCheckoutDb();
+  db.payment.status = "pending"; db.checkout.status = "pending";
+  db.payment.currency = "NAD"; db.checkout.currency = "NAD";
+  db.payment.amountCents = 24600; db.checkout.totalCents = 24600;
+  const airalo = createSyncAiraloClient();
+  const options = { prisma: db as unknown as PrismaClient, airaloOptions: { submissionMode: "sync" as const, airaloClient: airalo as unknown as AiraloClient } };
+  const wrong = await verifyPaymentTransaction(db.payment.id, { ...options, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 246, currency: "USD", rawResponse: {} }) } });
+  assert.equal(wrong.paymentStatus, "verification_mismatch"); assert.equal(airalo.syncPayloads.length, 0);
+  const verified = { ...options, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 246, currency: "NAD", rawResponse: {} }) } };
+  const first = await verifyPaymentTransaction(db.payment.id, verified);
+  assert.ok(first.orderId);
+  await verifyPaymentTransaction(db.payment.id, verified);
+  assert.equal(airalo.syncPayloads.length, 1);
+  assert.equal(db.orders[0].currency, "NAD"); assert.equal(db.orders[0].totalCents, 24600);
+});

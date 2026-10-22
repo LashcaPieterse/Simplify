@@ -343,6 +343,8 @@ model EsimInstallationPayload {
 
 model CheckoutSession {
   id              String               @id @default(cuid())
+  quoteId         String?              @unique
+  quote           CheckoutQuote?       @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   user            User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId          String?
   package         Package              @relation(fields: [packageId], references: [id])
@@ -371,6 +373,30 @@ model CheckoutSession {
   affiliateAdjustments AffiliateSaleAdjustment[]
 
   @@index([affiliateId, createdAt])
+}
+
+model CheckoutQuote {
+  id                 String @id @default(cuid())
+  userId             String?
+  user               User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestSessionHash   String?
+  packageId          String @db.Uuid
+  quantity           Int @default(1)
+  intent             String
+  topUpForOrderId    String?
+  topUpForIccid      String?
+  displayCents       Int
+  displayCurrency    String
+  sourceZarCents     Int
+  totalCents         Int
+  currency           String @default("NAD")
+  catalogSnapshot    String
+  expiresAt          DateTime
+  createdAt          DateTime @default(now())
+  checkout           CheckoutSession?
+
+  @@index([expiresAt])
+  @@index([userId])
 }
 
 enum DpoMode {
@@ -449,6 +475,7 @@ model SyncJob {
 
 model User {
   id           String               @id @default(cuid())
+  preferredCurrency String?
   email        String               @unique
   name         String?
   phone        String?
@@ -460,6 +487,7 @@ model User {
   orders       EsimOrder[]
   payments     PaymentTransaction[]
   identities   UserIdentity[]
+  checkoutQuotes CheckoutQuote[]
   affiliate    AffiliateProfile?
 }
 

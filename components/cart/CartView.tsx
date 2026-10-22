@@ -1,14 +1,38 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useCurrency } from "@/components/currency/CurrencyProvider";
+import { displayRetailPrice, type RetailPrices } from "@/lib/currency";
 import Link from "next/link";
 import { ShoppingBag, Trash2 } from "lucide-react";
 
 import { useCart } from "@/components/cart/CartProvider";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyWithCode } from "@/lib/format";
 
 export function CartView() {
-  const { items, hydrated, removeItem } = useCart();
+  const { items: savedItems, hydrated, removeItem } = useCart();
+  const { currency } = useCurrency();
+  const [currentPrices, setCurrentPrices] = useState<Record<string, RetailPrices>>({});
+  const [pricesLoaded, setPricesLoaded] = useState(false);
+  const packageIds = savedItems.map(item => item.packageId).sort().join("|");
+  useEffect(() => {
+    if (!hydrated) return;
+    const controller = new AbortController();
+    setPricesLoaded(false); setCurrentPrices({});
+    void fetch("/api/catalog/prices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packageIds: packageIds ? packageIds.split("|") : [] }), signal: controller.signal })
+      .then(async response => { if (!response.ok) throw new Error("Unavailable"); return response.json(); })
+      .then((data: { packages: Array<{ id: string; externalId: string; prices: RetailPrices }> }) => {
+        const prices: Record<string, RetailPrices> = {};
+        for (const pkg of data.packages) { prices[pkg.id] = pkg.prices; prices[pkg.externalId] = pkg.prices; }
+        if (!controller.signal.aborted) setCurrentPrices(prices);
+      }).catch(() => {}).finally(() => { if (!controller.signal.aborted) setPricesLoaded(true); });
+    return () => controller.abort();
+  }, [hydrated, packageIds]);
+  const items = savedItems.map(item => {
+    const price = currentPrices[item.packageId] && displayRetailPrice(currentPrices[item.packageId], currency);
+    return { ...item, unitPriceCents: price?.cents ?? 0, currency: price?.currency ?? "NAD", available: Boolean(price) };
+  });
 
   if (!hydrated) {
     return <div className="h-56 animate-pulse rounded-3xl bg-brand-50" aria-label="Loading cart" />;
@@ -28,7 +52,7 @@ export function CartView() {
   }
 
   const currencies = new Set(items.map((item) => item.currency));
-  const canShowCombinedTotal = currencies.size === 1;
+  const canShowCombinedTotal = currencies.size === 1 && items.every(item => item.available);
   const combinedCurrency = items[0]!.currency;
   const combinedTotal = items.reduce(
     (total, item) => total + item.unitPriceCents * item.quantity,
@@ -52,7 +76,7 @@ export function CartView() {
             </div>
             <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-brand-100 pt-5">
               <p className="text-sm text-brand-600">1 eSIM per checkout</p>
-              <p className="text-xl font-black text-brand-900">{formatCurrency(item.unitPriceCents * item.quantity, item.currency)}</p>
+              <p className="text-xl font-black text-brand-900">{item.available ? formatCurrencyWithCode(item.unitPriceCents, item.currency) : pricesLoaded ? "Plan unavailable" : "Refreshing price…"}</p>
             </div>
           </article>
         ))}
@@ -64,13 +88,13 @@ export function CartView() {
           <div className="flex justify-between gap-4 text-brand-600"><dt>Plans</dt><dd>{items.length}</dd></div>
           <div className="flex justify-between gap-4 text-brand-600"><dt>eSIMs</dt><dd>{items.reduce((total, item) => total + item.quantity, 0)}</dd></div>
           {canShowCombinedTotal ? (
-            <div className="flex justify-between gap-4 border-t border-brand-200 pt-4 text-base font-black text-brand-900"><dt>Total</dt><dd>{formatCurrency(combinedTotal, combinedCurrency)}</dd></div>
+            <div className="flex justify-between gap-4 border-t border-brand-200 pt-4 text-base font-black text-brand-900"><dt>Total</dt><dd>{formatCurrencyWithCode(combinedTotal, combinedCurrency)}</dd></div>
           ) : (
             <div className="border-t border-brand-200 pt-4 text-xs leading-5 text-brand-600">Totals are shown per currency on each plan.</div>
           )}
         </dl>
 
-        {items.length === 1 ? (
+        {items.length === 1 && items[0]!.available ? (
           <Button asChild className="mt-6 w-full">
             <Link href={`/checkout/new?packageId=${encodeURIComponent(items[0]!.packageId)}&quantity=${items[0]!.quantity}`}>Checkout securely</Link>
           </Button>
@@ -78,7 +102,7 @@ export function CartView() {
           <div className="mt-6 rounded-2xl border border-brand-200 bg-white p-4 text-sm leading-6 text-brand-700">
             The current secure fulfilment flow processes one plan at a time. Checkout each plan below so every eSIM remains linked to the correct supplier package.
             <div className="mt-4 grid gap-2">
-              {items.map((item) => (
+              {items.filter(item => item.available).map((item) => (
                 <Button key={item.packageId} asChild size="sm" variant="secondary" className="w-full">
                   <Link href={`/checkout/new?packageId=${encodeURIComponent(item.packageId)}&quantity=${item.quantity}`}>Checkout {item.destination}</Link>
                 </Button>

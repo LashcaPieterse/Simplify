@@ -1,5 +1,7 @@
 "use client";
 
+import { useCurrencyPlans } from "@/components/currency/CurrencyProvider";
+
 import { useState } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 
@@ -11,7 +13,8 @@ type DataFilter = "all" | "small" | "medium" | "large" | "unlimited";
 type ValidityFilter = "all" | "week" | "month";
 type KnownBooleanFilter = "all" | "yes" | "no";
 
-export function PlanExplorer({ plans }: { plans: StorefrontPlan[] }) {
+export function PlanExplorer({ plans: sourcePlans }: { plans: StorefrontPlan[] }) {
+  const plans = useCurrencyPlans(sourcePlans);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [sort, setSort] = useState<SortOption>("price");
   const [dataFilter, setDataFilter] = useState<DataFilter>("all");

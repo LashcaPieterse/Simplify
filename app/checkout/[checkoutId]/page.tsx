@@ -72,6 +72,8 @@ export default async function CheckoutPage({ params }: CheckoutPageProps) {
         quantity={summary.quantity}
         totalCents={summary.totalCents}
         currency={summary.currency}
+        displayCents={summary.displayCents}
+        displayCurrency={summary.displayCurrency}
         destination={summary.destination}
         dataLabel={summary.dataLabel}
         validityDays={summary.validityDays}

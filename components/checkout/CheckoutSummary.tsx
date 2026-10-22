@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/format";
+import { formatCurrencyWithCode } from "@/lib/format";
 
 interface CheckoutSummaryProps {
   packageName: string;
@@ -6,6 +6,9 @@ interface CheckoutSummaryProps {
   quantity: number;
   totalCents: number;
   currency: string;
+  displayCents?: number;
+  displayCurrency?: string;
+  hideTotal?: boolean;
   destination?: string | null;
   dataLabel?: string | null;
   validityDays?: number | null;
@@ -18,6 +21,9 @@ export function CheckoutSummary({
   quantity,
   totalCents,
   currency,
+  displayCents,
+  displayCurrency,
+  hideTotal = false,
   destination,
   dataLabel,
   validityDays,
@@ -45,12 +51,13 @@ export function CheckoutSummary({
           <dd className="text-base text-brand-900">{quantity}</dd>
         </div>
         {customerEmail ? <div className="rounded-2xl bg-brand-50 p-3 text-sm leading-6 text-brand-900"><dt className="font-bold">Delivery email</dt><dd className="break-all">{customerEmail}</dd></div> : null}
-        <div className="flex items-center justify-between">
+        {!hideTotal && displayCents !== undefined && displayCurrency ? <div className="flex items-center justify-between"><dt className="text-sm font-medium text-brand-500">Displayed price</dt><dd className="font-semibold">{formatCurrencyWithCode(displayCents, displayCurrency)}</dd></div> : null}
+        {!hideTotal ? <div className="flex items-center justify-between">
           <dt className="text-sm font-medium text-brand-500">Total due</dt>
           <dd className="text-lg font-black text-brand-900">
-            {formatCurrency(totalCents, currency)}
+            {formatCurrencyWithCode(totalCents, currency)}
           </dd>
-        </div>
+        </div> : null}
       </dl>
     </div>
   );

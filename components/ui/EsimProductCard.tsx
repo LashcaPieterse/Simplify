@@ -1,3 +1,4 @@
+import { RetailPrice } from "@/components/currency/CurrencyProvider";
 import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export function EsimProductCard({
       </div>
       <div className="mt-6 flex items-center justify-between">
         {formattedPrice ? (
-          <p className="text-lg font-semibold text-brand-900">{formattedPrice}</p>
+          <p className="text-lg font-semibold text-brand-900">{<RetailPrice prices={product.price?.retailPrices} fallback={formattedPrice} />}</p>
         ) : product.price?.label ? (
           <span className="text-sm text-brand-500">{product.price.label}</span>
         ) : (

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import prisma from "@/lib/db/client";
 import { authOptions } from "@/lib/auth/options";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrencyWithCode, formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +24,7 @@ export default async function AccountEsimsPage() {
     where: { userId },
     include: {
       profiles: { orderBy: { createdAt: "desc" }, take: 1 },
+      checkout: { include: { quote: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -71,7 +72,7 @@ export default async function AccountEsimsPage() {
         const profile = order.profiles[0] ?? null;
         const hasTotal = order.totalCents !== null && order.totalCents !== undefined && Boolean(order.currency);
         const totalLabel = hasTotal && order.currency
-          ? formatCurrency(order.totalCents ?? 0, order.currency)
+          ? formatCurrencyWithCode(order.totalCents ?? 0, order.currency)
           : "Pending";
 
         return (
@@ -96,6 +97,7 @@ export default async function AccountEsimsPage() {
                 <p className="text-xs uppercase tracking-[0.2em] text-brand-500">Status</p>
                 <p className="text-base font-semibold text-brand-900">{order.status}</p>
                 <p className="text-sm text-brand-600">{totalLabel}</p>
+                {order.checkout?.quote ? <p className="text-xs text-brand-500">Original displayed estimate: {formatCurrencyWithCode(order.checkout.quote.displayCents, order.checkout.quote.displayCurrency)}</p> : null}
               </div>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-brand-600">

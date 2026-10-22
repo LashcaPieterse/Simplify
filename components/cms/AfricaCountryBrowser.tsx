@@ -1,4 +1,6 @@
 "use client";
+import { useCurrency } from "@/components/currency/CurrencyProvider";
+import { displayRetailPrice } from "@/lib/currency";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -166,10 +168,9 @@ function CountryLink({ country }: { country: AfricaCountryListing }) {
   const flagUrl = country.flagImage
     ? urlForImage(country.flagImage)?.width(132).height(99).fit("max").auto("format").url() ?? null
     : null;
-  const formattedPrice = formatMoneyAmount(
-    country.minimumPrice.amount,
-    country.minimumPrice.currency,
-  );
+  const { currency } = useCurrency();
+  const nativePrice = country.minimumPrices && displayRetailPrice(country.minimumPrices, currency);
+  const formattedPrice = nativePrice ? `${nativePrice.currency} ${formatMoneyAmount(nativePrice.amount, nativePrice.currency)}` : formatMoneyAmount(country.minimumPrice.amount, country.minimumPrice.currency);
 
   return (
     <Link

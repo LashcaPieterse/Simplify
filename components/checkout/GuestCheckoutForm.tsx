@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Loader2, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CurrencySelector, useCurrency } from "@/components/currency/CurrencyProvider";
+import type { QuoteSummary } from "@/lib/payments/quotes";
+import { formatCurrencyWithCode } from "@/lib/format";
 import { trackEvent } from "@/lib/analytics";
 import Link from "next/link";
 
@@ -21,12 +24,21 @@ export function GuestCheckoutForm({
   packageId,
   defaultEmail = "",
   quantity = 1,
+  intent = "purchase",
+  topUpForOrderId,
 }: {
   packageId: string;
   defaultEmail?: string | null;
   quantity?: number;
+  intent?: "purchase" | "top-up";
+  topUpForOrderId?: string;
 }) {
   const router = useRouter();
+  const { currency, ready } = useCurrency();
+  const [quote, setQuote] = useState<QuoteSummary | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteExpired, setQuoteExpired] = useState(false);
+  const [quoteRevision, setQuoteRevision] = useState(0);
   const [email, setEmail] = useState(defaultEmail ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -50,10 +62,33 @@ export function GuestCheckoutForm({
     return () => { clearTimeout(timer); controller.abort(); };
   }, [affiliateCode]);
 
+  useEffect(() => {
+    if (!ready) return;
+    const controller = new AbortController();
+    setQuote(null); setQuoteError(null); setQuoteExpired(false); setAcceptedTerms(false);
+    void (async () => {
+      try {
+        const response = await fetch("/api/checkout-quotes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ packageId, quantity, currency, intent, topUpForOrderId }), signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message ?? "Unable to prepare a price quote.");
+        if (!controller.signal.aborted) setQuote(data);
+      } catch (error) {
+        if (!controller.signal.aborted) setQuoteError(error instanceof Error ? error.message : "Unable to prepare a price quote.");
+      }
+    })();
+    return () => controller.abort();
+  }, [ready, packageId, quantity, currency, intent, topUpForOrderId, quoteRevision]);
+
+  useEffect(() => {
+    if (!quote) return;
+    const timer = setTimeout(() => { setQuoteExpired(true); setAcceptedTerms(false); }, Math.max(0, new Date(quote.expiresAt).getTime() - Date.now()));
+    return () => clearTimeout(timer);
+  }, [quote]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (isPending) {
+    if (isPending || !quote || quoteExpired) {
       return;
     }
 
@@ -67,6 +102,9 @@ export function GuestCheckoutForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           packageId,
+          quoteId: quote.id,
+          intent,
+          topUpForOrderId,
           customerEmail: email,
           quantity,
           ...(affiliateCode.trim() ? { affiliateCode: affiliateCode.trim() } : {}),
@@ -76,6 +114,7 @@ export function GuestCheckoutForm({
       const data = (await response.json().catch(() => ({}))) as CheckoutResponseBody;
 
       if (!response.ok) {
+        if (data.field === "quoteId") { setQuote(null); setQuoteError("The price has changed or expired. Refresh it and review the new amount."); setAcceptedTerms(false); }
         if (data.field === "affiliateCode") {
           setAffiliateError(data.message ?? "Check this referral code.");
           return;
@@ -120,6 +159,16 @@ export function GuestCheckoutForm({
         <Mail className="h-5 w-5 text-brand-600" aria-hidden />
       </div>
 
+      <div className="space-y-3 rounded-2xl border border-brand-200 p-4">
+        <div className="flex items-center justify-between gap-4"><p className="font-bold text-brand-900">Display currency</p><CurrencySelector label="Display currency" disabled={isPending} /></div>
+        {quote && !quoteExpired ? <>
+          <p className="text-sm text-brand-600">Displayed price: {formatCurrencyWithCode(quote.displayCents, quote.displayCurrency)}</p>
+          <p className="text-lg font-bold text-brand-900">You will be charged NAD {(quote.totalCents / 100).toFixed(2)}</p>
+          <p className="text-xs leading-5 text-brand-600">Your bank may apply its own currency conversion rate and fees. This quote is valid for 15 minutes.</p>
+        </> : <p className="text-sm text-brand-600" role="status">{quoteExpired ? "Your price quote has expired." : quoteError ?? "Preparing your price quote…"}</p>}
+        {quoteExpired || quoteError ? <button type="button" onClick={() => setQuoteRevision(value => value + 1)} className="text-sm font-semibold underline" disabled={isPending}>Refresh price quote</button> : null}
+      </div>
+
       <label className="block text-sm font-bold text-brand-900">
         Email address
         <input
@@ -152,7 +201,7 @@ export function GuestCheckoutForm({
         <p className="text-xs text-brand-500">
           No account needed. You can save this eSIM after purchase.
         </p>
-        <Button type="submit" disabled={isPending || !email.trim() || !acceptedTerms}>
+        <Button type="submit" disabled={isPending || !email.trim() || !acceptedTerms || !quote || quoteExpired}>
           {isPending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

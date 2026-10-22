@@ -7,6 +7,7 @@ import { ArrowUpRight, Menu, ShoppingBag, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { HeaderActions } from "@/components/cms/HeaderActions";
+import { CurrencySelector } from "@/components/currency/CurrencyProvider";
 import { useCart } from "@/components/cart/CartProvider";
 import { WhatsAppSupportLink } from "@/components/site/WhatsAppSupportLink";
 import { Brand } from "@/components/site/Brand";
@@ -49,6 +50,7 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
             })}
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
+            <CurrencySelector />
             <div className="hidden md:block"><HeaderActions /></div>
             <Link href="/cart" aria-label={`Cart with ${hydrated ? itemCount : 0} items`} className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-brand-100 text-brand-900 transition-colors hover:bg-brand-50">
               <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={1.7} aria-hidden />

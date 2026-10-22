@@ -8,7 +8,8 @@ import { spawnSync } from "node:child_process";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaClient } from "@prisma/client";
-import { createCheckout, verifyCheckoutPayment, verifyPaymentTransaction } from "./checkouts";
+import { createQuotedCheckout as createCheckout } from "./testing/quoted-checkout";
+import { verifyCheckoutPayment, verifyPaymentTransaction } from "./checkouts";
 import { getActiveDpoMode, saveDpoMode } from "./dpo-settings";
 import { handleDpoPushPayment } from "./dpo-ipn";
 
@@ -16,7 +17,8 @@ test("DPO sandbox: migration, persistent mode, audit atomicity and verification 
   // Use only an isolated database and mock provider transport, never DATABASE_URL.
   const directory = mkdtempSync(join(tmpdir(), "sim-africa-dpo-"));
   const sql = await PGlite.create();
-  const server = new PGLiteSocketServer({ db: sql, host: "127.0.0.1", port: 0 });
+  // Allow a closing socket to overlap the replacement client during the reconnect assertion.
+  const server = new PGLiteSocketServer({ db: sql, host: "127.0.0.1", port: 0, maxConnections: 2 });
   const resources: { db?: PrismaClient } = {};
   const overrides: Record<string, string> = {
     AFFILIATE_PROGRAM_ENABLED: "false",
@@ -114,11 +116,13 @@ test("DPO sandbox: migration, persistent mode, audit atomicity and verification 
   const operator = await db.operator.create({ data: { countryId: country.id, title: "Sandbox", info: [] } });
   const makePackage = (type: string, externalId: string) => db.package.create({ data: {
     operatorId: operator.id, airaloPackageId: externalId, type, title: "Namibia 1 GB", amount: 1024, data: "1 GB", day: 7,
-    price: 20, netPrice: 10, pricesNetPrice: { USD: { amount: 10 } }, manualInstallation: "", qrInstallation: "",
+    price: 20, pricesRecommendedRetailPrice: { USD: 20, ZAR: 328, GBP: 15, EUR: 18 }, netPrice: 10, pricesNetPrice: { USD: { amount: 10 } }, manualInstallation: "", qrInstallation: "",
     state: { create: { sellingPriceCents: 2000, basePriceCents: 1000, currencyCode: "USD", isActive: true, lastSyncedAt: new Date() } },
   } });
   const purchasePackage = await makePackage("sim", "dpo-sandbox-sim");
   const topUpPackage = await makePackage("topup", "dpo-sandbox-topup");
+  const topUpOwner = await db.user.create({ data: { email: "dpo-topup@example.test" } });
+  await db.esimOrder.create({ data: { id: "original-order", userId: topUpOwner.id, packageId: purchasePackage.id, status: "completed", profiles: { create: { iccid: "8900000000000000001", status: "active" } } } });
   const requests: string[] = [];
   let creations = 0;
   let switchDuringCreation = true;
@@ -149,7 +153,7 @@ test("DPO sandbox: migration, persistent mode, audit atomicity and verification 
     await verifyCheckoutPayment(purchase.checkoutId, { prisma: db });
     assert.match(requests.at(-1)!, /<CompanyToken>test-company<\/CompanyToken>/);
 
-    const topUp = await createCheckout({ packageId: topUpPackage.id, customerEmail: "customer@example.test", intent: "top-up", topUpForOrderId: "original-order", topUpForIccid: "8900000000000000001" }, { prisma: db, baseUrl: "https://shop.example.test" });
+    const topUp = await createCheckout({ packageId: topUpPackage.id, customerEmail: "customer@example.test", intent: "top-up", topUpForOrderId: "original-order", topUpForIccid: "8900000000000000001" }, { prisma: db, userId: topUpOwner.id, baseUrl: "https://shop.example.test" });
     const livePayment = await db.paymentTransaction.findFirstOrThrow({ where: { checkoutId: topUp.checkoutId } });
     assert.equal(livePayment.dpoMode, "live");
     assert.match(requests.at(-1)!, /<CompanyToken>live-company<\/CompanyToken>/);
@@ -172,7 +176,7 @@ test("DPO sandbox: migration, persistent mode, audit atomicity and verification 
       assert.equal(result.status, 200);
       assert.match(requests.at(-1)!, /<CompanyToken>live-company<\/CompanyToken>/);
     }
-    assert.equal(await db.esimOrder.count(), 0);
+    assert.equal(await db.esimOrder.count({ where: { id: { not: "original-order" } } }), 0);
 
     process.env.DPO_LIVE_COMPANY_TOKEN = "";
     const requestCount = requests.length;

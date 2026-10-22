@@ -1,3 +1,4 @@
+import { RetailPrice } from "@/components/currency/CurrencyProvider";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import type { Route } from "next";
@@ -13,19 +14,16 @@ import {
 import prisma from "@/lib/db/client";
 import { pollUsageForProfile } from "@/lib/orders/usage";
 import { getTopUpPackages } from "@/lib/orders/topups";
-import { createCheckout } from "@/lib/payments/checkouts";
 import { authOptions } from "@/lib/auth/options";
 import { getServerSession } from "next-auth";
 import InstallationInstructions from "@/components/esim/InstallationInstructions";
 import { WhatsAppSupportLink } from "@/components/site/WhatsAppSupportLink";
 import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatCurrencyWithCode } from "@/lib/format";
 import {
   canAccessOwnerScopedRecord,
-  canIssueScopedAccessTokens,
   canStartTopUpCheckout,
   hasScopedAccessFromCookieStore,
-  setScopedAccessCookie,
   type SessionLike,
 } from "@/lib/orders/access";
 import { normalizeHttpUrl } from "@/lib/http/safe-url";
@@ -88,9 +86,6 @@ async function purchaseTopUp(
     throw new OrderServiceError("A package selection is required to purchase a top-up.", 422);
   }
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const session = await getServerSession(authOptions);
   const order = await getOrderWithDetails(orderIdentifier);
 
@@ -108,26 +103,7 @@ async function purchaseTopUp(
     notFound();
   }
 
-  const profileIccid = order.profiles[0]?.iccid ?? null;
-
-  const checkout = await createCheckout(
-    {
-      packageId,
-      quantity: 1,
-      customerEmail: order.customerEmail ?? session?.user?.email ?? undefined,
-      intent: "top-up",
-      topUpForOrderId: order.id,
-      topUpForIccid: profileIccid ?? undefined,
-    },
-    { baseUrl, userId: session?.user?.id },
-  );
-
-  if (canIssueScopedAccessTokens()) {
-    const cookieStore = await cookies();
-    setScopedAccessCookie(cookieStore, "checkout", checkout.checkoutId);
-  }
-
-  redirect(`/checkout/${checkout.checkoutId}`);
+  redirect(`/checkout/new?packageId=${encodeURIComponent(packageId)}&intent=top-up&topUpForOrderId=${encodeURIComponent(order.id)}`);
 }
 
 function parseInstallationPayload(payload: string | null): Record<string, unknown> | null {
@@ -194,6 +170,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
   }
 
   const pkg = await findPackageDisplayByIdentifier(prisma, order.packageId);
+  const checkoutRecord = await prisma.checkoutSession.findUnique({ where: { orderId: order.id }, include: { quote: true } });
   const profile = order.profiles[0] ?? null;
 
   const usageResult = profile ? await pollUsageForProfile(order.id, profile) : null;
@@ -250,8 +227,9 @@ export default async function OrderPage({ params }: OrderPageParams) {
           {order.requestId ? <p>Airalo request ID: {order.requestId}</p> : null}
           <p>Status: {order.status}</p>
           {order.totalCents !== null && order.currency ? (
-            <p>Total paid: {formatCurrency(order.totalCents, order.currency)}</p>
+            <p>Total paid: {formatCurrencyWithCode(order.totalCents, order.currency)}</p>
           ) : null}
+          {checkoutRecord?.quote ? <p>Original displayed estimate: {formatCurrencyWithCode(checkoutRecord.quote.displayCents, checkoutRecord.quote.displayCurrency)}</p> : null}
           {order.customerEmail ? <p>Customer email: {order.customerEmail}</p> : null}
           {pkg ? <p>{pkg.isUnlimited ? "Unlimited data" : pkg.data} · {pkg.day} days · {pkg.operator.country.title}</p> : null}
         </div>
@@ -483,7 +461,7 @@ export default async function OrderPage({ params }: OrderPageParams) {
                       </p>
                     ) : null}
                     <p className="text-sm font-medium text-brand-900">
-                      {formatCurrency(Math.round(pkg.price * 100), pkg.currency)}
+                      {<RetailPrice prices={pkg.retailPrices} />}
                     </p>
                   </div>
                   <button

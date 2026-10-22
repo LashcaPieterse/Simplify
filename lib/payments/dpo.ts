@@ -126,7 +126,7 @@ export class DpoClient {
       `<CompanyToken>${escapeXml(this.companyToken)}</CompanyToken>`,
       `<Request>createToken</Request>`,
       `<Transaction>`,
-      `<PaymentAmount>${escapeXml(input.amount)}</PaymentAmount>`,
+      `<PaymentAmount>${escapeXml(input.amount.toFixed(2))}</PaymentAmount>`,
       `<PaymentCurrency>${escapeXml(input.currency)}</PaymentCurrency>`,
       `<CompanyRef>${escapeXml(input.reference)}</CompanyRef>`,
       `<CompanyRefUnique>0</CompanyRefUnique>`,

@@ -239,3 +239,20 @@ test("DPO mode selects a complete credential pair and never falls back to anothe
   delete process.env.DPO_SERVICE_TYPE;
   assert.deepEqual(getDpoCredentialStatus(), { test: false, live: false });
 });
+
+
+test("DPO sends a NAD amount with exactly two decimal places", async () => {
+  const original = globalThis.fetch;
+  let xml = "";
+  globalThis.fetch = async (_url, init) => {
+    xml = String(init?.body);
+    return new Response("<API3G><Result>000</Result><TransToken>nad-token</TransToken></API3G>");
+  };
+  try {
+    const client = new DpoClient({ companyToken: "fixture", serviceType: "fixture", serviceUrl: "https://fixture.example/API/v6", paymentUrl: "https://fixture.example" });
+    await client.createTransaction({ amount: 246, currency: "NAD", reference: "fixture", redirectUrl: "https://shop.example/return", cancelUrl: "https://shop.example/back", callbackUrl: "https://shop.example/push" });
+    assert.match(xml, /<PaymentAmount>246\.00<\/PaymentAmount>/);
+    assert.match(xml, /<PaymentCurrency>NAD<\/PaymentCurrency>/);
+    assert.match(xml, /<PTL>5<\/PTL>/);
+  } finally { globalThis.fetch = original; }
+});

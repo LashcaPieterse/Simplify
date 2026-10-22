@@ -1,3 +1,4 @@
+import type { RetailPrices } from "../currency";
 import type { ImageLike } from "../image";
 import type { EsimProductSummary } from "../sanity.queries";
 
@@ -11,6 +12,7 @@ export type AfricaCountryListing = {
   countryCode: string;
   region: AfricaRegion;
   flagImage?: ImageLike;
+  minimumPrices?: RetailPrices;
   minimumPrice: {
     amount: number;
     currency: string;
@@ -96,12 +98,21 @@ export function buildAfricaCountryDirectory(
       countryCode: country.countryCode.toUpperCase(),
       region,
       flagImage: country.coverImage,
+      minimumPrices: product.price.retailPrices ? { ...product.price.retailPrices } : undefined,
       minimumPrice: {
         amount: product.price.amount,
         currency,
       },
     };
 
+    if (current) {
+      for (const [code, cents] of Object.entries(current.minimumPrices ?? {})) {
+        const currency = code as keyof RetailPrices;
+        const incoming = candidate.minimumPrices?.[currency];
+        if (cents && (!incoming || cents < incoming)) candidate.minimumPrices = { ...candidate.minimumPrices, [currency]: cents };
+      }
+      current.minimumPrices = candidate.minimumPrices;
+    }
     if (
       !current ||
       (currency === current.minimumPrice.currency && product.price.amount < current.minimumPrice.amount) ||

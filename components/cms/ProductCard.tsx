@@ -1,4 +1,6 @@
 "use client";
+import { RetailPrice } from "@/components/currency/CurrencyProvider";
+
 
 import Image from "next/image";
 import Link from "next/link";
@@ -57,7 +59,7 @@ export function ProductCard({ product, className, ctaLabel = "Get plan" }: {
           </span>
         ) : null}
         {typeof priceAmount === "number" ? (
-          <p className="font-semibold text-brand-900">{formatMoneyAmount(priceAmount, priceCurrency)}</p>
+          <p className="font-semibold text-brand-900">{<RetailPrice prices={livePrice?.retailPrices} fallback={formatMoneyAmount(priceAmount, priceCurrency)} />}</p>
         ) : null}
         <OrderButton
           packageId={packageId}

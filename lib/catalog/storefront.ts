@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
+import type { RetailPrices } from "@/lib/currency";
+import { resolveRetailPrices } from "./retail-prices";
 import prisma from "@/lib/db/client";
 import {
   AFRICA_COUNTRY_CODES,
@@ -27,6 +29,7 @@ export type StorefrontCountry = {
   countryCode: string;
   image: unknown | null;
   planCount: number;
+  minimumPrices?: RetailPrices;
   minimumPrice: {
     amount: number;
     currency: string;
@@ -49,6 +52,7 @@ export type StorefrontPlan = {
   dataAmountMb: number | null;
   isUnlimited: boolean;
   validityDays: number | null;
+  retailPrices?: RetailPrices;
   price: {
     amount: number;
     cents: number;
@@ -264,6 +268,7 @@ function toCountry(record: StorefrontPackageRecord): StorefrontCountry {
     countryCode: country.countryCode,
     image: country.imageJson ?? null,
     planCount: 1,
+    minimumPrices: resolveRetailPrices(record.pricesRecommendedRetailPrice) ?? undefined,
     minimumPrice: {
       amount: state.sellingPriceCents! / 100,
       currency: state.currencyCode.toUpperCase(),
@@ -310,6 +315,7 @@ export function mapStorefrontPlan(record: StorefrontPackageRecord): StorefrontPl
     dataAmountMb: record.amount > 0 ? record.amount : null,
     isUnlimited: record.isUnlimited,
     validityDays: record.day > 0 ? record.day : null,
+    retailPrices: resolveRetailPrices(record.pricesRecommendedRetailPrice) ?? undefined,
     price: {
       amount: record.state!.sellingPriceCents! / 100,
       cents: record.state!.sellingPriceCents!,
@@ -358,7 +364,7 @@ export async function getStorefrontPlansForCountry(slug: string): Promise<Storef
     include: STOREFRONT_PACKAGE_INCLUDE,
   });
 
-  return records.map(mapStorefrontPlan).sort(planOrder);
+  return records.filter(record => resolveRetailPrices(record.pricesRecommendedRetailPrice)).map(mapStorefrontPlan).sort(planOrder);
 }
 
 export async function getStorefrontPlan(identifier: string): Promise<StorefrontPlan | null> {
@@ -370,7 +376,7 @@ export async function getStorefrontPlan(identifier: string): Promise<StorefrontP
     include: STOREFRONT_PACKAGE_INCLUDE,
   });
 
-  return record ? mapStorefrontPlan(record) : null;
+  return record && resolveRetailPrices(record.pricesRecommendedRetailPrice) ? mapStorefrontPlan(record) : null;
 }
 
 export async function getStorefrontPlanIdentifiers(): Promise<string[]> {
@@ -395,7 +401,7 @@ export async function getRegionalStorefrontPlans(): Promise<StorefrontPlan[]> {
     include: STOREFRONT_PACKAGE_INCLUDE,
   });
 
-  return records.map(mapStorefrontPlan).sort(planOrder);
+  return records.filter(record => resolveRetailPrices(record.pricesRecommendedRetailPrice)).map(mapStorefrontPlan).sort(planOrder);
 }
 
 export async function getLocalStorefrontPlans(): Promise<StorefrontPlan[]> {
@@ -412,7 +418,7 @@ export async function getLocalStorefrontPlans(): Promise<StorefrontPlan[]> {
     include: STOREFRONT_PACKAGE_INCLUDE,
   });
 
-  return records.map(mapStorefrontPlan).sort(planOrder);
+  return records.filter(record => resolveRetailPrices(record.pricesRecommendedRetailPrice)).map(mapStorefrontPlan).sort(planOrder);
 }
 
 export async function getStorefrontCountries(): Promise<StorefrontCountry[]> {
@@ -432,6 +438,7 @@ export async function getStorefrontCountries(): Promise<StorefrontCountry[]> {
   const countries = new Map<string, StorefrontCountry>();
 
   for (const record of records) {
+    if (!resolveRetailPrices(record.pricesRecommendedRetailPrice)) continue;
     const candidate = toCountry(record);
     const current = countries.get(candidate.slug);
 
@@ -441,6 +448,11 @@ export async function getStorefrontCountries(): Promise<StorefrontCountry[]> {
     }
 
     current.planCount += 1;
+    for (const [code, cents] of Object.entries(candidate.minimumPrices ?? {})) {
+      const currency = code as keyof RetailPrices;
+      const previous = current.minimumPrices?.[currency];
+      if (cents && (!previous || cents < previous)) current.minimumPrices = { ...current.minimumPrices, [currency]: cents };
+    }
     if (
       candidate.minimumPrice.currency === current.minimumPrice.currency &&
       candidate.minimumPrice.amount < current.minimumPrice.amount

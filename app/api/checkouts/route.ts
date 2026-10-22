@@ -1,9 +1,11 @@
+import { isSameOriginRequest } from "@/lib/http/same-origin";
 import { NextResponse, NextRequest } from "next/server";
 import { REFERRAL_COOKIE } from "@/lib/affiliates/referral";
 import { getServerSession } from "next-auth";
 
 import { Prisma } from "@prisma/client";
 
+import { QUOTE_SESSION_COOKIE } from "@/lib/payments/quotes";
 import { createCheckout } from "@/lib/payments/checkouts";
 import {
   CheckoutRequestError,
@@ -79,6 +81,7 @@ function resolveCheckoutError(error: unknown): {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
   try {
     const rawBody = await request.json();
     const session = await getServerSession(authOptions);
@@ -99,16 +102,6 @@ export async function POST(request: NextRequest) {
       isAuthenticated: Boolean(session?.user?.id),
     }) as Parameters<typeof createCheckout>[0];
 
-    if (payload.intent === "top-up") {
-      return NextResponse.json(
-        {
-          message:
-            "Top-up checkouts must be started from the original eSIM order page.",
-        },
-        { status: 403 },
-      );
-    }
-
     const baseUrl = resolveAppBaseUrl({
       requestUrl: request.url,
       configuredUrl: process.env.NEXT_PUBLIC_APP_URL,
@@ -116,6 +109,7 @@ export async function POST(request: NextRequest) {
     });
     const result = await createCheckout(payload, {
       baseUrl,
+      guestSessionId: request.cookies.get(QUOTE_SESSION_COOKIE)?.value,
       userId: session?.user?.id,
       referralToken: request.cookies.get(REFERRAL_COOKIE)?.value,
     });

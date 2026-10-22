@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import prisma from "@/lib/db/client";
 import { authOptions } from "@/lib/auth/options";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrencyWithCode, formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,7 @@ export default async function AccountReceiptsPage() {
       userId,
       paymentTransactionId: { not: null },
     },
-    include: { payment: true },
+    include: { payment: true, checkout: { include: { quote: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -72,7 +72,7 @@ export default async function AccountReceiptsPage() {
         const payment = order.payment;
         const amountCents = order.totalCents ?? payment?.amountCents ?? null;
         const currency = order.currency ?? payment?.currency ?? "USD";
-        const amountLabel = amountCents === null ? currency : formatCurrency(amountCents, currency);
+        const amountLabel = amountCents === null ? currency : formatCurrencyWithCode(amountCents, currency);
         const receiptStatus = order.receiptSentAt ? `Sent ${formatDate(order.receiptSentAt)}` : "Not sent";
 
         return (
@@ -98,7 +98,7 @@ export default async function AccountReceiptsPage() {
                 <p className="text-base font-semibold text-brand-900">
                   {payment?.status ?? "pending"}
                 </p>
-                <p className="text-sm text-brand-600">{amountLabel}</p>
+                <p className="text-sm text-brand-600">{amountLabel}{order.checkout?.quote ? <span className="mt-1 block text-xs font-normal text-brand-500">Original displayed estimate: {formatCurrencyWithCode(order.checkout.quote.displayCents, order.checkout.quote.displayCurrency)}</span> : null}</p>
               </div>
             </div>
 

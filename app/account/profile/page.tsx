@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/db/client";
 import { authOptions } from "@/lib/auth/options";
 import { formatDate } from "@/lib/format";
+import { CurrencySelector } from "@/components/currency/CurrencyProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function AccountProfilePage() {
         Keep your contact details up to date for eSIM delivery and receipts.
       </p>
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Preferred currency</p><CurrencySelector label="Preferred currency" /></div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Name</p>
           <p className="text-base font-semibold text-brand-900">{user?.name ?? "--"}</p>

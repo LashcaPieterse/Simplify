@@ -1,3 +1,4 @@
+import type { AiraloClient } from "../airalo/client";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { resolveCheckoutReferral } from "../affiliates/program";
 import { safelyAccrueCommission } from "../affiliates/accounting";
@@ -6,7 +7,6 @@ import { z } from "zod";
 import {
   findActivePackageByIdentifier,
   findPackageDisplayByIdentifier,
-  getPackagePrice,
   isUuid,
 } from "../catalog/package-resolver";
 import prismaClient from "../db/client";
@@ -14,7 +14,8 @@ import { centsToMajorUnits } from "../format";
 import { sendOrderReceipt } from "../notifications/receipts";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { DEFAULT_QUANTITY, MAX_QUANTITY, normaliseQuantity } from "../orders/quantity";
-import { normalizeEmailAddress } from "./checkout-request";
+import { CheckoutRequestError, normalizeEmailAddress } from "./checkout-request";
+import { assertNewCheckoutEnabled, assertQuoteOwner, assertQuotePrice, validateTopUpContext } from "./quotes";
 import {
   buildAiraloTopUpOrderPayload,
   logAiraloTopUpSubmissionSuccess,
@@ -50,6 +51,7 @@ import { getActiveDpoMode } from "./dpo-settings";
 
 const checkoutInputSchema = z.object({
   packageId: z.string().min(1, "A package selection is required."),
+  quoteId: z.string().min(1).optional(),
   quantity: z
     .number({ invalid_type_error: "Quantity must be a number." })
     .int("Quantity must be an integer.")
@@ -80,6 +82,9 @@ export type CheckoutSummary = {
   quantity: number;
   totalCents: number;
   currency: string;
+  displayCents?: number;
+  displayCurrency?: string;
+  quoteExpiresAt?: string;
   status: string;
   intent: string;
   paymentStatus?: string;
@@ -132,7 +137,7 @@ async function resolveCheckoutUserId(
 
 export async function createCheckout(
   rawInput: CreateCheckoutInput,
-  options: { prisma?: PrismaClient; baseUrl: string; userId?: string; referralToken?: string | null; dpoClient?: Pick<DpoClient, "createTransaction"> },
+  options: { prisma?: PrismaClient; baseUrl: string; userId?: string; guestSessionId?: string; topUpAiraloClient?: AiraloClient; referralToken?: string | null; dpoClient?: Pick<DpoClient, "createTransaction"> },
 ): Promise<CreateCheckoutResult> {
   const parsed = checkoutInputSchema.safeParse(rawInput);
 
@@ -146,6 +151,26 @@ export async function createCheckout(
   const quantity = normaliseQuantity(input.quantity);
   const packageIdIsUuid = isUuid(input.packageId);
   const checkoutUserId = await resolveCheckoutUserId(db, options.userId);
+  const quote = input.quoteId ? await db.checkoutQuote.findUnique({ where: { id: input.quoteId }, include: { checkout: { include: { payments: { orderBy: { createdAt: "desc" }, take: 1 } } } } }) : null;
+  if (input.quoteId && !quote) throw new CheckoutRequestError("Price quote not found. Review the price again.", 409, "quoteId");
+  if (quote) {
+    assertQuoteOwner(quote, { userId: checkoutUserId ?? undefined, guestSessionId: options.guestSessionId });
+    if (quote.intent !== (input.intent ?? "purchase") || quote.quantity !== quantity ||
+      (input.topUpForOrderId && input.topUpForOrderId !== quote.topUpForOrderId) ||
+      (input.topUpForIccid && input.topUpForIccid !== quote.topUpForIccid)) throw new CheckoutRequestError("Checkout details do not match the reviewed quote.", 409, "quoteId");
+    if (quote.checkout) {
+      if (input.packageId !== quote.packageId) {
+        const matched = await findActivePackageByIdentifier(db, input.packageId, { activeOnly: false, packageType: "any", publicCatalogOnly: false });
+        if (matched?.id !== quote.packageId) throw new CheckoutRequestError("The package does not match the reviewed quote.", 409, "quoteId");
+      }
+      const payment = quote.checkout.payments[0];
+      if (payment?.redirectUrl) return { checkoutId: quote.checkout.id, paymentUrl: payment.redirectUrl };
+      throw new CheckoutRequestError("Your payment is being checked. Reopen this checkout shortly; another payment will not be started automatically.", 503);
+    }
+    input.topUpForOrderId = quote.topUpForOrderId ?? undefined;
+    input.topUpForIccid = quote.topUpForIccid ?? undefined;
+  }
+
 
   if (input.intent === "top-up") {
     if (quantity !== 1) {
@@ -185,26 +210,12 @@ export async function createCheckout(
     throw new Error("Selected package is unavailable.");
   }
 
-  const packagePrice = getPackagePrice(pkg);
-
-  if (!packagePrice) {
-    logOrderError("payments.checkout.package_missing_price", {
-      requestedPackageId: input.packageId,
-      matchedPackageId: pkg.id,
-      matchedExternalId: pkg.airaloPackageId,
-      userId: options.userId ?? null,
-    });
-    throw new Error("Selected package is unavailable.");
-  }
-
-  logOrderInfo("payments.checkout.package_resolved", {
-    requestedPackageId: input.packageId,
-    matchedPackageId: pkg.id,
-    matchedExternalId: pkg.airaloPackageId,
-  });
-
-  const priceCents = packagePrice.sellingPriceCents;
-  const totalCents = priceCents * quantity;
+  assertNewCheckoutEnabled();
+  if (!quote) throw new CheckoutRequestError("Review a price quote before starting payment.", 409, "quoteId");
+  if (quote.packageId !== pkg.id) throw new CheckoutRequestError("The package does not match the reviewed quote.", 409, "quoteId");
+  assertQuotePrice(quote, pkg);
+  if (quote.intent === "top-up") await validateTopUpContext({ packageId: pkg.id, topUpForOrderId: input.topUpForOrderId, topUpForIccid: input.topUpForIccid }, { userId: checkoutUserId ?? undefined }, db, options.topUpAiraloClient);
+  const totalCents = quote.totalCents;
 
   const referral = await resolveCheckoutReferral({
     affiliateCode: input.affiliateCode, referralToken: options.referralToken,
@@ -216,22 +227,33 @@ export async function createCheckout(
   const dpoMode = await getActiveDpoMode(db);
   const dpoClient = options.dpoClient ?? resolveDpoClient(dpoMode);
 
-  const checkout = await db.checkoutSession.create({
-    data: {
-      userId: checkoutUserId,
-      packageId: pkg.id,
-      customerEmail: input.customerEmail ?? null,
-      quantity,
-      totalCents,
-      currency: packagePrice.currencyCode,
-      status: STATUS_PENDING,
-      intent: input.intent ?? "purchase",
-      topUpForOrderId: input.topUpForOrderId ?? null,
-      topUpForIccid: input.topUpForIccid ?? null,
-      metadata: input.metadata ? serialise(input.metadata) : null,
-      ...referral,
-    },
-  });
+  let checkout;
+  try {
+    checkout = await db.checkoutSession.create({
+      data: {
+        userId: checkoutUserId,
+        quoteId: quote.id,
+        packageId: pkg.id,
+        customerEmail: input.customerEmail ?? null,
+        quantity,
+        totalCents,
+        currency: "NAD",
+        status: STATUS_PENDING,
+        intent: input.intent ?? "purchase",
+        topUpForOrderId: input.topUpForOrderId ?? null,
+        topUpForIccid: input.topUpForIccid ?? null,
+        metadata: input.metadata ? serialise(input.metadata) : null,
+        ...referral,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await db.checkoutSession.findUnique({ where: { quoteId: quote.id }, include: { payments: { orderBy: { createdAt: "desc" }, take: 1 } } });
+      if (existing?.payments[0]?.redirectUrl) return { checkoutId: existing.id, paymentUrl: existing.payments[0].redirectUrl };
+      throw new CheckoutRequestError("Your payment is already being prepared. Please try this checkout again shortly.", 409);
+    }
+    throw error;
+  }
 
   const successUrl = `${options.baseUrl}/checkout/${checkout.id}/return`;
   const cancelUrl = `${options.baseUrl}/checkout/${checkout.id}`;
@@ -269,7 +291,7 @@ export async function createCheckout(
 
     await db.checkoutSession.update({
       where: { id: checkout.id },
-      data: { status: STATUS_FAILED },
+      data: { status: "payment_creation_unknown" },
     });
 
     throw error;
@@ -321,6 +343,7 @@ export async function getCheckoutSummary(
   const checkout = await db.checkoutSession.findUnique({
     where: { id: checkoutId },
     include: {
+      quote: true,
       payments: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -343,6 +366,9 @@ export async function getCheckoutSummary(
     quantity: checkout.quantity,
     totalCents: checkout.totalCents,
     currency: checkout.currency,
+    displayCents: checkout.quote?.displayCents,
+    displayCurrency: checkout.quote?.displayCurrency,
+    quoteExpiresAt: checkout.quote?.expiresAt.toISOString(),
     status: checkout.status,
     intent: checkout.intent,
     paymentStatus: latestPayment?.status ?? undefined,

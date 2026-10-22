@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 import prismaClient from "@/lib/db/client";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrencyWithCode, formatDate } from "@/lib/format";
 import { sendEmail } from "@/lib/notifications/email";
 import { normalizeHttpUrl } from "@/lib/http/safe-url";
 import { resolveAiraloApnSettings, type AiraloApnSettings } from "@/lib/airalo/apn";
@@ -122,6 +122,7 @@ export function buildReceiptEmail(options: {
   planName: string;
   destination: string | null;
   amountLabel: string;
+  displayAmountLabel?: string;
   status: string;
   purchasedAt: string;
   orderLink: string;
@@ -156,6 +157,7 @@ export function buildReceiptEmail(options: {
     destinationLine,
     `Status: ${options.status}`,
     `Amount: ${options.amountLabel}`,
+    options.displayAmountLabel ? `Original displayed estimate: ${options.displayAmountLabel}` : "",
     `Date: ${options.purchasedAt}`,
     "",
     `Manage your order: ${options.orderLink}`,
@@ -215,6 +217,7 @@ export function buildReceiptEmail(options: {
         }
         <tr><td style="padding: 8px 0; color: #64748b;">Status</td><td style="padding: 8px 0; font-weight: 600;">${safe(options.status)}</td></tr>
         <tr><td style="padding: 8px 0; color: #64748b;">Amount</td><td style="padding: 8px 0; font-weight: 600;">${safe(options.amountLabel)}</td></tr>
+        ${options.displayAmountLabel ? `<tr><td style="padding:8px 0;color:#64748b;">Original displayed estimate</td><td>${safe(options.displayAmountLabel)}</td></tr>` : ""}
         <tr><td style="padding: 8px 0; color: #64748b;">Date</td><td style="padding: 8px 0; font-weight: 600;">${safe(options.purchasedAt)}</td></tr>
       </table>
       <p style="margin-top: 16px;">
@@ -262,6 +265,7 @@ export async function sendOrderReceipt(
     include: {
       user: { select: { name: true, email: true } },
       payment: true,
+      checkout: { include: { quote: true } },
       installation: true,
       profiles: {
         select: { activationCode: true },
@@ -324,7 +328,7 @@ export async function sendOrderReceipt(
 
   const amountCents = order.totalCents ?? order.payment?.amountCents ?? null;
   const currency = order.currency ?? order.payment?.currency ?? "USD";
-  const amountLabel = amountCents === null ? currency : formatCurrency(amountCents, currency);
+  const amountLabel = amountCents === null ? currency : formatCurrencyWithCode(amountCents, currency);
   const orderReference = order.orderNumber ?? order.requestId ?? order.id;
   const purchasedAt = formatDate(order.createdAt);
   const orderLink = buildOrderLink(order.id, baseUrl);
@@ -336,6 +340,7 @@ export async function sendOrderReceipt(
     planName: pkg?.title ?? "SIM.Africa eSIM plan",
     destination: pkg?.operator?.country?.title ?? null,
     amountLabel,
+    displayAmountLabel: order.checkout?.quote ? formatCurrencyWithCode(order.checkout.quote.displayCents, order.checkout.quote.displayCurrency) : undefined,
     status: order.status,
     purchasedAt,
     orderLink,

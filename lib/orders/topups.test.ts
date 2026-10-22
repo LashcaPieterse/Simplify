@@ -33,10 +33,12 @@ class FakeTopUpDb {
         {
           id: "local-package-1",
           airaloPackageId: "bonbon-mobile-30days-3gb-topup",
+          pricesRecommendedRetailPrice: { USD: 15, ZAR: 246 },
           state: {
             basePriceCents: 1200,
             sellingPriceCents: 1500,
             currencyCode: "USD",
+            lastSyncedAt: new Date(),
           },
         },
       ];

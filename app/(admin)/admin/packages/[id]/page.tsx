@@ -1,3 +1,4 @@
+import { supplierCostCents } from "@/lib/affiliates/queries";
 import { notFound } from "next/navigation";
 import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
 import { StatusBadge } from "@/components/admin/StatusBadge";
@@ -46,23 +47,26 @@ export default async function PackageDetailPage({ params }: { params: Promise<{ 
     pkg.state?.sellingPriceCents ??
     decimalToCents(pkg.price);
 
-  const revenue = orders.reduce((sum, order) => sum + (order.totalCents ?? 0), 0);
   const units = orders.reduce((sum, order) => sum + order.quantity, 0);
-  const profit = orders.reduce((sum, order) => {
-    const selling = order.totalCents ?? sellingPriceCents * order.quantity;
-    const base = basePriceCents * order.quantity;
-    return sum + (selling - base);
-  }, 0);
-
-  const salesByDate = orders.reduce<Record<string, number>>((acc, order) => {
-    const date = order.createdAt.toISOString().slice(0, 10);
-    acc[date] = (acc[date] ?? 0) + (order.totalCents ?? 0);
-    return acc;
+  const revenueByCurrency = orders.reduce<Record<string, number>>((totals, order) => {
+    const code = order.currency ?? currencyCode;
+    totals[code] = (totals[code] ?? 0) + (order.totalCents ?? 0);
+    return totals;
   }, {});
-
-  const linePoints = Object.entries(salesByDate)
-    .sort(([a], [b]) => (a > b ? 1 : -1))
-    .map(([label, value]) => ({ label, value }));
+  const profits = Object.entries(revenueByCurrency).map(([code, revenue]) => {
+    const cost = supplierCostCents(pkg.pricesNetPrice, code === "NAD" ? "ZAR" : code) ?? (code === currencyCode ? basePriceCents : null);
+    const quantity = orders.filter(order => (order.currency ?? currencyCode) === code).reduce((sum, order) => sum + order.quantity, 0);
+    return `${code} ${cost === null ? "unavailable" : formatCurrency(revenue - cost * quantity, code)}`;
+  }).join(" · ");
+  const revenues = Object.entries(revenueByCurrency).map(([code, amount]) => `${code} ${formatCurrency(amount, code)}`).join(" · ") || "—";
+  const series = Object.keys(revenueByCurrency).map(code => {
+    const dates: Record<string, number> = {};
+    for (const order of orders.filter(order => (order.currency ?? currencyCode) === code)) {
+      const date = order.createdAt.toISOString().slice(0, 10);
+      dates[date] = (dates[date] ?? 0) + (order.totalCents ?? 0);
+    }
+    return { code, points: Object.entries(dates).sort(([a], [b]) => a.localeCompare(b)).map(([label, value]) => ({ label, value })) };
+  });
 
   return (
     <div className="space-y-6">
@@ -163,7 +167,7 @@ export default async function PackageDetailPage({ params }: { params: Promise<{ 
           <h3 className="text-lg font-semibold text-slate-900">Sales over time</h3>
           <p className="text-sm text-slate-600">Aggregated by day.</p>
           <div className="mt-4 h-64">
-            <SimpleLineChart points={linePoints} />
+            {series.map(item => <div key={item.code}><p className="text-xs">{item.code}</p><div className="h-36"><SimpleLineChart points={item.points} /></div></div>)}
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -175,11 +179,11 @@ export default async function PackageDetailPage({ params }: { params: Promise<{ 
             </div>
             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
               <dt className="text-slate-600">Total revenue</dt>
-              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(revenue, currencyCode)}</dd>
+              <dd className="text-lg font-semibold text-slate-900">{revenues}</dd>
             </div>
             <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-              <dt className="text-slate-600">Total profit</dt>
-              <dd className="text-lg font-semibold text-slate-900">{formatCurrency(profit, currencyCode)}</dd>
+              <dt className="text-slate-600">Estimated profit</dt>
+              <dd className="text-lg font-semibold text-slate-900">{profits || "—"}</dd>
             </div>
           </dl>
         </div>
@@ -201,7 +205,7 @@ export default async function PackageDetailPage({ params }: { params: Promise<{ 
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-slate-900">
-                        {order.totalCents ? formatCurrency(order.totalCents, currencyCode) : "—"}
+                        {order.totalCents ? formatCurrency(order.totalCents, order.currency ?? currencyCode) : "—"}
                       </p>
                       <p className="text-xs text-slate-500">Qty {order.quantity}</p>
                     </div>

@@ -1,3 +1,4 @@
+import type { RetailPrices } from "./currency";
 import type { Route } from "next";
 import type { LinkProps } from "next/link";
 import { urlForImage } from "./image";
@@ -18,6 +19,7 @@ export type EsimProductCardData = {
     alt?: string;
   };
   price?: {
+    retailPrices?: RetailPrices;
     amount?: number;
     currency?: string;
     label?: string;
@@ -58,6 +60,7 @@ export const mapProductToCardData = (product: EsimProductSummary): EsimProductCa
       alt: `${product.displayName} cover`
     },
     price: {
+      retailPrices: livePrice?.retailPrices,
       amount: priceAmount,
       currency: priceCurrency
     }

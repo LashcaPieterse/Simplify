@@ -2,6 +2,11 @@
 
 This document covers the SIM.Africa integration with the DPO payment gateway. The flow gates order fulfilment behind a successful DPO transaction for both new plans and top-up purchases.
 
+New payments use NAD, taking the selected package's ZAR recommended retail price
+at 1:1. Customers may browse in USD, NAD, ZAR, EUR or GBP. Follow the
+[currency checkout deployment and rollback runbook](currency-checkout.md),
+including its required database migration, before deploying this flow.
+
 ## Environment configuration
 
 Set the following environment variables in production and non-production environments:

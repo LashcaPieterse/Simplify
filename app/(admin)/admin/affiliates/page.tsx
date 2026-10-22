@@ -1,3 +1,4 @@
+import { resolveRetailPrices } from "@/lib/catalog/retail-prices";
 import Link from "next/link";
 import type { Route } from "next";
 import type { ReactNode } from "react";
@@ -22,7 +23,7 @@ export default async function AdminAffiliatesPage({ searchParams }: { searchPara
   const [settings, guides, packages, missingCommissions, pendingNotifications] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({ where: { id: "program" } }),
     prisma.affiliateProfile.findMany({ where: search ? { OR: [{ legalName: { contains: search, mode: "insensitive" } }, { code: { contains: search, mode: "insensitive" } }, { contactEmail: { contains: search, mode: "insensitive" } }] } : {}, include: { user: { select: { email: true, emailVerifiedAt: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
-    prisma.package.findMany({ where: { type: { in: ["sim", "topup"] }, state: { is: { isActive: true, sellingPriceCents: { gt: 0 } } } }, select: { title: true, type: true, pricesNetPrice: true, state: { select: { sellingPriceCents: true, currencyCode: true } } }, take: 500 }),
+    prisma.package.findMany({ where: { type: { in: ["sim", "topup"] }, state: { is: { isActive: true, sellingPriceCents: { gt: 0 } } } }, select: { title: true, type: true, pricesNetPrice: true, pricesRecommendedRetailPrice: true, state: { select: { sellingPriceCents: true, currencyCode: true } } }, take: 500 }),
     prisma.checkoutSession.count({ where: { affiliateId: { not: null }, affiliateCommission: null, order: { is: { fulfilledAt: { not: null } } }, payments: { some: { status: "approved" } } } }),
     prisma.affiliateNotification.count({ where: { sentAt: null } }),
   ]);
@@ -30,10 +31,10 @@ export default async function AdminAffiliatesPage({ searchParams }: { searchPara
   const selected = guideId ? await prisma.affiliateProfile.findUnique({ where: { id: guideId }, include: { user: { select: { email: true, emailVerifiedAt: true } } } }) : null;
   const dashboard = selected ? await getGuideDashboard(selected.userId) : null;
   const rate = settings?.defaultRateBps;
-  const margins = packages.map(pkg => {
-    const currency = pkg.state!.currencyCode;
-    const sale = pkg.state!.sellingPriceCents!;
-    const cost = supplierCostCents(pkg.pricesNetPrice, currency);
+  const margins = packages.filter(pkg => resolveRetailPrices(pkg.pricesRecommendedRetailPrice)?.NAD).map(pkg => {
+    const currency = "NAD";
+    const sale = resolveRetailPrices(pkg.pricesRecommendedRetailPrice)!.NAD!;
+    const cost = supplierCostCents(pkg.pricesNetPrice, "ZAR");
     const commission = rate ? commissionAmount(sale, rate) : null;
     return { title: `${pkg.title} · ${pkg.type === "topup" ? "Top-up" : "New eSIM"}`, currency, sale, cost, commission, remaining: cost !== null && commission !== null ? sale - cost - commission : null };
   }).sort((a, b) => (a.remaining ?? Infinity) - (b.remaining ?? Infinity));

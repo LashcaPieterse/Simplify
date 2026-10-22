@@ -1,3 +1,4 @@
+import type { RetailPrices } from "./currency";
 import groq from "groq";
 import type { Prisma } from "@prisma/client";
 import { getSanityClient } from "./sanity.client";
@@ -172,6 +173,7 @@ export type CarrierSummary = {
 };
 
 export type MoneyValue = {
+  retailPrices?: RetailPrices;
   amount: number;
   currency: string;
   source: "airalo" | "sanity";

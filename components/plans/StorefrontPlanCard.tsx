@@ -1,3 +1,4 @@
+import { RetailPrice } from "@/components/currency/CurrencyProvider";
 import Link from "next/link";
 import { ArrowUpRight, Database, Radio, RefreshCw, Phone } from "lucide-react";
 
@@ -43,7 +44,7 @@ export function StorefrontPlanCard({
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wider text-brand-500">One-time payment</p>
-            <p className="mt-1 text-[1.75rem] font-semibold tracking-tight text-brand-900">{formatMoneyAmount(plan.price.amount, plan.price.currency)}</p>
+            <p className="mt-1 text-[1.75rem] font-semibold tracking-tight text-brand-900">{<RetailPrice prices={plan.retailPrices} fallback={formatMoneyAmount(plan.price.amount, plan.price.currency)} />}</p>
           </div>
           <Link href={`/plan/${encodeURIComponent(plan.externalId)}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-md text-xs font-semibold text-brand-600 underline-offset-4 hover:text-brand-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600">
             Details <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />

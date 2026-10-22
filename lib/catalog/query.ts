@@ -1,3 +1,4 @@
+import { resolveRetailPrices } from "./retail-prices";
 import groq from "groq";
 import type { Prisma } from "@prisma/client";
 
@@ -239,6 +240,7 @@ function createPriceFromPackage(record: PackageRecord): MoneyValue | null {
 
   const priceCents = state.sellingPriceCents;
   return {
+    retailPrices: resolveRetailPrices(record.pkg.pricesRecommendedRetailPrice) ?? undefined,
     amount: centsToAmount(priceCents),
     currency: (state.currencyCode ?? "USD").toUpperCase(),
     source: "airalo",

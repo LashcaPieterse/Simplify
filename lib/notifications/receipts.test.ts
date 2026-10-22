@@ -198,3 +198,13 @@ test("production receipt delivery fails closed without a canonical app URL", () 
     "http://localhost:3000",
   );
 });
+
+
+test("receipts retain the original display estimate alongside the exact NAD payment", () => {
+  const receipt = buildReceiptEmail({ ...receiptOptions, amountLabel: "NAD 246.00", displayAmountLabel: "GBP 11.25" });
+  for (const body of [receipt.text, receipt.html]) {
+    assert.match(body, /NAD 246.00/);
+    assert.match(body, /Original displayed estimate/);
+    assert.match(body, /GBP 11.25/);
+  }
+});

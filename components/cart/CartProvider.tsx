@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
+import type { RetailPrices } from "@/lib/currency";
 import { trackEvent } from "@/lib/analytics";
 
 export type CartItem = {
@@ -12,6 +13,7 @@ export type CartItem = {
   validityLabel: string;
   unitPriceCents: number;
   currency: string;
+  retailPrices?: RetailPrices;
   quantity: number;
 };
 
@@ -55,7 +57,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       const parsed: unknown = stored ? JSON.parse(stored) : [];
       if (Array.isArray(parsed)) {
-        setItems(parsed.filter(isCartItem).map((item) => ({ ...item, quantity: 1 })));
+        setItems(parsed.filter(isCartItem).map((item) => ({ ...item, retailPrices: undefined, quantity: 1 })));
       }
     } catch (error) {
       console.warn("Could not restore the shopping cart", error);
@@ -78,7 +80,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const quantity = 1;
         setItems((current) => {
           const existing = current.find((item) => item.packageId === incoming.packageId);
-          if (!existing) return [...current, { ...incoming, quantity }];
+          if (!existing) return [...current, { ...incoming, quantity }].slice(0, 100);
           return current.map((item) =>
             item.packageId === incoming.packageId
               ? { ...item, quantity }

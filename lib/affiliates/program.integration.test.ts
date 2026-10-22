@@ -10,7 +10,8 @@ import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaClient } from "@prisma/client";
 import type { AiraloClient } from "../airalo/client";
 import { OrderResponseSchema } from "../airalo/schemas";
-import { createCheckout, verifyPaymentTransaction } from "../payments/checkouts";
+import { createQuotedCheckout as createCheckout } from "../payments/testing/quoted-checkout";
+import { verifyPaymentTransaction } from "../payments/checkouts";
 import { applyToAffiliateProgram, reviewAffiliate, saveAffiliateSettings } from "./management";
 import { accrueCommissionForOrder, reconcileAffiliateCommissions, recordAffiliateRefund, recordAffiliateSaleRefund, setCommissionHold, stampAffiliateFulfilment } from "./accounting";
 import { prepareAffiliatePayout, transitionAffiliatePayout } from "./payouts";
@@ -57,7 +58,7 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
   const operator = await database.operator.create({ data: { countryId: country.id, title: "Sandbox", info: [] } });
   const pkg = await database.package.create({ data: {
     operatorId: operator.id, airaloPackageId: "sandbox-1gb", type: "sim", title: "Namibia 1 GB", amount: 1024, data: "1 GB", day: 7,
-    price: 20, netPrice: 10, pricesNetPrice: { USD: { amount: 10 } }, manualInstallation: "", qrInstallation: "",
+    price: 20, pricesRecommendedRetailPrice: { USD: 20, ZAR: 20, GBP: 15, EUR: 18 }, netPrice: 10, pricesNetPrice: { USD: { amount: 10 } }, manualInstallation: "", qrInstallation: "",
     state: { create: { sellingPriceCents: 2000, basePriceCents: 1000, currencyCode: "USD", isActive: true, lastSyncedAt: new Date() } },
   } });
   await saveAffiliateSettings({ enabled: true, percentage: "10", actorEmail }, database);
@@ -87,8 +88,8 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     await reviewAffiliate({ id: guide.id, status: "suspended", rateOverride: "25", reason: "Pause new referrals", actorEmail }, database);
     const payment = await database.paymentTransaction.findFirstOrThrow({ where: { checkoutId: checkout.id } });
     const airaloClient = { createOrderResponse: async () => { supplierCalls++; return OrderResponseSchema.parse({ status: true, data: { order_id: "SANDBOX-ORDER-1", order_reference: "SANDBOX-REF-1", status: "completed", iccid: "8900000000000000001", activation_code: "LPA:1$sandbox.example.test$activation" } }); } } as unknown as AiraloClient;
-    const verification = { prisma: database, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 20, currency: "USD", rawResponse: {} }) }, airaloOptions: { submissionMode: "sync" as const, airaloClient } };
-    await verifyPaymentTransaction(payment.id, { ...verification, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 19, currency: "USD", rawResponse: {} }) } });
+    const verification = { prisma: database, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 20, currency: "NAD", rawResponse: {} }) }, airaloOptions: { submissionMode: "sync" as const, airaloClient } };
+    await verifyPaymentTransaction(payment.id, { ...verification, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 19, currency: "NAD", rawResponse: {} }) } });
     assert.equal(await database.affiliateCommission.count(), 0); assert.equal(supplierCalls, 0);
     const result = await verifyPaymentTransaction(payment.id, verification);
     assert.ok(result.orderId);
@@ -101,11 +102,11 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     assert.equal(supplierCalls, 1); assert.equal(await database.affiliateCommission.count(), 1); assert.equal(await database.affiliateLedgerEntry.count(), 1);
     const repeated = await database.affiliateCommission.findUniqueOrThrow({ where: { id: commission.id } });
     assert.equal(repeated.availableAt.getTime(), commission.availableAt.getTime());
-    await assert.rejects(prepareAffiliatePayout(guide.id, "USD", actorEmail, database), /no positive available balance/);
+    await assert.rejects(prepareAffiliatePayout(guide.id, "NAD", actorEmail, database), /no positive available balance/);
   });
 
   await t.test("concurrent preparation reserves earnings once; allocations and original terms are protected by PostgreSQL", async () => {
-    const attempts = await Promise.allSettled([prepareAffiliatePayout(guide.id, "USD", actorEmail, database, new Date(primaryAvailableAt.getTime() + 1)), prepareAffiliatePayout(guide.id, "USD", actorEmail, database, new Date(primaryAvailableAt.getTime() + 1))]);
+    const attempts = await Promise.allSettled([prepareAffiliatePayout(guide.id, "NAD", actorEmail, database, new Date(primaryAvailableAt.getTime() + 1)), prepareAffiliatePayout(guide.id, "NAD", actorEmail, database, new Date(primaryAvailableAt.getTime() + 1))]);
     assert.equal(attempts.filter(item => item.status === "fulfilled").length, 1);
     const payout = await database.affiliatePayout.findFirstOrThrow({ where: { affiliateId: guide.id, status: "prepared" } });
     const allocation = await database.affiliatePayoutAllocation.findFirstOrThrow({ where: { payoutId: payout.id } });
@@ -116,7 +117,7 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     await assert.rejects(sql.query('UPDATE "CheckoutSession" SET "affiliateRateBps"=2500 WHERE id=$1', [commission.checkoutId]), /immutable/);
     await transitionAffiliatePayout({ id: payout.id, action: "processing", actorEmail }, database);
     await assert.rejects(transitionAffiliatePayout({ id: payout.id, action: "cancelled", actorEmail, note: "uncertain" }, database), /Confirm no money/);
-    const settlement = { id: payout.id, action: "paid" as const, actorEmail, transferReference: "BANK-SANDBOX-1", paidAt: new Date().toISOString(), transferAmount: "2", transferCurrency: "USD", exchangeRate: "1", fees: "0" };
+    const settlement = { id: payout.id, action: "paid" as const, actorEmail, transferReference: "BANK-SANDBOX-1", paidAt: new Date().toISOString(), transferAmount: "2", transferCurrency: "NAD", exchangeRate: "1", fees: "0" };
     await transitionAffiliatePayout(settlement, database); await transitionAffiliatePayout(settlement, database);
     assert.equal((await database.affiliatePayout.findUniqueOrThrow({ where: { id: payout.id } })).status, "paid");
     await assert.rejects(transitionAffiliatePayout({ ...settlement, action: "cancelled", note: "undo", confirmedNotSent: true }, database));
@@ -132,24 +133,24 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     await assert.rejects(recordAffiliateRefund({ ...refund, saleRefundCents: 700 }, database), /different amount/);
     const dashboard = await getGuideDashboard(user.id, database);
     assert.equal(dashboard!.balances[0].available, -100); assert.equal(dashboard!.balances[0].paid, 200);
-    await assert.rejects(prepareAffiliatePayout(guide.id, "NAD", actorEmail, database), /no positive available balance/);
+    await assert.rejects(prepareAffiliatePayout(guide.id, "USD", actorEmail, database), /no positive available balance/);
   });
 
   let fixtureCounter = 1;
   await t.test("a refund before supplier fulfilment is carried into the eventual commission", async () => {
-    const checkout = await database.checkoutSession.create({ data: { packageId: pkg.id, totalCents: 2000, currency: "USD", affiliateId: guide.id, affiliateCode: guide.code, affiliateRateBps: 1000, affiliateSource: "code" } });
+    const checkout = await database.checkoutSession.create({ data: { packageId: pkg.id, totalCents: 2000, currency: "NAD", affiliateId: guide.id, affiliateCode: guide.code, affiliateRateBps: 1000, affiliateSource: "code" } });
     const refund = { checkoutId: checkout.id, saleRefundCents: 2000, reference: "pre-delivery-refund", reason: "Undelivered purchase refunded", actorEmail };
     await recordAffiliateSaleRefund(refund, database); await recordAffiliateSaleRefund(refund, database);
-    const payment = await database.paymentTransaction.create({ data: { checkoutId: checkout.id, provider: "dpo", amountCents: 2000, currency: "USD", status: "approved" } });
+    const payment = await database.paymentTransaction.create({ data: { checkoutId: checkout.id, provider: "dpo", amountCents: 2000, currency: "NAD", status: "approved" } });
     const order = await database.esimOrder.create({ data: { packageId: pkg.id, status: "completed", orderNumber: "REFUNDED-BEFORE-DELIVERY", paymentTransactionId: payment.id, profiles: { create: { iccid: "8900000000000099999", status: "completed", activationCode: "sandbox" } }, installation: { create: { payload: JSON.stringify({ activationCode: "sandbox" }) } } } });
     await database.checkoutSession.update({ where: { id: checkout.id }, data: { orderId: order.id } });
     const commission = await accrueCommissionForOrder(order.id, database);
     assert.equal(commission!.refundedSaleCents, 2000);
     assert.equal((await database.affiliateLedgerEntry.aggregate({ where: { commissionId: commission!.id }, _sum: { amountCents: true } }))._sum.amountCents, 0);
     const dashboard = await getGuideDashboard(user.id, database);
-    assert.equal(dashboard!.balances.find(balance => balance.currency === "USD")!.pending, 0, "a refunded pending commission cancels itself without reducing other available earnings");
+    assert.equal(dashboard!.balances.find(balance => balance.currency === "NAD")!.pending, 0, "a refunded pending commission cancels itself without reducing other available earnings");
   });
-  async function delayedOrder(currency = "USD") {
+  async function delayedOrder(currency = "NAD") {
     fixtureCounter++;
     const checkout = await database.checkoutSession.create({ data: { packageId: pkg.id, totalCents: 2000, currency, affiliateId: guide.id, affiliateCode: guide.code, affiliateRateBps: 1000, affiliateSource: "code" } });
     const payment = await database.paymentTransaction.create({ data: { checkoutId: checkout.id, provider: "dpo", amountCents: 2000, currency, status: "pending" } });
@@ -171,17 +172,17 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     await reconcileAffiliateCommissions(database);
     const commission = await database.affiliateCommission.findUniqueOrThrow({ where: { checkoutId: fixture.checkout.id } });
     await setCommissionHold(commission.id, true, "Review", actorEmail, database);
-    await assert.rejects(prepareAffiliatePayout(guide.id, "USD", actorEmail, database), /no positive/);
+    await assert.rejects(prepareAffiliatePayout(guide.id, "NAD", actorEmail, database), /no positive/);
     await setCommissionHold(commission.id, false, "Cleared", actorEmail, database);
-    const payout = await prepareAffiliatePayout(guide.id, "USD", actorEmail, database);
+    const payout = await prepareAffiliatePayout(guide.id, "NAD", actorEmail, database);
     assert.equal(payout.amountCents, 100, "past refund reduces the next payout");
     await recordAffiliateRefund({ commissionId: commission.id, saleRefundCents: 500, reference: "pending-refund", reason: "Refund after export", actorEmail }, database);
     assert.equal((await database.affiliatePayout.findUniqueOrThrow({ where: { id: payout.id } })).status, "cancelled");
-    const replacement = await prepareAffiliatePayout(guide.id, "USD", actorEmail, database);
+    const replacement = await prepareAffiliatePayout(guide.id, "NAD", actorEmail, database);
     assert.equal(replacement.amountCents, 50);
     await transitionAffiliatePayout({ id: replacement.id, action: "cancelled", actorEmail, note: "Guide requested deferral" }, database);
-    const nad = await delayedOrder("NAD"); await accrueCommissionForOrder(nad.order.id, database);
-    const foreign = await prepareAffiliatePayout(guide.id, "NAD", actorEmail, database);
+    const nad = await delayedOrder("USD"); await accrueCommissionForOrder(nad.order.id, database);
+    const foreign = await prepareAffiliatePayout(guide.id, "USD", actorEmail, database);
     assert.equal(foreign.amountCents, 200);
     assert.equal((await getGuideDashboard(traveller.id, database)), null, "travellers cannot read another guide's account");
     const dto = JSON.stringify((await getGuideDashboard(user.id, database))!.commissions);
@@ -202,7 +203,7 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     const iccid = original.profiles[0].iccid!;
     const topUpPackage = await database.package.create({ data: {
       operatorId: operator.id, airaloPackageId: "sandbox-1gb-topup", type: "topup", title: "Namibia 1 GB top-up", amount: 1024, data: "1 GB", day: 7,
-      price: 10.04, netPrice: 5, pricesNetPrice: { USD: { amount: 5 } }, manualInstallation: "", qrInstallation: "",
+      price: 10.04, pricesRecommendedRetailPrice: { USD: 10.04, ZAR: 10.04 }, netPrice: 5, pricesNetPrice: { USD: { amount: 5 } }, manualInstallation: "", qrInstallation: "",
       state: { create: { sellingPriceCents: 1004, basePriceCents: 500, currencyCode: "USD", isActive: true, lastSyncedAt: new Date() } },
     } });
     const profileCount = await database.esimProfile.count();
@@ -219,8 +220,8 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
       topUpCalls++; assert.equal(payload.iccid, iccid);
       return OrderResponseSchema.parse({ data: { id: 12345, code: "SANDBOX-TOPUP-1", package_id: topUpPackage.airaloPackageId, quantity: 1, type: "topup", description: `Topup (${iccid})`, currency: "USD", price: 5 } });
     } } as unknown as AiraloClient;
-    const verification = { prisma: database, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 10.04, currency: "USD", rawResponse: {} }) }, airaloOptions: { airaloClient } };
-    await verifyPaymentTransaction(payment.id, { ...verification, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 10.04, currency: "NAD", rawResponse: {} }) } });
+    const verification = { prisma: database, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 10.04, currency: "NAD", rawResponse: {} }) }, airaloOptions: { airaloClient } };
+    await verifyPaymentTransaction(payment.id, { ...verification, dpoClient: { verifyTransaction: async () => ({ status: "approved", resultCode: "000", amount: 10.04, currency: "USD", rawResponse: {} }) } });
     assert.equal(topUpCalls, 0); assert.equal(await database.affiliateCommission.count({ where: { checkoutId: checkout.id } }), 0);
     // Changes after checkout creation cannot erase or reprice this top-up's obligation.
     await reviewAffiliate({ id: guide.id, status: "suspended", rateOverride: "30", reason: "Pause future referrals", actorEmail }, database);
@@ -243,22 +244,22 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     assert.equal((await database.affiliateCommission.findUniqueOrThrow({ where: { id: commission.id } })).availableAt.getTime(), topUpAvailableAt.getTime());
     const dashboard = (await getGuideDashboard(user.id, database))!;
     assert.equal(dashboard.commissions.find(sale => sale.id === commission.id)!.checkout.intent, "top-up");
-    assert.equal(dashboard.balances.find(balance => balance.currency === "USD")!.pending, 126);
+    assert.equal(dashboard.balances.find(balance => balance.currency === "NAD")!.pending, 126);
   });
 
   await t.test("top-up earnings mature, enter manual payouts, and carry later refund deductions forward", async subtest => {
     subtest.mock.timers.enable({ apis: ["Date"], now: topUpAvailableAt.getTime() + 1 });
-    const payout = await prepareAffiliatePayout(guide.id, "USD", actorEmail, database);
+    const payout = await prepareAffiliatePayout(guide.id, "NAD", actorEmail, database);
     assert.equal(payout.amountCents, 176, "mature top-up earnings join the existing fifty-cent available balance");
     assert.ok(await database.affiliatePayoutAllocation.findFirst({ where: { payoutId: payout.id, ledgerEntry: { commissionId: topUpCommissionId } } }));
     await transitionAffiliatePayout({ id: payout.id, action: "processing", actorEmail }, database);
-    await transitionAffiliatePayout({ id: payout.id, action: "paid", actorEmail, transferReference: "BANK-TOPUP-1", paidAt: new Date().toISOString(), transferAmount: "1.76", transferCurrency: "USD", exchangeRate: "1", fees: "0" }, database);
+    await transitionAffiliatePayout({ id: payout.id, action: "paid", actorEmail, transferReference: "BANK-TOPUP-1", paidAt: new Date().toISOString(), transferAmount: "1.76", transferCurrency: "NAD", exchangeRate: "1", fees: "0" }, database);
     const adjustment = { commissionId: topUpCommissionId, saleRefundCents: 4, reference: "topup-partial-refund", reason: "Partial top-up refund", actorEmail };
     await recordAffiliateRefund(adjustment, database); await recordAffiliateRefund(adjustment, database);
     const commission = await database.affiliateCommission.findUniqueOrThrow({ where: { id: topUpCommissionId } });
     assert.equal(commission.refundedSaleCents, 4);
     assert.equal((await database.affiliateLedgerEntry.aggregate({ where: { commissionId: commission.id, kind: "refund" }, _sum: { amountCents: true } }))._sum.amountCents, -1);
-    assert.equal((await getGuideDashboard(user.id, database))!.balances.find(balance => balance.currency === "USD")!.available, -1);
+    assert.equal((await getGuideDashboard(user.id, database))!.balances.find(balance => balance.currency === "NAD")!.available, -1);
   });
 
   await t.test("top-up reconciliation repairs missing postings and refuses an unrelated SIM or unattributed legacy checkout", async () => {
@@ -267,10 +268,10 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
     async function completedTopUp(iccid: string, attributed = true) {
       fixtureCounter++;
       const checkout = await database.checkoutSession.create({ data: {
-        packageId: pkg.id, userId: traveller.id, totalCents: 1000, currency: "USD", intent: "top-up", topUpForOrderId: original.id, topUpForIccid: iccid,
+        packageId: pkg.id, userId: traveller.id, totalCents: 1000, currency: "NAD", intent: "top-up", topUpForOrderId: original.id, topUpForIccid: iccid,
         ...(attributed ? { affiliateId: guide.id, affiliateCode: guide.code, affiliateRateBps: 1250, affiliateSource: "original-order" } : {}),
       } });
-      const payment = await database.paymentTransaction.create({ data: { checkoutId: checkout.id, provider: "dpo", amountCents: 1000, currency: "USD", status: "approved" } });
+      const payment = await database.paymentTransaction.create({ data: { checkoutId: checkout.id, provider: "dpo", amountCents: 1000, currency: "NAD", status: "approved" } });
       const order = await database.esimOrder.create({ data: { packageId: pkg.id, userId: traveller.id, status: "completed", orderNumber: `RECOVERED-TOPUP-${fixtureCounter}`, paymentTransactionId: payment.id } });
       await database.checkoutSession.update({ where: { id: checkout.id }, data: { orderId: order.id } });
       return { checkout, order };

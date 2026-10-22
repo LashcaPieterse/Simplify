@@ -1,3 +1,5 @@
+import type { RetailPrices } from "../currency";
+import { resolveRetailPrices, isCatalogPriceFresh } from "../catalog/retail-prices";
 import type { PrismaClient } from "@prisma/client";
 
 import type { AiraloClient } from "../airalo/client";
@@ -12,6 +14,7 @@ export type TopUpPackage = AiraloTopUpPackage & {
   localPackageId: string;
   price: number;
   currency: string;
+  retailPrices: RetailPrices;
 };
 
 type CacheRecord = {
@@ -94,11 +97,13 @@ export async function getTopUpPackages(
     select: {
       id: true,
       airaloPackageId: true,
+      pricesRecommendedRetailPrice: true,
       state: {
         select: {
           basePriceCents: true,
           sellingPriceCents: true,
           currencyCode: true,
+          lastSyncedAt: true,
         },
       },
     },
@@ -116,16 +121,16 @@ export async function getTopUpPackages(
         return null;
       }
 
-      const priceCents =
-        localPackage.state?.sellingPriceCents ??
-        localPackage.state?.basePriceCents ??
-        Math.round(pkg.price * 100);
-      const currency = localPackage.state?.currencyCode ?? "USD";
+      const retailPrices = resolveRetailPrices(localPackage.pricesRecommendedRetailPrice);
+      if (!retailPrices?.NAD || !isCatalogPriceFresh(localPackage.state?.lastSyncedAt)) return null;
+      const priceCents = retailPrices.USD ?? retailPrices.NAD;
+      const currency = retailPrices.USD ? "USD" : "NAD";
 
       return {
         ...pkg,
         price: priceCents / 100,
         currency,
+        retailPrices,
         localPackageId: localPackage.id,
       } satisfies TopUpPackage;
     })

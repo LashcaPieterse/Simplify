@@ -1,4 +1,6 @@
 "use client";
+import { RetailPrice } from "@/components/currency/CurrencyProvider";
+
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
@@ -264,7 +266,7 @@ function RecommendationCard({
           <CheckCircle2 className="h-3.5 w-3.5" />
           {label}
         </span>
-        <span className="text-sm font-semibold text-brand-900">{priceLabel}</span>
+        <span className="text-sm font-semibold text-brand-900">{<RetailPrice prices={product.price?.retailPrices} fallback={priceLabel} />}</span>
       </div>
 
       <div className="grid gap-4 lg:gap-3 xl:grid-cols-[minmax(0,1fr)_11rem] xl:items-stretch">
@@ -355,7 +357,7 @@ function CompactAlternative({
         <div className="mb-2 flex items-center justify-between gap-2 xl:mb-1">
           <p className="text-xs font-bold uppercase text-brand-500">{label}</p>
           <p className="text-sm font-semibold text-brand-900">
-            {formatMoneyAmount(recommendation.priceAmount, recommendation.priceCurrency, "")}
+            {<RetailPrice prices={recommendation.product.price?.retailPrices} fallback={formatMoneyAmount(recommendation.priceAmount, recommendation.priceCurrency, "")} />}
           </p>
         </div>
         <h4 className="line-clamp-2 min-h-9 text-sm font-semibold leading-snug text-brand-900 xl:min-h-0 xl:line-clamp-1">

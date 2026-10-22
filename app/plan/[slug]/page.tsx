@@ -1,3 +1,4 @@
+import { RetailPrice } from "@/components/currency/CurrencyProvider";
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -85,8 +86,8 @@ export default async function PlanPage({ params }: PlanPageProps) {
     brand: { "@type": "Brand", name: "SIM.Africa" },
     offers: {
       "@type": "Offer",
-      price: plan.price.amount,
-      priceCurrency: plan.price.currency,
+      price: (plan.retailPrices?.NAD ?? plan.price.cents) / 100,
+      priceCurrency: "NAD",
       availability: "https://schema.org/InStock",
       url: `https://sim.africa/plan/${encodeURIComponent(plan.externalId)}`,
     },
@@ -125,8 +126,8 @@ export default async function PlanPage({ params }: PlanPageProps) {
 
           <aside className="rounded-3xl border border-brand-100 bg-white p-6 shadow-card lg:sticky lg:top-28">
             <p className="text-xs font-black uppercase tracking-wide text-brand-500">Price</p>
-            <p className="mt-2 text-4xl font-black text-brand-900">{formatMoneyAmount(plan.price.amount, plan.price.currency)}</p>
-            <p className="mt-3 text-sm leading-6 text-brand-600">One-time package price for the selected eSIM. Payment currency: {plan.price.currency}.</p>
+            <p className="mt-2 text-4xl font-black text-brand-900">{<RetailPrice prices={plan.retailPrices} fallback={formatMoneyAmount(plan.price.amount, plan.price.currency)} />}</p>
+            <p className="mt-3 text-sm leading-6 text-brand-600">One-time package price for the selected eSIM. You will be charged in NAD.</p>
             <div className="mt-5 border-t border-brand-100 pt-5">
               <h2 className="text-xs font-black uppercase tracking-wide text-brand-500">Where you can use it</h2>
               <p className="mt-2 text-sm font-semibold leading-6 text-brand-900">
@@ -183,7 +184,7 @@ export default async function PlanPage({ params }: PlanPageProps) {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-100 bg-white/95 p-3 backdrop-blur lg:hidden"><div className="mx-auto flex max-w-lg items-center gap-3"><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-600">{plan.dataLabel} · {plan.validityDays ? `${plan.validityDays} days` : "Validity unknown"}</p><p className="text-[10px] leading-4 text-brand-600">{plan.coverageVerified ? (coverageNames.length <= 3 ? coverageNames.join(", ") : `${coverageNames.length} covered countries`) : "Confirm coverage before buying"}</p><p className="font-black text-brand-900">{formatMoneyAmount(plan.price.amount, plan.price.currency)}</p></div><AddToCartButton item={cartItem} label="Add to cart" className="w-auto min-w-36" /></div></div>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-brand-100 bg-white/95 p-3 backdrop-blur lg:hidden"><div className="mx-auto flex max-w-lg items-center gap-3"><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-brand-600">{plan.dataLabel} · {plan.validityDays ? `${plan.validityDays} days` : "Validity unknown"}</p><p className="text-[10px] leading-4 text-brand-600">{plan.coverageVerified ? (coverageNames.length <= 3 ? coverageNames.join(", ") : `${coverageNames.length} covered countries`) : "Confirm coverage before buying"}</p><p className="font-black text-brand-900">{<RetailPrice prices={plan.retailPrices} fallback={formatMoneyAmount(plan.price.amount, plan.price.currency)} />}</p></div><AddToCartButton item={cartItem} label="Add to cart" className="w-auto min-w-36" /></div></div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema).replace(/</g, "\\u003c") }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, "\\u003c") }} />
     </div>
