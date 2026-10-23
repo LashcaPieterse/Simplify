@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { Session } from "next-auth";
 
-const TOKEN_VERSION = "v1";
+const TOKEN_VERSION = "v2";
 const DEFAULT_ACCESS_TTL_SECONDS = 60 * 60 * 24 * 14;
 
 export type ScopedAccessScope = "checkout" | "order";
@@ -10,6 +10,7 @@ export type SessionLike = Pick<Session, "user"> | null | undefined;
 
 export type OwnerScopedRecord = {
   userId?: string | null;
+  ownershipReviewRequired?: boolean;
 };
 
 export type CookieSetter = {
@@ -75,7 +76,7 @@ export function scopedAccessCookieName(
 export function createScopedAccessToken(
   scope: ScopedAccessScope,
   id: string,
-  options: { issuedAt?: number; ttlSeconds?: number } = {},
+  options: { issuedAt?: number; ttlSeconds?: number; accessVersion?: number } = {},
 ): string {
   const secret = resolveRequiredAccessSecret();
   const issuedAt = options.issuedAt ?? Date.now();
@@ -86,6 +87,7 @@ export function createScopedAccessToken(
     id,
     String(issuedAt),
     String(ttlSeconds),
+    String(options.accessVersion ?? 0),
   ].join("|");
   const signature = signPayload(payload, secret);
   return `${payload}|${signature}`;
@@ -94,7 +96,7 @@ export function createScopedAccessToken(
 export function createOrderAccessLink(
   orderId: string,
   baseUrl: string,
-  options: { issuedAt?: number; ttlSeconds?: number } = {},
+  options: { issuedAt?: number; ttlSeconds?: number; accessVersion?: number } = {},
 ): string {
   const url = new URL(`/orders/${encodeURIComponent(orderId)}/access`, baseUrl);
   url.searchParams.set(
@@ -108,7 +110,7 @@ export function verifyScopedAccessToken(
   token: string | null | undefined,
   scope: ScopedAccessScope,
   id: string,
-  options: { now?: number } = {},
+  options: { now?: number; accessVersion?: number } = {},
 ): boolean {
   const secret = resolveAccessSecret();
   if (!token || !secret) {
@@ -116,12 +118,14 @@ export function verifyScopedAccessToken(
   }
 
   const parts = token.split("|");
-  if (parts.length !== 6) {
+  if (parts.length !== 6 && parts.length !== 7) {
     return false;
   }
 
-  const [version, tokenScope, tokenId, issuedAtRaw, ttlRaw, signature] = parts;
-  if (version !== TOKEN_VERSION || tokenScope !== scope || tokenId !== id) {
+  const [version, tokenScope, tokenId, issuedAtRaw, ttlRaw] = parts;
+  const tokenVersion = version === "v1" && parts.length === 6 ? 0 : version === TOKEN_VERSION && parts.length === 7 ? Number(parts[5]) : -1;
+  const signature = parts[parts.length - 1];
+  if (tokenVersion !== (options.accessVersion ?? 0) || tokenScope !== scope || tokenId !== id) {
     return false;
   }
 
@@ -136,11 +140,12 @@ export function verifyScopedAccessToken(
   }
 
   const expiresAt = issuedAt + ttlSeconds * 1000;
-  if ((options.now ?? Date.now()) > expiresAt) {
+  const now = options.now ?? Date.now();
+  if (now > expiresAt || issuedAt > now + 60_000) {
     return false;
   }
 
-  const payload = parts.slice(0, 5).join("|");
+  const payload = parts.slice(0, -1).join("|");
   return safeEqual(signPayload(payload, secret), signature);
 }
 
@@ -148,8 +153,9 @@ export function setScopedAccessCookie(
   cookies: CookieSetter,
   scope: ScopedAccessScope,
   id: string,
+  accessVersion = 0,
 ): void {
-  const token = createScopedAccessToken(scope, id);
+  const token = createScopedAccessToken(scope, id, { accessVersion });
   cookies.set(scopedAccessCookieName(scope, id), token, {
     httpOnly: true,
     sameSite: "lax",
@@ -185,18 +191,20 @@ export function hasScopedAccessFromCookieHeader(
   cookieHeader: string | null | undefined,
   scope: ScopedAccessScope,
   id: string,
+  accessVersion = 0,
 ): boolean {
   const token = readCookieValue(cookieHeader, scopedAccessCookieName(scope, id));
-  return verifyScopedAccessToken(token, scope, id);
+  return verifyScopedAccessToken(token, scope, id, { accessVersion });
 }
 
 export function hasScopedAccessFromCookieStore(
   cookieStore: { get: (name: string) => { value?: string } | undefined },
   scope: ScopedAccessScope,
   id: string,
+  accessVersion = 0,
 ): boolean {
   const token = cookieStore.get(scopedAccessCookieName(scope, id))?.value;
-  return verifyScopedAccessToken(token, scope, id);
+  return verifyScopedAccessToken(token, scope, id, { accessVersion });
 }
 
 export function isSessionOwner(
@@ -204,7 +212,7 @@ export function isSessionOwner(
   session: SessionLike,
 ): boolean {
   const sessionUserId = session?.user?.id;
-  return Boolean(record.userId && sessionUserId && record.userId === sessionUserId);
+  return Boolean(!record.ownershipReviewRequired && !session?.user?.recoveryRequired && session?.user?.emailProofVerified !== false && record.userId && sessionUserId && record.userId === sessionUserId);
 }
 
 export function canAccessOwnerScopedRecord(

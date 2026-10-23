@@ -1,3 +1,5 @@
+import { readJsonBody, BodyError } from "@/lib/http/bounded-body";
+import { limitCheckout, abuseResponse } from "@/lib/security/rate-limit";
 import { isSameOriginRequest } from "@/lib/http/same-origin";
 import { NextResponse, NextRequest } from "next/server";
 import { REFERRAL_COOKIE } from "@/lib/affiliates/referral";
@@ -83,11 +85,12 @@ function resolveCheckoutError(error: unknown): {
 export async function POST(request: NextRequest) {
   if (!isSameOriginRequest(request)) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
   try {
-    const rawBody = await request.json();
+    await limitCheckout(request.headers, request.cookies.get(QUOTE_SESSION_COOKIE)?.value ?? "no-session");
+    const rawBody = await readJsonBody(request);
     const session = await getServerSession(authOptions);
     const canIssueGuestAccess = canIssueScopedAccessTokens();
 
-    if (!session?.user?.id && !canIssueGuestAccess) {
+    if (!(session?.user?.emailProofVerified && !session.user.recoveryRequired ? session.user.id : undefined) && !canIssueGuestAccess) {
       return NextResponse.json(
         {
           message:
@@ -99,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     const payload = prepareCheckoutRequestPayload(rawBody, {
       sessionEmail: session?.user?.email,
-      isAuthenticated: Boolean(session?.user?.id),
+      isAuthenticated: Boolean((session?.user?.emailProofVerified && !session.user.recoveryRequired ? session.user.id : undefined)),
     }) as Parameters<typeof createCheckout>[0];
 
     const baseUrl = resolveAppBaseUrl({
@@ -110,7 +113,7 @@ export async function POST(request: NextRequest) {
     const result = await createCheckout(payload, {
       baseUrl,
       guestSessionId: request.cookies.get(QUOTE_SESSION_COOKIE)?.value,
-      userId: session?.user?.id,
+      userId: (session?.user?.emailProofVerified && !session.user.recoveryRequired ? session.user.id : undefined),
       referralToken: request.cookies.get(REFERRAL_COOKIE)?.value,
     });
 
@@ -121,6 +124,9 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
+    const limited = abuseResponse(error);
+    if (limited) return limited;
+    if (error instanceof BodyError) return NextResponse.json({ message: error.message }, { status: error.status });
     const resolved = resolveCheckoutError(error);
     return NextResponse.json(
       { message: resolved.message, field: resolved.field },

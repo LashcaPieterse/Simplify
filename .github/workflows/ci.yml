@@ -33,6 +33,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Operational script checks
+        run: npm run check:operations
+
       - name: Unit tests
         run: npm test
 
@@ -45,5 +48,59 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Install browser for focused journey tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Checkout and recovery browser tests
+        run: npm run test:browser
+
       - name: Production dependency audit
         run: npm run security:audit
+
+  postgres-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture
+          POSTGRES_DB: simplify_remediation_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql://postgres:fixture@127.0.0.1:5432/simplify_remediation_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:postgres
+
+  supabase-platform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TEST_SUPABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.1
+      - run: npm ci
+      - name: Start disposable Supabase database
+        run: supabase start --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - name: Validate extensions, access restrictions and inactive schedulers
+        run: npm run test:platform
+      - name: Stop disposable Supabase
+        if: always()
+        run: supabase stop --no-backup

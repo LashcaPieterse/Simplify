@@ -6,8 +6,10 @@ import type { NextAuthOptions } from "next-auth";
 import { PrismaUserIdentityAdapter } from "./adapter";
 import prisma from "@/lib/db/client";
 import { verifyPassword } from "./password";
-import { markUserEmailVerifiedAndClaimGuestOrders } from "./guest-orders";
+import { recordEmailProof, verifiedOAuthEmail } from "./ownership-proof";
 import { sendEmail } from "@/lib/notifications/email";
+import { enforceRates, refundRates } from "../security/rate-limit";
+import { customerLoginReservation } from "../security/login-context";
 
 const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -52,10 +54,13 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-        const user = await prisma.user.findUnique({ where: { email: credentials.email } });
-        if (!user || !user.passwordHash) return null;
+        if (credentials.email.length > 254 || credentials.password.length < 8 || Buffer.byteLength(credentials.password, "utf8") > 72) return null;
+        const failures = customerLoginReservation() ?? await enforceRates([{ scope: "login-account", identifier: credentials.email, limit: 10, windowSeconds: 900 }]);
+        const user = await prisma.user.findUnique({ where: { email: credentials.email.trim().toLowerCase() } });
+        if (!user || !user.passwordHash || user.passwordResetRequired || user.recoveryRequired) return null;
         const valid = await verifyPassword(credentials.password, user.passwordHash);
         if (!valid) return null;
+        await refundRates(failures);
         return {
           id: user.id,
           email: user.email,
@@ -68,6 +73,9 @@ export const authOptions: NextAuthOptions = {
           GoogleProvider({
             clientId: GOOGLE_ID,
             clientSecret: GOOGLE_SECRET,
+            // signIn requires a verified matching claim before NextAuth links;
+            // the initial JWT checks it again against the persisted user.
+            allowDangerousEmailAccountLinking: true,
           }),
         ]
       : []),
@@ -76,6 +84,7 @@ export const authOptions: NextAuthOptions = {
           AppleProvider({
             clientId: APPLE_ID,
             clientSecret: APPLE_SECRET,
+            allowDangerousEmailAccountLinking: true,
           }),
         ]
       : []),
@@ -86,39 +95,39 @@ export const authOptions: NextAuthOptions = {
       : []),
   ],
   callbacks: {
-    async signIn({ user, account }) {
-      const trustedVerifiedProvider =
-        account?.provider === "email" ||
-        account?.provider === "google" ||
-        account?.provider === "apple";
-
-      if (trustedVerifiedProvider && user.id && user.email) {
-        try {
-          await markUserEmailVerifiedAndClaimGuestOrders(
-            prisma,
-            user.id,
-            user.email,
-          );
-        } catch (error) {
-          console.error("Failed to claim guest orders after verified sign-in", {
-            userId: user.id,
-            provider: account?.provider,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
+    async signIn({ user, account, profile }) {
+      // This callback also runs BEFORE an email link is sent. It must not mutate ownership.
+      if (account?.provider === "google" || account?.provider === "apple") {
+        return Boolean(user.email && verifiedOAuthEmail(account.provider, profile, user.email));
       }
-
       return true;
     },
-    async jwt({ token, user }) {
-      if (user?.id) {
+    async jwt({ token, user, account, profile }) {
+      if (user?.id && account) {
         token.sub = user.id;
+        const source = account.provider;
+        if ((source === "google" || source === "apple") && (!user.email || !verifiedOAuthEmail(source, profile, user.email))) {
+          throw new Error("Verified provider email does not match this account.");
+        }
+        const proof = source === "email" || ((source === "google" || source === "apple") && user.email && verifiedOAuthEmail(source, profile, user.email));
+        const persisted = proof && user.email
+          ? await recordEmailProof(prisma, { userId: user.id, email: user.email, source: source as "email" | "google" | "apple", providerAccountId: account.providerAccountId })
+          : await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+        token.authVersion = persisted.authVersion;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
-        session.user.id = token.sub;
+        const user = await prisma.user.findUnique({ where: { id: token.sub } });
+        if (!user || token.authVersion !== user.authVersion) {
+          session.user = undefined;
+          return session;
+        }
+        session.user.id = user.id;
+        session.user.emailProofVerified = Boolean(user.emailProofAt);
+        session.user.recoveryRequired = user.recoveryRequired;
+        session.user.passwordResetRequired = user.passwordResetRequired;
       }
       return session;
     },

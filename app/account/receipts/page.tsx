@@ -1,10 +1,9 @@
+import { requireVerifiedCustomerSession } from "@/lib/auth/customer";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
 import prisma from "@/lib/db/client";
-import { authOptions } from "@/lib/auth/options";
 import { formatCurrencyWithCode, formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +12,7 @@ const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export default async function AccountReceiptsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await requireVerifiedCustomerSession("/account/receipts");
   const userId = session?.user?.id;
 
   if (!userId) {
@@ -23,6 +22,7 @@ export default async function AccountReceiptsPage() {
   const orders = await prisma.esimOrder.findMany({
     where: {
       userId,
+      ownershipReviewRequired: false,
       paymentTransactionId: { not: null },
     },
     include: { payment: true, checkout: { include: { quote: true } } },

@@ -1,3 +1,5 @@
+import { enqueueJob } from "../jobs/store";
+import { queueOrderReceipt } from "../notifications/receipt-outbox";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { stampAffiliateFulfilment } from "../affiliates/accounting";
 
@@ -315,6 +317,8 @@ export async function persistOrderRecords(
     }
 
     await stampAffiliateFulfilment(tx, orderRecord.id);
+    await queueOrderReceipt(tx, orderRecord.id);
+    await enqueueJob(tx, "complete_installation", orderRecord.id);
     return orderRecord;
   };
 

@@ -1,3 +1,4 @@
+import { queueOrderReceipt } from "../notifications/receipt-outbox";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { stampAffiliateFulfilment, safelyAccrueCommission } from "../affiliates/accounting";
 
@@ -129,6 +130,7 @@ export async function applyRecoveredPurchase(
     data: { orderId: order.id, identifier: data.order_id, result: "success" },
   });
   await stampAffiliateFulfilment(tx, order.id);
+  await queueOrderReceipt(tx, order.id);
 }
 
 export async function recoverAiraloOrders(options: {

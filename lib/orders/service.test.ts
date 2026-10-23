@@ -1,3 +1,4 @@
+import { fixtureOutbox } from "../testing/durable-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -79,6 +80,8 @@ type SnapshotRecord = {
 };
 
 class FakeOrderDb {
+  readonly receiptDelivery = fixtureOutbox();
+  readonly lifecycleJob = fixtureOutbox();
   readonly orders: Array<Record<string, unknown>> = [];
   readonly profiles: Array<Record<string, unknown>> = [];
   readonly installationPayloads: Array<Record<string, unknown>> = [];

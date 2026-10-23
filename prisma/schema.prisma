@@ -35,7 +35,7 @@ model Operator {
   gradientEnd          String?   @map("gradient_end")
   gradientStart        String?   @map("gradient_start")
   imageJson            Json?     @map("image_json")
-  info                 String[]  @db.Text
+  info                 String[]  @default([]) @db.Text
   installWindowDays    Int?      @map("install_window_days")
   isKycVerify          Boolean?  @map("is_kyc_verify")
   isPrepaid            Boolean?  @map("is_prepaid")
@@ -89,29 +89,29 @@ model Package {
 }
 
 model PackageState {
-  package            Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
   packageId          String    @id @map("package_id") @db.Uuid
   isActive           Boolean   @default(true) @map("is_active")
-  deactivatedAt      DateTime? @map("deactivated_at")
+  deactivatedAt      DateTime? @map("deactivated_at") @db.Timestamptz(6)
   basePriceCents     Int       @default(0) @map("base_price_cents")
   sellingPriceCents  Int?      @map("selling_price_cents")
   currencyCode       String    @default("USD") @map("currency_code")
   sourcePriceDecimal Decimal?  @map("source_price_decimal") @db.Decimal(12, 4)
   sellPriceDecimal   Decimal?  @map("sell_price_decimal") @db.Decimal(12, 4)
-  lastSyncedAt       DateTime? @map("last_synced_at")
+  lastSyncedAt       DateTime? @map("last_synced_at") @db.Timestamptz(6)
   sourceHash         String?   @map("source_hash")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  package            Package   @relation(fields: [packageId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([isActive])
-  @@index([lastSyncedAt])
+  @@index([isActive], map: "idx_package_state_is_active")
+  @@index([lastSyncedAt(sort: Desc)], map: "idx_package_state_last_synced_at")
   @@map("package_state")
 }
 
 model SyncRun {
   id            String            @id @default(cuid())
-  startedAt     DateTime          @default(now()) @map("started_at")
-  finishedAt    DateTime?         @map("finished_at")
+  startedAt     DateTime          @default(now()) @map("started_at") @db.Timestamptz(6)
+  finishedAt    DateTime?         @map("finished_at") @db.Timestamptz(6)
   status        String
   source        String            @default("airalo")
   triggeredBy   String            @default("system") @map("triggered_by")
@@ -123,38 +123,37 @@ model SyncRun {
   skippedCount  Int               @default(0) @map("skipped_count")
   warningCount  Int               @default(0) @map("warning_count")
   failureCount  Int               @default(0) @map("failure_count")
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
-  items         SyncRunItem[]
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   snapshots     EntitySnapshot[]
   packagePages  PackageSyncPage[]
+  items         SyncRunItem[]
 
-  @@index([startedAt])
-  @@index([status])
+  @@index([startedAt(sort: Desc)], map: "idx_sync_runs_started_at")
+  @@index([status], map: "idx_sync_runs_status")
   @@map("sync_runs")
 }
 
 model PackageSyncPage {
   id             String   @id @default(cuid())
-  run            SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
   runId          String   @map("run_id")
   page           Int
   limit          Int
   linksJson      Json?    @map("links_json")
   metaJson       Json?    @map("meta_json")
   pricingJson    Json?    @map("pricing_json")
-  rawPayloadJson Json?    @map("raw_payload_json")
   countryCount   Int      @map("country_count")
-  capturedAt     DateTime @default(now()) @map("captured_at")
+  capturedAt     DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+  rawPayloadJson Json?    @map("raw_payload_json")
+  run            SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([runId, page])
-  @@index([capturedAt])
+  @@index([capturedAt(sort: Desc)], map: "idx_package_sync_pages_captured_at")
   @@map("package_sync_pages")
 }
 
 model SyncRunItem {
   id           String   @id @default(cuid())
-  run          SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
   runId        String   @map("run_id")
   entityType   String   @map("entity_type")
   entityKey    String   @map("entity_key")
@@ -164,26 +163,26 @@ model SyncRunItem {
   diffJson     Json?    @map("diff_json")
   warningFlags String[] @default([]) @map("warning_flags")
   errorText    String?  @map("error_text")
-  createdAt    DateTime @default(now()) @map("created_at")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  run          SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([runId, entityType, entityKey])
-  @@index([runId, entityType])
-  @@index([entityType, entityKey])
+  @@index([entityType, entityKey], map: "idx_sync_run_items_lookup")
+  @@index([runId, entityType], map: "idx_sync_run_items_run_type")
   @@map("sync_run_items")
 }
 
 model EntitySnapshot {
   id             String   @id @default(cuid())
-  run            SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
   runId          String   @map("run_id")
   entityType     String   @map("entity_type")
   entityKey      String   @map("entity_key")
   rawPayloadJson Json     @map("raw_payload_json")
   normalizedJson Json     @map("normalized_json")
-  createdAt      DateTime @default(now()) @map("created_at")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  run            SyncRun  @relation(fields: [runId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([runId, entityType])
-  @@index([entityType, entityKey, createdAt])
+  @@index([entityType, entityKey, createdAt(sort: Desc)], map: "idx_entity_snapshots_lookup")
   @@map("entity_snapshots")
 }
 
@@ -193,6 +192,8 @@ model EsimOrder {
   requestId            String?                    @unique
   user                 User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId               String?
+  ownershipReviewRequired Boolean                 @default(false)
+  accessVersion        Int                        @default(0)
   package              Package                    @relation(fields: [packageId], references: [id])
   packageId            String                     @db.Uuid
   status               String                     @default("pending")
@@ -215,6 +216,11 @@ model EsimOrder {
   airaloSnapshots      AiraloOrderSnapshot[]
   fulfilledAt          DateTime?
   affiliateCommission  AffiliateCommission?
+  receiptDeliveries    ReceiptDelivery[]
+
+  @@index([packageId])
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
 }
 
 model EsimProfile {
@@ -230,6 +236,8 @@ model EsimProfile {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   usageSnapshots UsageSnapshot[]
+
+  @@index([orderId])
 }
 
 model UsageSnapshot {
@@ -277,10 +285,10 @@ model AiraloOrderSnapshot {
   rawPayloadJson Json       @map("raw_payload_json")
   createdAt      DateTime   @default(now()) @map("created_at")
 
-  @@index([orderId])
-  @@index([requestId])
-  @@index([orderNumber])
-  @@index([source, createdAt])
+  @@index([orderId], map: "idx_airalo_order_snapshots_order_id")
+  @@index([requestId], map: "idx_airalo_order_snapshots_request_id")
+  @@index([orderNumber], map: "idx_airalo_order_snapshots_order_number")
+  @@index([source, createdAt], map: "idx_airalo_order_snapshots_source_created_at")
   @@map("airalo_order_snapshots")
 }
 
@@ -292,6 +300,8 @@ model EsimOrderRecoveryAttempt {
   result     String
   reason     String?
   createdAt  DateTime  @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 model EsimInstallationPayload {
@@ -309,6 +319,8 @@ model CheckoutSession {
   quote           CheckoutQuote?       @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   user            User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId          String?
+  ownershipReviewRequired Boolean @default(false)
+  accessVersion   Int @default(0)
   package         Package              @relation(fields: [packageId], references: [id])
   packageId       String               @db.Uuid
   customerEmail   String?
@@ -334,6 +346,7 @@ model CheckoutSession {
   affiliateCommission AffiliateCommission?
   affiliateAdjustments AffiliateSaleAdjustment[]
 
+  @@index([packageId])
   @@index([affiliateId, createdAt])
 }
 
@@ -377,12 +390,17 @@ model PaymentTransaction {
   id                String                    @id @default(cuid())
   user              User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId            String?
+  ownershipReviewRequired Boolean @default(false)
   provider          String
   dpoMode           DpoMode?
   providerReference String?
   transactionToken  String?
   redirectUrl       String?
   status            String                    @default("pending")
+  providerCode      String?
+  providerExplanation String?
+  version           Int                       @default(0)
+  approvedAt        DateTime?
   amountCents       Int
   currency          String
   statusHistory     String?
@@ -393,6 +411,11 @@ model PaymentTransaction {
   webhookEvents     PaymentTransactionEvent[]
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
+
+  @@index([checkoutId, createdAt])
+  @@index([transactionToken])
+  @@index([providerReference])
+  @@index([status, updatedAt])
 }
 
 model PaymentTransactionEvent {
@@ -401,7 +424,12 @@ model PaymentTransactionEvent {
   transactionId String
   eventType     String
   payload       String
+  fromStatus    String?
+  toStatus      String?
+  transitionVersion Int?
   receivedAt    DateTime           @default(now())
+
+  @@unique([transactionId, transitionVersion])
 }
 
 model AiraloAccessToken {
@@ -443,6 +471,11 @@ model User {
   phone        String?
   passwordHash String?              @map("password_hash")
   emailVerifiedAt DateTime?         @map("email_verified_at")
+  emailProofAt DateTime?
+  emailProofSource String?
+  authVersion Int @default(0)
+  recoveryRequired Boolean @default(false)
+  passwordResetRequired Boolean @default(false)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   checkouts    CheckoutSession[]
@@ -612,12 +645,67 @@ model UserIdentity {
   scope          String?
   tokenType      String?
   sessionState   String?
+  quarantined    Boolean @default(false)
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId         String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([provider, providerUserId])
+}
+
+model LifecycleJob {
+  id String @id @default(cuid())
+  businessKey String @unique
+  kind String
+  targetId String
+  status String @default("pending")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+}
+
+model ReceiptDelivery {
+  id String @id @default(cuid())
+  businessKey String @unique
+  orderId String
+  order EsimOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  templateVersion Int @default(1)
+  status String @default("pending")
+  payload Json?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  firstAttemptAt DateTime?
+  acceptanceUnknown Boolean @default(false)
+  providerMessageId String?
+  acceptedAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([orderId])
+}
+
+model RateBucket {
+  key String @id
+  count Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model AdminAuthState {
+  id String @id @default("admin")
+  version Int @default(0)
 }
 
 model VerificationToken {

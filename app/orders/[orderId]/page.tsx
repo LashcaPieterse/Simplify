@@ -70,7 +70,7 @@ async function canAccessOrder(order: OrderWithDetails, session: SessionLike): Pr
   return canAccessOwnerScopedRecord(
     order,
     session,
-    hasScopedAccessFromCookieStore(cookieStore, "order", order.id),
+    hasScopedAccessFromCookieStore(cookieStore, "order", order.id, order.accessVersion),
   );
 }
 
