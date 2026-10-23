@@ -15,6 +15,12 @@ interface SendEmailResult {
   skipped: boolean;
 }
 
+export class EmailSendError extends Error {
+  constructor(readonly status: number) { super(`Email provider returned HTTP ${status}.`); }
+  get definitelyRejected() { return this.status >= 400 && this.status < 500 && ![408, 409].includes(this.status); }
+  get requiresReview() { return this.status === 409; }
+}
+
 function normalizeRecipients(recipients: string | string[]): string[] {
   return Array.isArray(recipients) ? recipients : [recipients];
 }
@@ -42,7 +48,7 @@ export async function sendEmail({
       "Content-Type": "application/json",
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
-    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
+    signal: AbortSignal.timeout(timeoutMs ?? 8000),
     body: JSON.stringify({
       from,
       to: normalizeRecipients(to),
@@ -64,7 +70,7 @@ export async function sendEmail({
       return { id: null, skipped: true };
     }
 
-    throw new Error(`Failed to send email alert: ${response.status} ${payload}`);
+    throw new EmailSendError(response.status);
   }
 
   const body = (await response.json()) as { id?: string };

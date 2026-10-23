@@ -19,7 +19,16 @@
     "checkouts:recover-paid": "tsx scripts/recover-paid-checkouts.ts",
     "airalo:smoke-live": "tsx scripts/airalo-live-smoke.ts",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "check:operations": "tsc --noEmit -p tsconfig.operations.json && eslint --no-ignore scripts/security-*.ts scripts/db-*.ts --max-warnings=0",
+    "db:adopt-baseline": "tsx scripts/db-adopt-baseline.ts",
+    "db:platform": "tsx scripts/db-platform.ts",
+    "db:upgrade-legacy": "prisma migrate deploy --schema prisma/migration-history/schema.prisma",
+    "security:quarantine": "tsx scripts/security-quarantine.ts",
+    "security:backfill": "tsx scripts/security-backfill.ts",
+    "test:postgres": "tsx scripts/db-test-postgres.ts",
+    "test:platform": "tsx scripts/db-test-platform.ts",
+    "test:browser": "tsx --test tests/checkout.browser.test.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",

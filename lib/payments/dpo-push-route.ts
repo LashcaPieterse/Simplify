@@ -1,12 +1,14 @@
+import { readBoundedText, BodyError } from "../http/bounded-body";
+import { reconcilePayment } from "../jobs/lifecycle";
 import prismaClient from "../db/client";
 import {
   recordPaymentEvent,
-  verifyPaymentTransaction,
 } from "./checkouts";
 import { handleDpoPushPayment } from "./dpo-ipn";
 
 export async function handleDpoPushRoute(request: Request): Promise<Response> {
-  const rawBody = await request.text();
+  let rawBody: string;
+  try { rawBody = await readBoundedText(request, 256 * 1024); } catch (error) { return new Response("Invalid callback body.", { status: error instanceof BodyError ? error.status : 400 }); }
   const contentType = request.headers.get("content-type");
 
   const result = await handleDpoPushPayment({
@@ -47,11 +49,10 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
         recordPaymentEvent(transactionId, eventType, payload, {
           prisma: prismaClient,
         }),
-      verifyPaymentTransaction: (transactionId) =>
-        verifyPaymentTransaction(transactionId, {
-          prisma: prismaClient,
-          source: "dpo-push",
-        }),
+      verifyPaymentTransaction: async transactionId => {
+        await reconcilePayment(transactionId, prismaClient);
+        return { paymentStatus: "pending" };
+      },
     },
   });
 

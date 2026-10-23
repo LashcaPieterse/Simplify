@@ -60,7 +60,7 @@ export function assertQuotePrice(quote: CheckoutQuote, pkg: PackageWithPrice, no
 
 export async function validateTopUpContext(input: { packageId: string; topUpForOrderId?: string; topUpForIccid?: string | null }, owner: QuoteOwner, db: PrismaClient, airaloClient?: AiraloClient) {
   if (!owner.userId || !input.topUpForOrderId) throw new CheckoutRequestError("Sign in to the original order to purchase a top-up.", 403);
-  const order = await db.esimOrder.findFirst({ where: { id: input.topUpForOrderId, userId: owner.userId }, include: { profiles: true } });
+  const order = await db.esimOrder.findFirst({ where: { id: input.topUpForOrderId, userId: owner.userId, ownershipReviewRequired: false }, include: { profiles: true } });
   const iccid = order?.profiles[0]?.iccid;
   if (!iccid || (input.topUpForIccid && input.topUpForIccid !== iccid)) throw new CheckoutRequestError("This eSIM is not available for top-up.", 403);
   const packages = await getTopUpPackages(iccid, { prisma: db, airaloClient });

@@ -68,8 +68,8 @@ export default async function NewCheckoutPage({
   }
 
   if (intent === "top-up") {
-    if (!session?.user?.id) redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/checkout/new?packageId=${requestedPackageId}&intent=top-up&topUpForOrderId=${topUpForOrderId ?? ""}`)}`);
-    const ownerOrder = topUpForOrderId ? await prisma.esimOrder.findFirst({ where: { id: topUpForOrderId, userId: session.user.id }, select: { id: true } }) : null;
+    if (!session?.user?.id || !session.user.emailProofVerified || session.user.recoveryRequired) redirect(`/auth/signin?callbackUrl=${encodeURIComponent(`/checkout/new?packageId=${requestedPackageId}&intent=top-up&topUpForOrderId=${topUpForOrderId ?? ""}`)}`);
+    const ownerOrder = topUpForOrderId ? await prisma.esimOrder.findFirst({ where: { id: topUpForOrderId, userId: session.user.id, ownershipReviewRequired: false }, select: { id: true } }) : null;
     if (!ownerOrder) return <PlanUnavailable />;
   }
   const price = getPackagePrice(pkg);

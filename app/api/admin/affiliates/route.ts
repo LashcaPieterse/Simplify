@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readJsonBody, BodyError } from "@/lib/http/bounded-body";
 import { z } from "zod";
 import { requireAdminApiSession } from "@/lib/admin/guards";
 import { isAffiliateSameOrigin } from "@/lib/affiliates/http";
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
   if (!isAffiliateSameOrigin(request)) return NextResponse.json({ message: "Invalid request origin." }, { status: 403 });
   if (!affiliateInfrastructureEnabled()) return NextResponse.json({ message: "Enable affiliate infrastructure after deploying its migration." }, { status: 503 });
   try {
-    const parsed = inputSchema.safeParse(await request.json());
+    const parsed = inputSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new Error("Invalid form fields.");
     const data = parsed.data;
     const actorEmail = session.email;
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
     if (data.operation === "review") { try { await deliverAffiliateNotifications(); } catch { console.error("affiliate.notification.queued"); } }
     return NextResponse.json({ message: "Saved. Balances and records have been refreshed." });
   } catch (error) {
+    if (error instanceof BodyError) return NextResponse.json({ message: error.message }, { status: error.status });
     return NextResponse.json({ message: error instanceof Error && !("code" in error) ? error.message : "Unable to save. Refresh and try again." }, { status: 422 });
   }
 }

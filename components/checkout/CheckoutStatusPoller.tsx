@@ -18,6 +18,9 @@ interface CheckoutStatusResponse {
   redirectOrderId?: string | null;
   paymentUrl?: string;
   message?: string;
+  isComplete?: boolean;
+  fulfillmentStatus?: string;
+  nextCheckAt?: string | null;
 }
 
 export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) {
@@ -28,6 +31,8 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
   useEffect(() => {
     let cancelled = false;
     let timeout: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    void fetch(`/api/checkouts/${checkoutId}/reconcile`, { method: "POST", signal: controller.signal }).catch(() => {});
 
     async function poll() {
       try {
@@ -55,24 +60,25 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
         }
 
         const redirectOrderId = data.redirectOrderId ?? data.orderId;
-        if (redirectOrderId) {
+        if (data.isComplete && redirectOrderId) {
           const eventKey = `sim-africa-purchase-${checkoutId}`;
-          if (!window.sessionStorage.getItem(eventKey)) {
+          try { if (!window.sessionStorage.getItem(eventKey)) {
             trackEvent("purchase_completed", { checkout_id: checkoutId, order_id: redirectOrderId });
             window.sessionStorage.setItem(eventKey, "1");
-          }
+          } } catch { /* Storage availability must not prevent a completed redirect. */ }
           router.replace(`/orders/${redirectOrderId}`);
           return;
         }
 
-        if ((data.paymentStatus ?? "").toLowerCase() === "failed") {
+        if (["failed", "declined", "expired", "cancelled"].includes((data.paymentStatus ?? "").toLowerCase())) {
           trackEvent("purchase_failed", { checkout_id: checkoutId });
           router.replace(`/checkout/${checkoutId}/failed`);
           return;
         }
 
         // If payment is approved but no orderId yet and we have a message, stop polling and show it.
-        if ((data.paymentStatus ?? "").toLowerCase() === "approved" && !data.orderId && data.message) {
+        if ((data.paymentStatus ?? "").toLowerCase() === "verification_mismatch") {
+          setMessage("This payment needs review. Contact support before paying again.");
           return;
         }
 
@@ -89,6 +95,7 @@ export function CheckoutStatusPoller({ checkoutId }: CheckoutStatusPollerProps) 
 
     return () => {
       cancelled = true;
+      controller.abort();
       if (timeout) {
         clearTimeout(timeout);
       }

@@ -20,7 +20,7 @@ interface CheckoutPageProps {
 async function requireCheckoutAccess(checkoutId: string): Promise<void> {
   const checkout = await prisma.checkoutSession.findUnique({
     where: { id: checkoutId },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, accessVersion: true, ownershipReviewRequired: true },
   });
 
   if (!checkout) {
@@ -33,6 +33,7 @@ async function requireCheckoutAccess(checkoutId: string): Promise<void> {
     cookieStore,
     "checkout",
     checkoutId,
+    checkout.accessVersion,
   );
 
   if (canAccessOwnerScopedRecord(checkout, session, hasCheckoutToken)) {

@@ -1,9 +1,10 @@
+import prisma from "./db/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextRequest } from "next/server";
 
 export const ADMIN_SESSION_COOKIE = "simplify-admin-session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const SESSION_TTL_SECONDS = 60 * 60 * 8;
 
 function envValue(name: "ADMIN_SESSION_SECRET" | "ADMIN_EMAIL" | "ADMIN_PASSWORD") {
   const value = process.env[name]?.trim();
@@ -62,8 +63,8 @@ async function hmacHex(payload: string, secret: string) {
     .join("");
 }
 
-async function buildToken(email: string, issuedAt: number, secret: string) {
-  const payload = `${email}|${issuedAt}`;
+async function buildToken(email: string, issuedAt: number, secret: string, version: number) {
+  const payload = `v2|${email}|${issuedAt}|${version}`;
   const signature = await hmacHex(payload, secret);
   return `${payload}|${signature}`;
 }
@@ -74,29 +75,35 @@ export async function verifySessionToken(token?: string | null) {
   if (!secret) return null;
 
   const parts = token.split("|");
-  if (parts.length !== 3) return null;
-  const [email, issuedAtRaw, signature] = parts;
-  const payload = `${email}|${issuedAtRaw}`;
-  if ((await hmacHex(payload, secret)) !== signature) return null;
+  if (parts.length !== 5 || parts[0] !== "v2") return null;
+  const [, email, issuedAtRaw, versionRaw, signature] = parts;
+  const payload = parts.slice(0, 4).join("|");
+  const expected = await hmacHex(payload, secret);
+  if (signature.length !== expected.length) return null;
+  let mismatch = 0;
+  for (let index = 0; index < expected.length; index++) mismatch |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
+  if (mismatch) return null;
+  const version = Number(versionRaw);
+  if (!Number.isSafeInteger(version) || version < 0) return null;
 
   const issuedAt = Number(issuedAtRaw);
-  if (Number.isNaN(issuedAt)) return null;
+  if (!Number.isFinite(issuedAt) || issuedAt > Date.now() || issuedAt < 0) return null;
   const expiresAt = issuedAt + SESSION_TTL_SECONDS * 1000;
   if (Date.now() > expiresAt) return null;
 
-  return { email, issuedAt: new Date(issuedAt), expiresAt: new Date(expiresAt) };
+  return { email, version, issuedAt: new Date(issuedAt), expiresAt: new Date(expiresAt) };
 }
 
 export async function requireAdminSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(ADMIN_SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);
-  const isAllowed = session ? isAdminEmailAllowed(session.email) : false;
+  const state = session ? await prisma.adminAuthState.findUnique({ where: { id: "admin" } }) : null;
+  const isAllowed = session ? isAdminEmailAllowed(session.email) && state?.version === session.version : false;
 
   if (!session || !isAllowed) {
-    if (session && !isAllowed) {
-      await clearAdminSession();
-    }
+    // This guard also runs during Server Component rendering. Cookie mutations
+    // belong in login/logout actions; a revoked cookie can safely reach login.
     redirect("/admin/login");
   }
 
@@ -109,7 +116,8 @@ export async function createAdminSession(email: string) {
     throw new Error("ADMIN_SESSION_SECRET must be configured before creating admin sessions.");
   }
 
-  const token = await buildToken(email, Date.now(), secret);
+  const state = await prisma.adminAuthState.upsert({ where: { id: "admin" }, update: {}, create: { id: "admin" } });
+  const token = await buildToken(email, Date.now(), secret, state.version);
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_SESSION_COOKIE, token, {
     httpOnly: true,
@@ -130,11 +138,25 @@ export function validateAdminCredentials(email: string, password: string) {
   if (!credentials) return false;
 
   const { email: expectedEmail, password: expectedPassword } = credentials;
-  return email === expectedEmail && password === expectedPassword;
+  const equal = (left: string, right: string) => {
+    const a = new TextEncoder().encode(left), b = new TextEncoder().encode(right);
+    if (a.length !== b.length) return false;
+    let difference = 0;
+    for (let index = 0; index < a.length; index++) difference |= a[index] ^ b[index];
+    return difference === 0;
+  };
+  return equal(email, expectedEmail) && equal(password, expectedPassword);
 }
 
 export async function requestHasValidSession(request: NextRequest) {
   const token = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
   const session = await verifySessionToken(token);
   return Boolean(session && isAdminEmailAllowed(session.email));
+}
+
+export async function revokeAdminSessions(actor: string) {
+  await prisma.$transaction(async tx => {
+    await tx.adminAuthState.upsert({ where: { id: "admin" }, create: { id: "admin", version: 1 }, update: { version: { increment: 1 } } });
+    await tx.auditLog.create({ data: { action: "admin.sessions-revoked", entityType: "AdminAuthState", entityId: "admin", details: JSON.stringify({ actor }) } });
+  });
 }

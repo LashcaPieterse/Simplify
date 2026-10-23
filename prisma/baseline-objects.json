@@ -1,0 +1,72 @@
+{
+  "checks": [
+    {
+      "name": "CheckoutQuote_amounts_check",
+      "definition": "CHECK (((quantity = 1) AND (currency = 'NAD'::text) AND (\"sourceZarCents\" > 0) AND (\"totalCents\" = \"sourceZarCents\") AND (\"displayCents\" > 0) AND (\"displayCurrency\" = ANY (ARRAY['USD'::text, 'NAD'::text, 'ZAR'::text, 'EUR'::text, 'GBP'::text]))))"
+    },
+    {
+      "name": "User_preferredCurrency_check",
+      "definition": "CHECK (((\"preferredCurrency\" IS NULL) OR (\"preferredCurrency\" = ANY (ARRAY['USD'::text, 'NAD'::text, 'ZAR'::text, 'EUR'::text, 'GBP'::text]))))"
+    },
+    {
+      "name": "affiliate_checkout_snapshot_valid",
+      "definition": "CHECK ((((\"affiliateId\" IS NULL) AND (\"affiliateCode\" IS NULL) AND (\"affiliateRateBps\" IS NULL) AND (\"affiliateSource\" IS NULL)) OR ((\"affiliateId\" IS NOT NULL) AND (\"affiliateCode\" IS NOT NULL) AND (\"affiliateRateBps\" IS NOT NULL) AND (\"affiliateSource\" IS NOT NULL) AND ((\"affiliateRateBps\" >= 1) AND (\"affiliateRateBps\" <= 10000)) AND (((intent = 'purchase'::text) AND (\"affiliateSource\" = ANY (ARRAY['code'::text, 'cookie'::text]))) OR ((intent = 'top-up'::text) AND (\"affiliateSource\" = 'original-order'::text) AND (\"topUpForOrderId\" IS NOT NULL) AND (\"topUpForIccid\" IS NOT NULL))))))"
+    },
+    {
+      "name": "affiliate_commission_valid",
+      "definition": "CHECK (((\"saleCents\" > 0) AND ((\"rateBps\" >= 1) AND (\"rateBps\" <= 10000)) AND (\"commissionCents\" >= 0) AND ((\"refundedSaleCents\" >= 0) AND (\"refundedSaleCents\" <= \"saleCents\")) AND ((\"commissionCents\")::numeric = floor((((((\"saleCents\")::bigint * \"rateBps\") + 5000))::numeric / (10000)::numeric))) AND (\"availableAt\" = (\"fulfilledAt\" + '30 days'::interval))))"
+    },
+    {
+      "name": "affiliate_ledger_adjustment_valid",
+      "definition": "CHECK ((((kind = 'refund'::text) AND (\"adjustmentId\" IS NOT NULL)) OR ((kind = 'commission'::text) AND (\"adjustmentId\" IS NULL))))"
+    },
+    {
+      "name": "affiliate_ledger_valid",
+      "definition": "CHECK ((((kind = 'commission'::text) AND (\"amountCents\" >= 0) AND (\"saleRefundCents\" = 0)) OR ((kind = 'refund'::text) AND (\"amountCents\" <= 0) AND (\"saleRefundCents\" > 0) AND (reference IS NOT NULL) AND (reason IS NOT NULL))))"
+    },
+    {
+      "name": "affiliate_payout_valid",
+      "definition": "CHECK (((\"amountCents\" > 0) AND (status = ANY (ARRAY['prepared'::text, 'processing'::text, 'paid'::text, 'cancelled'::text])) AND ((status <> 'paid'::text) OR ((\"paidAt\" IS NOT NULL) AND (\"transferReference\" IS NOT NULL) AND (\"transferAmount\" IS NOT NULL) AND (\"transferAmount\" > (0)::numeric) AND (\"transferCurrency\" IS NOT NULL) AND (\"exchangeRate\" IS NOT NULL) AND (\"exchangeRate\" > (0)::numeric) AND (fees IS NOT NULL) AND (fees >= (0)::numeric)))))"
+    },
+    {
+      "name": "affiliate_profile_valid",
+      "definition": "CHECK (((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'suspended'::text])) AND (code ~ '^[A-Z0-9]{8,32}$'::text) AND ((\"rateOverrideBps\" IS NULL) OR ((\"rateOverrideBps\" >= 1) AND (\"rateOverrideBps\" <= 10000)))))"
+    },
+    {
+      "name": "affiliate_sale_adjustment_valid",
+      "definition": "CHECK ((\"saleRefundCents\" > 0))"
+    },
+    {
+      "name": "affiliate_settings_valid",
+      "definition": "CHECK (((id = 'program'::text) AND ((\"defaultRateBps\" IS NULL) OR ((\"defaultRateBps\" >= 1) AND (\"defaultRateBps\" <= 10000))) AND ((NOT enabled) OR (\"defaultRateBps\" IS NOT NULL))))"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "affiliate_checkout_immutable",
+      "definition": "CREATE TRIGGER affiliate_checkout_immutable BEFORE UPDATE ON public.\"CheckoutSession\" FOR EACH ROW EXECUTE FUNCTION affiliate_frozen_checkout()"
+    },
+    {
+      "name": "affiliate_commission_immutable",
+      "definition": "CREATE TRIGGER affiliate_commission_immutable BEFORE UPDATE ON public.\"AffiliateCommission\" FOR EACH ROW EXECUTE FUNCTION affiliate_frozen_commission()"
+    },
+    {
+      "name": "affiliate_fulfilment_immutable",
+      "definition": "CREATE TRIGGER affiliate_fulfilment_immutable BEFORE UPDATE ON public.\"EsimOrder\" FOR EACH ROW EXECUTE FUNCTION affiliate_frozen_fulfilment()"
+    },
+    {
+      "name": "affiliate_ledger_immutable",
+      "definition": "CREATE TRIGGER affiliate_ledger_immutable BEFORE DELETE OR UPDATE ON public.\"AffiliateLedgerEntry\" FOR EACH ROW EXECUTE FUNCTION affiliate_immutable_ledger()"
+    },
+    {
+      "name": "affiliate_sale_adjustment_immutable",
+      "definition": "CREATE TRIGGER affiliate_sale_adjustment_immutable BEFORE DELETE OR UPDATE ON public.\"AffiliateSaleAdjustment\" FOR EACH ROW EXECUTE FUNCTION affiliate_immutable_ledger()"
+    }
+  ],
+  "indexes": [
+    {
+      "name": "\"AffiliatePayoutAllocation_active_entry_key\"",
+      "definition": "CREATE UNIQUE INDEX \"AffiliatePayoutAllocation_active_entry_key\" ON public.\"AffiliatePayoutAllocation\" USING btree (\"ledgerEntryId\") WHERE (\"releasedAt\" IS NULL)"
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 import prismaClient from "@/lib/db/client";
 import { formatCurrencyWithCode, formatDate } from "@/lib/format";
-import { sendEmail } from "@/lib/notifications/email";
+import type { SendEmailOptions } from "@/lib/notifications/email";
 import { normalizeHttpUrl } from "@/lib/http/safe-url";
 import { resolveAiraloApnSettings, type AiraloApnSettings } from "@/lib/airalo/apn";
 import {
@@ -24,7 +24,7 @@ export type ReceiptSendResult = {
   reason?: string;
 };
 
-type SendReceiptOptions = {
+export type SendReceiptOptions = {
   prisma?: PrismaClient;
   baseUrl?: string;
 };
@@ -108,9 +108,9 @@ export function resolveReceiptBaseUrl({
   return nodeEnv === "production" ? null : "http://localhost:3000";
 }
 
-function buildOrderLink(orderId: string, baseUrl: string): string {
+function buildOrderLink(orderId: string, baseUrl: string, accessVersion: number): string {
   if (canIssueScopedAccessTokens()) {
-    return createOrderAccessLink(orderId, baseUrl);
+    return createOrderAccessLink(orderId, baseUrl, { accessVersion });
   }
 
   return `${baseUrl}/orders/${orderId}`;
@@ -254,10 +254,10 @@ export function buildReceiptEmail(options: {
   };
 }
 
-export async function sendOrderReceipt(
+export async function prepareOrderReceipt(
   orderId: string,
   options: SendReceiptOptions = {},
-): Promise<ReceiptSendResult> {
+): Promise<ReceiptSendResult | { payload: SendEmailOptions }> {
   const db = options.prisma ?? prismaClient;
 
   const order = await db.esimOrder.findUnique({
@@ -314,16 +314,6 @@ export async function sendOrderReceipt(
     return { sent: false, skipped: true, reason: "missing_app_url" };
   }
 
-  const now = new Date();
-  const claimed = await db.esimOrder.updateMany({
-    where: { id: orderId, receiptSentAt: null },
-    data: { receiptSentAt: now, receiptEmail },
-  });
-
-  if (claimed.count === 0) {
-    return { sent: false, skipped: true, reason: "already_sent" };
-  }
-
   const pkg = await findPackageDisplayByIdentifier(db, order.packageId);
 
   const amountCents = order.totalCents ?? order.payment?.amountCents ?? null;
@@ -331,7 +321,7 @@ export async function sendOrderReceipt(
   const amountLabel = amountCents === null ? currency : formatCurrencyWithCode(amountCents, currency);
   const orderReference = order.orderNumber ?? order.requestId ?? order.id;
   const purchasedAt = formatDate(order.createdAt);
-  const orderLink = buildOrderLink(order.id, baseUrl);
+  const orderLink = buildOrderLink(order.id, baseUrl, order.accessVersion);
   const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER?.replace(/\D/g, "") ?? "";
 
   const { subject, text, html } = buildReceiptEmail({
@@ -360,29 +350,12 @@ export async function sendOrderReceipt(
     whatsappUrl: whatsappNumber ? `https://wa.me/${whatsappNumber}` : null,
   });
 
-  try {
-    const result = await sendEmail({
-      to: receiptEmail,
-      subject,
-      text,
-      html,
-      from: process.env.RECEIPT_EMAIL_FROM ?? DEFAULT_FROM,
-    });
+  return { payload: { to: receiptEmail, subject, text, html, from: process.env.RECEIPT_EMAIL_FROM ?? DEFAULT_FROM } };
+}
 
-    if (result.skipped) {
-      await db.esimOrder.update({
-        where: { id: orderId },
-        data: { receiptSentAt: null, receiptEmail: null },
-      });
-      return { sent: false, skipped: true, reason: "email_disabled" };
-    }
-
-    return { sent: true, skipped: false };
-  } catch (error) {
-    await db.esimOrder.update({
-      where: { id: orderId },
-      data: { receiptSentAt: null, receiptEmail: null },
-    });
-    throw error;
-  }
+/** Compatibility entrypoint: callers enqueue durable work; only the worker sends. */
+export async function sendOrderReceipt(orderId: string, options: SendReceiptOptions = {}): Promise<ReceiptSendResult> {
+  const { queueOrderReceipt } = await import("./receipt-outbox");
+  const queued = await queueOrderReceipt(options.prisma ?? prismaClient, orderId);
+  return { sent: false, skipped: !queued, reason: queued ? "queued" : "already_sent" };
 }

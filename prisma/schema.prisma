@@ -193,6 +193,8 @@ model EsimOrder {
   requestId            String?                    @unique
   user                 User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId               String?
+  ownershipReviewRequired Boolean                 @default(false)
+  accessVersion        Int                        @default(0)
   package              Package                    @relation(fields: [packageId], references: [id])
   packageId            String                     @db.Uuid
   status               String                     @default("pending")
@@ -215,6 +217,11 @@ model EsimOrder {
   airaloSnapshots      AiraloOrderSnapshot[]
   fulfilledAt          DateTime?
   affiliateCommission  AffiliateCommission?
+  receiptDeliveries    ReceiptDelivery[]
+
+  @@index([packageId])
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
 }
 
 model EsimProfile {
@@ -230,6 +237,8 @@ model EsimProfile {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   usageSnapshots UsageSnapshot[]
+
+  @@index([orderId])
 }
 
 model UsageSnapshot {
@@ -292,6 +301,8 @@ model EsimOrderRecoveryAttempt {
   result     String
   reason     String?
   createdAt  DateTime  @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 model EsimInstallationPayload {
@@ -309,6 +320,8 @@ model CheckoutSession {
   quote           CheckoutQuote?       @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   user            User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId          String?
+  ownershipReviewRequired Boolean @default(false)
+  accessVersion   Int @default(0)
   package         Package              @relation(fields: [packageId], references: [id])
   packageId       String               @db.Uuid
   customerEmail   String?
@@ -334,6 +347,7 @@ model CheckoutSession {
   affiliateCommission AffiliateCommission?
   affiliateAdjustments AffiliateSaleAdjustment[]
 
+  @@index([packageId])
   @@index([affiliateId, createdAt])
 }
 
@@ -377,12 +391,17 @@ model PaymentTransaction {
   id                String                    @id @default(cuid())
   user              User?                     @relation(fields: [userId], references: [id], onDelete: SetNull)
   userId            String?
+  ownershipReviewRequired Boolean @default(false)
   provider          String
   dpoMode           DpoMode?
   providerReference String?
   transactionToken  String?
   redirectUrl       String?
   status            String                    @default("pending")
+  providerCode      String?
+  providerExplanation String?
+  version           Int                       @default(0)
+  approvedAt        DateTime?
   amountCents       Int
   currency          String
   statusHistory     String?
@@ -393,6 +412,11 @@ model PaymentTransaction {
   webhookEvents     PaymentTransactionEvent[]
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
+
+  @@index([checkoutId, createdAt])
+  @@index([transactionToken])
+  @@index([providerReference])
+  @@index([status, updatedAt])
 }
 
 model PaymentTransactionEvent {
@@ -401,7 +425,12 @@ model PaymentTransactionEvent {
   transactionId String
   eventType     String
   payload       String
+  fromStatus    String?
+  toStatus      String?
+  transitionVersion Int?
   receivedAt    DateTime           @default(now())
+
+  @@unique([transactionId, transitionVersion])
 }
 
 model AiraloAccessToken {
@@ -443,6 +472,11 @@ model User {
   phone        String?
   passwordHash String?              @map("password_hash")
   emailVerifiedAt DateTime?         @map("email_verified_at")
+  emailProofAt DateTime?
+  emailProofSource String?
+  authVersion Int @default(0)
+  recoveryRequired Boolean @default(false)
+  passwordResetRequired Boolean @default(false)
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   checkouts    CheckoutSession[]
@@ -612,12 +646,67 @@ model UserIdentity {
   scope          String?
   tokenType      String?
   sessionState   String?
+  quarantined    Boolean @default(false)
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId         String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([provider, providerUserId])
+}
+
+model LifecycleJob {
+  id String @id @default(cuid())
+  businessKey String @unique
+  kind String
+  targetId String
+  status String @default("pending")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+}
+
+model ReceiptDelivery {
+  id String @id @default(cuid())
+  businessKey String @unique
+  orderId String
+  order EsimOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  templateVersion Int @default(1)
+  status String @default("pending")
+  payload Json?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  leaseUntil DateTime?
+  leaseToken String?
+  firstAttemptAt DateTime?
+  acceptanceUnknown Boolean @default(false)
+  providerMessageId String?
+  acceptedAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([orderId])
+}
+
+model RateBucket {
+  key String @id
+  count Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model AdminAuthState {
+  id String @id @default("admin")
+  version Int @default(0)
 }
 
 model VerificationToken {

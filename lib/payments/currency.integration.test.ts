@@ -34,11 +34,11 @@ test("currency checkout: additive migration, frozen NAD quotes, ownership and du
   assert.equal(diff.status, 0, diff.stderr);
   await sql.exec(diff.stdout);
   await sql.exec('INSERT INTO "PaymentTransaction" (id,provider,"amountCents",currency,"updatedAt") VALUES (\'legacy-usd\',\'dpo\',1500,\'USD\',CURRENT_TIMESTAMP)');
-  await sql.exec(readFileSync(new URL("../../prisma/migrations/20261021160000_add_currency_quotes/migration.sql", import.meta.url), "utf8"));
+  await sql.exec(readFileSync(new URL("../../prisma/migration-history/migrations/20261021160000_add_currency_quotes/migration.sql", import.meta.url), "utf8"));
   await server.start();
   const database = new PrismaClient({ datasources: { db: { url: `postgresql://postgres:postgres@${server.getServerConn()}/postgres?sslmode=disable&connection_limit=1&pool_timeout=30` } } }); resources.db = database;
   await database.dpoSettings.create({ data: { id: "dpo" } });
-  const user = await database.user.create({ data: { email: "currency@example.test", preferredCurrency: "GBP" } });
+  const user = await database.user.create({ data: { email: "currency@example.test", emailProofAt: new Date(), emailProofSource: "email", preferredCurrency: "GBP" } });
   const country = await database.country.create({ data: { countryCode: "NA", slug: "namibia", title: "Namibia" } });
   const operator = await database.operator.create({ data: { countryId: country.id, title: "Fixture", info: [] } });
   const retail = { USD: 15, EUR: 13.35, GBP: 11.25, ZAR: 246 };

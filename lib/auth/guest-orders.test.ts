@@ -4,7 +4,6 @@ import type { PrismaClient } from "@prisma/client";
 
 import {
   claimGuestOrdersForVerifiedEmail,
-  markUserEmailVerifiedAndClaimGuestOrders,
 } from "./guest-orders";
 
 function matchesEmail(value: string | null | undefined, filter: { equals: string }) {
@@ -16,7 +15,7 @@ class FakeGuestOrderClaimDb {
     {
       id: "user-1",
       email: "Customer@Example.COM",
-      emailVerifiedAt: null as Date | null,
+      emailProofAt: null as Date | null,
     },
   ];
 
@@ -66,7 +65,7 @@ class FakeGuestOrderClaimDb {
       data,
     }: {
       where: { id: string; email: { equals: string } };
-      data: { emailVerifiedAt: Date };
+      data: { emailProofAt: Date };
     }) => {
       let count = 0;
       for (const user of this.users) {
@@ -74,7 +73,7 @@ class FakeGuestOrderClaimDb {
           continue;
         }
 
-        user.emailVerifiedAt = data.emailVerifiedAt;
+        user.emailProofAt = data.emailProofAt;
         count += 1;
       }
       return { count };
@@ -182,14 +181,15 @@ class FakeGuestOrderClaimDb {
 
 test("verified email claim attaches matching guest records without overwriting owners", async () => {
   const db = new FakeGuestOrderClaimDb();
-  const result = await markUserEmailVerifiedAndClaimGuestOrders(
+  db.users[0]!.emailProofAt = new Date();
+  const result = await claimGuestOrdersForVerifiedEmail(
     db as unknown as PrismaClient,
     "user-1",
     "customer@example.com",
   );
 
   assert.deepEqual(result, { orders: 2, checkouts: 1, payments: 2 });
-  assert.ok(db.users[0]?.emailVerifiedAt instanceof Date);
+  assert.ok(db.users[0]?.emailProofAt instanceof Date);
   assert.equal(db.orders.find((order) => order.id === "order-1")?.userId, "user-1");
   assert.equal(db.orders.find((order) => order.id === "order-2")?.userId, "user-1");
   assert.equal(db.orders.find((order) => order.id === "order-owned")?.userId, "other-user");

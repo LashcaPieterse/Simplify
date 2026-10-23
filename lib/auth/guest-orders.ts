@@ -29,10 +29,10 @@ export async function claimGuestOrdersForVerifiedEmail(
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { email: true, emailVerifiedAt: true },
+    select: { email: true, emailProofAt: true },
   });
 
-  if (!user?.emailVerifiedAt) {
+  if (!user?.emailProofAt) {
     return {
       orders: 0,
       checkouts: 0,
@@ -100,38 +100,4 @@ export async function claimGuestOrdersForVerifiedEmail(
       payments: payments.count,
     };
   });
-}
-
-export async function markUserEmailVerifiedAndClaimGuestOrders(
-  db: PrismaClient,
-  userId: string,
-  email: string | null | undefined,
-): Promise<GuestOrderClaimResult> {
-  const normalizedEmail = email ? normalizeEmailAddress(email) : "";
-
-  if (!normalizedEmail) {
-    return { orders: 0, checkouts: 0, payments: 0, skipped: "missing_email" };
-  }
-
-  const verifiedAt = new Date();
-  const updated = await db.user.updateMany({
-    where: {
-      id: userId,
-      email: emailFilter(normalizedEmail),
-    },
-    data: {
-      emailVerifiedAt: verifiedAt,
-    },
-  });
-
-  if (updated.count === 0) {
-    return {
-      orders: 0,
-      checkouts: 0,
-      payments: 0,
-      skipped: "user_email_mismatch",
-    };
-  }
-
-  return claimGuestOrdersForVerifiedEmail(db, userId, normalizedEmail);
 }

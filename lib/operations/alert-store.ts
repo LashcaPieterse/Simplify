@@ -74,6 +74,11 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
       ]);
       const health = healthRows[0];
       const now = Date.now();
+      const unresolvedPayments = await db.paymentTransaction.count({ where: { provider: "dpo", status: { in: ["creating", "creation_unknown", "pending", "authorized", "partially_paid", "verification_error", "verification_mismatch"] }, createdAt: { lte: new Date(now - 15 * 60_000) } } });
+      const receipts = {
+        overdue: await db.receiptDelivery.count({ where: { status: { in: ["pending", "leased"] }, createdAt: { lte: new Date(now - 10 * 60_000) }, order: { status: "completed", installation: { isNot: null } } } }),
+        review: await db.receiptDelivery.count({ where: { status: "review" } }),
+      };
       const affiliates = affiliateInfrastructureEnabled() ? {
         overdueCommissions: await db.checkoutSession.count({ where: { affiliateId: { not: null }, affiliateCommission: null, order: { is: { fulfilledAt: { lte: new Date(now - 30 * 60_000) } } }, payments: { some: { status: "approved" } } } }),
         overdueNotifications: await db.affiliateNotification.count({ where: { sentAt: null, createdAt: { lte: new Date(now - 60 * 60_000) } } }),
@@ -81,11 +86,13 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
       let responseValid = false;
       try {
         const summary = JSON.parse(health.responseBody ?? "null");
-        responseValid = [summary?.checked, summary?.recovered, summary?.unresolved].every(value => Number.isInteger(value) && value >= 0);
+        responseValid = summary?.ok === true && [summary?.checked, summary?.recovered, summary?.unresolved].every(value => Number.isInteger(value) && value >= 0);
       } catch { /* A 200 HTML/error response is not a successful recovery response. */ }
       return {
         activatedAt: config.activatedAt,
         affiliates,
+        unresolvedPayments,
+        receipts,
         checkouts: checkouts.map(checkout => ({
           id: checkout.id, intent: checkout.intent,
           paidAt: firstPaymentApproval(checkout.payments[0]?.statusHistory ?? null, checkout.payments[0]?.updatedAt ?? checkout.updatedAt),

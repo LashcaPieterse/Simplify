@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": ["scripts/security-*.ts", "scripts/db-*.ts", "types/next-auth.d.ts"],
+  "exclude": ["node_modules"]
+}
