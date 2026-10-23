@@ -14,6 +14,7 @@ The implementation was validated locally using Node 22.22.3, Prisma 5.22.0 and N
 | Python production watchdog tests | Four passed. |
 | `npm run security:audit` | Zero production dependency vulnerabilities reported. |
 | `git diff --check` | Passed. |
+| GitHub Actions on initial release candidate `ac0f88b` | All three jobs passed: application/browser/dependency checks, real Postgres migrations, and disposable Supabase platform checks including extensions, Vault, denied client access and inactive schedulers. [Run 39930447360](https://github.com/LashcaPieterse/Simplify/actions/runs/39930447360). |
 
 The remediation integration fixture executes the actual active migration SQL against an isolated PostgreSQL-compatible database. It verifies that a link request cannot claim purchases; verified proof resets preregistered credentials and quarantines mismatched identities; historical job seeding progresses; same-name constraint replacements fail adoption; competing payment observations retain approval; only one worker acquires a lease; receipt payloads and keys remain stable across unknown acceptance and later failures; expired uncertainty requires operator review; concurrent rate limits share hashed buckets; and limiter outages fail closed.
 
@@ -25,8 +26,7 @@ The JSON reader tests include false content lengths, malformed UTF-8 and oversiz
 
 The following checks require isolated Supabase-compatible staging and configured delivery/ingress; local application tests do not establish them:
 
-- Run `npm run test:platform` against a disposable local Supabase instance. Validate actual `pg_cron`, `http`, Vault, inactive secret-free schedulers and denied client-role reads.
-- Run baseline adoption against a staging copy of the real installation and resolve any installation-specific drift before marking the baseline applied.
+- Rerun CI for the baseline corrections found during the real-installation rehearsal. The staging copy passed structural and permission parity before adoption; fresh baseline SQL now also preserves the installed catalog timestamp precision, indexes, defaults, foreign-key actions and six additional SQL-only checks.
 - Verify recovery mail reaches the correct inbox and successfully redeems before historical quarantine activation.
 - Validate the trusted-IP adapter through the deployment's actual ingress.
 - Observe scheduled recovery and overdue-work alerts with lifecycle stages enabled. Verify the approved receipt sender and provider-acceptance evidence in staging.

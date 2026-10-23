@@ -5,6 +5,10 @@
       "definition": "CHECK (((quantity = 1) AND (currency = 'NAD'::text) AND (\"sourceZarCents\" > 0) AND (\"totalCents\" = \"sourceZarCents\") AND (\"displayCents\" > 0) AND (\"displayCurrency\" = ANY (ARRAY['USD'::text, 'NAD'::text, 'ZAR'::text, 'EUR'::text, 'GBP'::text]))))"
     },
     {
+      "name": "DpoSettings_singleton",
+      "definition": "CHECK ((id = 'dpo'::text))"
+    },
+    {
       "name": "User_preferredCurrency_check",
       "definition": "CHECK (((\"preferredCurrency\" IS NULL) OR (\"preferredCurrency\" = ANY (ARRAY['USD'::text, 'NAD'::text, 'ZAR'::text, 'EUR'::text, 'GBP'::text]))))"
     },
@@ -39,6 +43,26 @@
     {
       "name": "affiliate_settings_valid",
       "definition": "CHECK (((id = 'program'::text) AND ((\"defaultRateBps\" IS NULL) OR ((\"defaultRateBps\" >= 1) AND (\"defaultRateBps\" <= 10000))) AND ((NOT enabled) OR (\"defaultRateBps\" IS NOT NULL))))"
+    },
+    {
+      "name": "countries_country_code_not_blank_check",
+      "definition": "CHECK ((btrim(country_code) <> ''::text))"
+    },
+    {
+      "name": "entity_snapshots_entity_type_check",
+      "definition": "CHECK ((entity_type = ANY (ARRAY['country'::text, 'operator'::text, 'package'::text])))"
+    },
+    {
+      "name": "sync_run_items_action_check",
+      "definition": "CHECK ((action = ANY (ARRAY['insert'::text, 'update'::text, 'skip'::text, 'error'::text])))"
+    },
+    {
+      "name": "sync_run_items_entity_type_check",
+      "definition": "CHECK ((entity_type = ANY (ARRAY['country'::text, 'operator'::text, 'package'::text])))"
+    },
+    {
+      "name": "sync_runs_status_check",
+      "definition": "CHECK ((status = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text])))"
     }
   ],
   "triggers": [

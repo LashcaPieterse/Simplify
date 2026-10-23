@@ -14,6 +14,8 @@ Use Node 22.12–22.x and the lockfile's Prisma 5.22 CLI. Run commands from the 
 
 The workspace contains the combined implementation. A staged production rollout must deploy an application artifact compatible with each corresponding schema; do not deploy the final artifact against only the identity migration. Historical SQL remains byte-for-byte archived under `prisma/migration-history/migrations`, with SHA-256 checksums for the pre-cutover files. Do not edit archived migrations. The historical chain contains installation defects; it is an upgrade path for existing databases, not a fresh-install recipe.
 
+The frozen baseline preserves the installed catalog audit tables' microsecond timestamps with time zones, descending indexes and their original names, defaults, foreign-key update behavior, and SQL-only validation constraints. These definitions were checked against a schema-only copy of the existing installation. Baseline adoption does not rewrite those tables or convert their timestamps.
+
 ## Backup and inventory
 
 Take a provider backup/PITR checkpoint and a direct Postgres dump before migration. Use PostgreSQL client tools compatible with the server, and store the dump securely outside the repository. Configure a `simplify_backup` connection profile in a protected Postgres service file outside the repository (mode 0600), matching the intended database. This keeps credentials out of command arguments:
@@ -46,6 +48,8 @@ npm run db:platform -- --apply
 ```
 
 `migrate resolve --applied` adds the baseline history record; it does not remove historical records or execute baseline SQL. Retain those records and backups. The parity command intentionally targets stage 3; run it before stage 5 introduces its new tables.
+
+For a schema-only rehearsal on a fresh Supabase project, retain Supabase-owned schema objects and default privileges that the migration role cannot replay. Compare those platform defaults with the source, restore the application schema and migration-history rows, then apply `prisma/platform/001_backend_access.sql` before the parity gate. Fresh Supabase schema grants must satisfy the same denied-client-access checks as the source. Do not copy customer or financial rows into the rehearsal.
 
 ## Fresh installation
 

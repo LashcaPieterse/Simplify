@@ -29,7 +29,7 @@ CREATE TABLE "operators" (
     "gradient_end" TEXT,
     "gradient_start" TEXT,
     "image_json" JSONB,
-    "info" TEXT[],
+    "info" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "install_window_days" INTEGER,
     "is_kyc_verify" BOOLEAN,
     "is_prepaid" BOOLEAN,
@@ -80,16 +80,16 @@ CREATE TABLE "packages" (
 CREATE TABLE "package_state" (
     "package_id" UUID NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
-    "deactivated_at" TIMESTAMP(3),
+    "deactivated_at" TIMESTAMPTZ(6),
     "base_price_cents" INTEGER NOT NULL DEFAULT 0,
     "selling_price_cents" INTEGER,
     "currency_code" TEXT NOT NULL DEFAULT 'USD',
     "source_price_decimal" DECIMAL(12,4),
     "sell_price_decimal" DECIMAL(12,4),
-    "last_synced_at" TIMESTAMP(3),
+    "last_synced_at" TIMESTAMPTZ(6),
     "source_hash" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "package_state_pkey" PRIMARY KEY ("package_id")
 );
@@ -97,8 +97,8 @@ CREATE TABLE "package_state" (
 -- CreateTable
 CREATE TABLE "sync_runs" (
     "id" TEXT NOT NULL,
-    "started_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "finished_at" TIMESTAMP(3),
+    "started_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "finished_at" TIMESTAMPTZ(6),
     "status" TEXT NOT NULL,
     "source" TEXT NOT NULL DEFAULT 'airalo',
     "triggered_by" TEXT NOT NULL DEFAULT 'system',
@@ -110,8 +110,8 @@ CREATE TABLE "sync_runs" (
     "skipped_count" INTEGER NOT NULL DEFAULT 0,
     "warning_count" INTEGER NOT NULL DEFAULT 0,
     "failure_count" INTEGER NOT NULL DEFAULT 0,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "sync_runs_pkey" PRIMARY KEY ("id")
 );
@@ -125,9 +125,9 @@ CREATE TABLE "package_sync_pages" (
     "links_json" JSONB,
     "meta_json" JSONB,
     "pricing_json" JSONB,
-    "raw_payload_json" JSONB,
     "country_count" INTEGER NOT NULL,
-    "captured_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "captured_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "raw_payload_json" JSONB,
 
     CONSTRAINT "package_sync_pages_pkey" PRIMARY KEY ("id")
 );
@@ -144,7 +144,7 @@ CREATE TABLE "sync_run_items" (
     "diff_json" JSONB,
     "warning_flags" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "error_text" TEXT,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "sync_run_items_pkey" PRIMARY KEY ("id")
 );
@@ -157,7 +157,7 @@ CREATE TABLE "entity_snapshots" (
     "entity_key" TEXT NOT NULL,
     "raw_payload_json" JSONB NOT NULL,
     "normalized_json" JSONB NOT NULL,
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "entity_snapshots_pkey" PRIMARY KEY ("id")
 );
@@ -669,43 +669,43 @@ CREATE UNIQUE INDEX "packages_airalo_package_id_key" ON "packages"("airalo_packa
 CREATE INDEX "packages_operator_id_idx" ON "packages"("operator_id");
 
 -- CreateIndex
-CREATE INDEX "package_state_is_active_idx" ON "package_state"("is_active");
+CREATE INDEX "idx_package_state_is_active" ON "package_state"("is_active");
 
 -- CreateIndex
-CREATE INDEX "package_state_last_synced_at_idx" ON "package_state"("last_synced_at");
+CREATE INDEX "idx_package_state_last_synced_at" ON "package_state"("last_synced_at" DESC);
 
 -- CreateIndex
-CREATE INDEX "sync_runs_started_at_idx" ON "sync_runs"("started_at");
+CREATE INDEX "idx_sync_runs_started_at" ON "sync_runs"("started_at" DESC);
 
 -- CreateIndex
-CREATE INDEX "sync_runs_status_idx" ON "sync_runs"("status");
+CREATE INDEX "idx_sync_runs_status" ON "sync_runs"("status");
 
 -- CreateIndex
-CREATE INDEX "package_sync_pages_captured_at_idx" ON "package_sync_pages"("captured_at");
+CREATE INDEX "idx_package_sync_pages_captured_at" ON "package_sync_pages"("captured_at" DESC);
 
 -- CreateIndex
 CREATE UNIQUE INDEX "package_sync_pages_run_id_page_key" ON "package_sync_pages"("run_id", "page");
 
 -- CreateIndex
-CREATE INDEX "sync_run_items_run_id_entity_type_idx" ON "sync_run_items"("run_id", "entity_type");
+CREATE INDEX "idx_sync_run_items_lookup" ON "sync_run_items"("entity_type", "entity_key");
 
 -- CreateIndex
-CREATE INDEX "sync_run_items_entity_type_entity_key_idx" ON "sync_run_items"("entity_type", "entity_key");
+CREATE INDEX "idx_sync_run_items_run_type" ON "sync_run_items"("run_id", "entity_type");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "sync_run_items_run_id_entity_type_entity_key_key" ON "sync_run_items"("run_id", "entity_type", "entity_key");
 
 -- CreateIndex
-CREATE INDEX "entity_snapshots_run_id_entity_type_idx" ON "entity_snapshots"("run_id", "entity_type");
-
--- CreateIndex
-CREATE INDEX "entity_snapshots_entity_type_entity_key_created_at_idx" ON "entity_snapshots"("entity_type", "entity_key", "created_at");
+CREATE INDEX "idx_entity_snapshots_lookup" ON "entity_snapshots"("entity_type", "entity_key", "created_at" DESC);
 
 -- CreateIndex
 CREATE UNIQUE INDEX "EsimOrder_orderNumber_key" ON "EsimOrder"("orderNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "EsimOrder_requestId_key" ON "EsimOrder"("requestId");
+
+-- CreateIndex
+CREATE INDEX "EsimOrder_packageId_idx" ON "EsimOrder"("packageId");
 
 -- CreateIndex
 CREATE INDEX "EsimOrder_userId_createdAt_idx" ON "EsimOrder"("userId", "createdAt");
@@ -723,16 +723,16 @@ CREATE INDEX "EsimProfile_orderId_idx" ON "EsimProfile"("orderId");
 CREATE UNIQUE INDEX "WebhookEvent_eventId_key" ON "WebhookEvent"("eventId");
 
 -- CreateIndex
-CREATE INDEX "airalo_order_snapshots_order_id_idx" ON "airalo_order_snapshots"("order_id");
+CREATE INDEX "idx_airalo_order_snapshots_order_id" ON "airalo_order_snapshots"("order_id");
 
 -- CreateIndex
-CREATE INDEX "airalo_order_snapshots_request_id_idx" ON "airalo_order_snapshots"("request_id");
+CREATE INDEX "idx_airalo_order_snapshots_request_id" ON "airalo_order_snapshots"("request_id");
 
 -- CreateIndex
-CREATE INDEX "airalo_order_snapshots_order_number_idx" ON "airalo_order_snapshots"("order_number");
+CREATE INDEX "idx_airalo_order_snapshots_order_number" ON "airalo_order_snapshots"("order_number");
 
 -- CreateIndex
-CREATE INDEX "airalo_order_snapshots_source_created_at_idx" ON "airalo_order_snapshots"("source", "created_at");
+CREATE INDEX "idx_airalo_order_snapshots_source_created_at" ON "airalo_order_snapshots"("source", "created_at");
 
 -- CreateIndex
 CREATE INDEX "EsimOrderRecoveryAttempt_orderId_createdAt_idx" ON "EsimOrderRecoveryAttempt"("orderId", "createdAt");
@@ -745,6 +745,9 @@ CREATE UNIQUE INDEX "CheckoutSession_quoteId_key" ON "CheckoutSession"("quoteId"
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CheckoutSession_orderId_key" ON "CheckoutSession"("orderId");
+
+-- CreateIndex
+CREATE INDEX "CheckoutSession_packageId_idx" ON "CheckoutSession"("packageId");
 
 -- CreateIndex
 CREATE INDEX "CheckoutSession_affiliateId_createdAt_idx" ON "CheckoutSession"("affiliateId", "createdAt");
@@ -849,16 +852,16 @@ ALTER TABLE "operators" ADD CONSTRAINT "operators_country_id_fkey" FOREIGN KEY (
 ALTER TABLE "packages" ADD CONSTRAINT "packages_operator_id_fkey" FOREIGN KEY ("operator_id") REFERENCES "operators"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "package_state" ADD CONSTRAINT "package_state_package_id_fkey" FOREIGN KEY ("package_id") REFERENCES "packages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "package_state" ADD CONSTRAINT "package_state_package_id_fkey" FOREIGN KEY ("package_id") REFERENCES "packages"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "package_sync_pages" ADD CONSTRAINT "package_sync_pages_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "sync_runs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "package_sync_pages" ADD CONSTRAINT "package_sync_pages_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "sync_runs"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "sync_run_items" ADD CONSTRAINT "sync_run_items_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "sync_runs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "sync_run_items" ADD CONSTRAINT "sync_run_items_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "sync_runs"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE "entity_snapshots" ADD CONSTRAINT "entity_snapshots_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "sync_runs"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "entity_snapshots" ADD CONSTRAINT "entity_snapshots_run_id_fkey" FOREIGN KEY ("run_id") REFERENCES "sync_runs"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "EsimOrder" ADD CONSTRAINT "EsimOrder_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -964,6 +967,14 @@ ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_actorId_fkey" FOREIGN KEY ("acto
 
 
 -- A ledger entry may belong to only one unreleased payout, including under concurrency.
+-- Preserve SQL-only catalog and singleton checks from the installed schema.
+ALTER TABLE "DpoSettings" ADD CONSTRAINT "DpoSettings_singleton" CHECK ((id = 'dpo'::text));
+ALTER TABLE countries ADD CONSTRAINT "countries_country_code_not_blank_check" CHECK ((btrim(country_code) <> ''::text));
+ALTER TABLE entity_snapshots ADD CONSTRAINT "entity_snapshots_entity_type_check" CHECK ((entity_type = ANY (ARRAY['country'::text, 'operator'::text, 'package'::text])));
+ALTER TABLE sync_run_items ADD CONSTRAINT "sync_run_items_action_check" CHECK ((action = ANY (ARRAY['insert'::text, 'update'::text, 'skip'::text, 'error'::text])));
+ALTER TABLE sync_run_items ADD CONSTRAINT "sync_run_items_entity_type_check" CHECK ((entity_type = ANY (ARRAY['country'::text, 'operator'::text, 'package'::text])));
+ALTER TABLE sync_runs ADD CONSTRAINT "sync_runs_status_check" CHECK ((status = ANY (ARRAY['running'::text, 'success'::text, 'failed'::text])));
+
 CREATE UNIQUE INDEX "AffiliatePayoutAllocation_active_entry_key"
 ON "AffiliatePayoutAllocation" ("ledgerEntryId") WHERE "releasedAt" IS NULL;
 
@@ -1065,8 +1076,8 @@ ALTER TABLE "CheckoutQuote" ADD CONSTRAINT "CheckoutQuote_amounts_check"
     AND "displayCurrency" IN ('USD', 'NAD', 'ZAR', 'EUR', 'GBP'));
 
 
-CREATE INDEX "CheckoutSession_packageId_idx" ON "CheckoutSession" ("packageId");
-CREATE INDEX "EsimOrder_packageId_idx" ON "EsimOrder" ("packageId");
+CREATE INDEX IF NOT EXISTS "CheckoutSession_packageId_idx" ON "CheckoutSession" ("packageId");
+CREATE INDEX IF NOT EXISTS "EsimOrder_packageId_idx" ON "EsimOrder" ("packageId");
 CREATE OR REPLACE FUNCTION public.is_admin_role()
 RETURNS BOOLEAN
 LANGUAGE sql
