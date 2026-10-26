@@ -1,10 +1,10 @@
-# Remediation validation — 2026-10-23
+# Remediation validation — 2026-10-26
 
-The implementation was validated locally using Node 22.22.3, Prisma 5.22.0 and Next.js 16.4.2. Automated tests use isolated databases and mocked payment, supplier-purchase and receipt transports. The subsequent isolated staging rollout used mocked financial transports and real verification, receipt and alert email delivery to an approved inbox. Production application, schema, account ownership and schedulers remain unchanged.
+The implementation was validated locally using Node 22.22.3, Prisma 5.22.0 and Next.js 16.4.2. Automated tests use isolated databases and mocked payment, supplier-purchase and receipt transports. The isolated staging rollout used mocked financial transports and real verification, receipt and alert email delivery to an approved inbox. The owner subsequently resumed production rollout while retaining the Free Supabase plan. Production migration and deployment evidence is recorded below.
 
 | Check | Result |
 | --- | --- |
-| `npm test` | 359 tests: 358 passed, 1 skipped, 0 failed. The skip is the existing live Airalo API test, which requires explicit provider credentials. |
+| `npm test` | 361 tests: 360 passed, 1 skipped, 0 failed. The skip is the existing live Airalo API test, which requires explicit provider credentials. |
 | `npm run typecheck` | Passed. |
 | `npm run check:operations` | Passed; includes database provisioning/backfill scripts and the Supabase platform fixture. |
 | `npm run lint` | Passed with zero warnings. |
@@ -14,11 +14,13 @@ The implementation was validated locally using Node 22.22.3, Prisma 5.22.0 and N
 | Python production watchdog tests | Four passed. |
 | `npm run security:audit` | Zero production dependency vulnerabilities reported. |
 | `git diff --check` | Passed. |
-| GitHub Actions on release candidate `050a351` | All three jobs passed: application/browser/dependency checks, real Postgres migrations, and disposable Supabase platform checks including extensions, Vault, denied client access and inactive schedulers. Includes the baseline corrections found during the installation rehearsal. [Run 39936173603](https://github.com/LashcaPieterse/Simplify/actions/runs/39936173603). |
+| GitHub Actions on release candidate `c02ed61` | All three jobs passed: application/browser/dependency checks, real Postgres migrations, and disposable Supabase platform checks including extensions, Vault, denied client access and inactive schedulers. Includes baseline corrections, patched Zod/Nodemailer dependencies and the late-callback recovery regression. [Run 40313051906](https://github.com/LashcaPieterse/Simplify/actions/runs/40313051906). |
 
 The remediation integration fixture executes the actual active migration SQL against an isolated PostgreSQL-compatible database. It verifies that a link request cannot claim purchases; verified proof resets preregistered credentials and quarantines mismatched identities; historical job seeding progresses; same-name constraint replacements fail adoption; competing payment observations retain approval; only one worker acquires a lease; receipt payloads and keys remain stable across unknown acceptance and later failures; expired uncertainty requires operator review; concurrent rate limits share hashed buckets; and limiter outages fail closed.
 
 The browser-independent purchase journey starts with a persisted pending payment and runs the leased verification and fulfillment stages without a callback or browser. Two concurrent fulfillment workers produce exactly one supplier submission and one reserved order. Fulfillment persists a receipt job, the mocked provider accepts it, and DPO processing acknowledgment runs separately afterward. Existing unknown-outcome and concurrent supplier-submission regression tests remain passing.
+
+A late independently verified paid callback can reopen only its payment-verification job after an earlier terminal observation. Concurrent callbacks preserve active leases and a 15-second verification cooldown; supplier review jobs remain untouched. This was also exercised using two independent clients against real isolated staging Postgres: one mocked DPO verification recovered approval and produced zero supplier submissions.
 
 The JSON reader tests include false content lengths, malformed UTF-8 and oversized cloned request streams. Account-limit reservations remain isolated across concurrent authentication requests. Scoped-token and admin-session tests cover versioned access, old formats, timestamps, signatures and local return destinations.
 
@@ -41,10 +43,10 @@ The staging-only draft baseline registration was reconciled to the final artifac
 
 Detailed evidence, inbox identifiers, payload fingerprints and operational logs are retained in the ignored owner-only audit directory; credentials and customer information are excluded from the release PR.
 
-## Production hold
+## Production rollout
 
-On 2026-10-26 the owner chose to retain the Free Supabase plan and hold production rollout. Supabase still reports organization-wide restrictions for exceeding the database-size quota. No paid plan or add-on was activated. Production remains on `25ce2c3`; the candidate is published in [draft PR #107](https://github.com/LashcaPieterse/Simplify/pull/107).
+Production deployment resumed at the owner's request and the release is live. The migration and baseline checks passed before application deployment. Recovery inbox proof, authenticated account access, request-body limits, scheduled lifecycle recovery and alert delivery were verified. Historical recovery and receipt-review controls are active.
 
-Production had a read-only inventory and schema/migration-history backup. The full application backup was interrupted when rollout was held; its partial artifact is explicitly labeled incomplete and must never be used for restore. Before resuming, resolve the capacity decision, take and validate a fresh complete backup, recheck current installation parity, configure the required production rate-limit secret, and follow the staged migration, deployment, recovery-mail and bounded activation gates in the [runbook](security-remediation.md). Historical production quarantine and lifecycle/receipt worker activation have not run.
+[PR #107](https://github.com/LashcaPieterse/Simplify/pull/107) contains the deployed release. Its application code matches the tested release candidate. Detailed deployment, inventory, backup and operator-review evidence is retained privately.
 
-`PURCHASE_LIFECYCLE_ENABLED` and `RECEIPT_OUTBOX_ENABLED` default to false. Fresh platform schedules are inactive. Preserve queued work and additive schema during rollback.
+Worker flags default to false for new environments, and fresh platform schedules remain inactive. Preserve queued work and additive schema during rollback; follow the [operations runbook](security-remediation.md).
