@@ -266,6 +266,7 @@ export async function prepareOrderReceipt(
       user: { select: { name: true, email: true } },
       payment: true,
       checkout: { include: { quote: true } },
+      saleCheckout: true,
       installation: true,
       profiles: {
         select: { activationCode: true },
@@ -282,6 +283,7 @@ export async function prepareOrderReceipt(
     return { sent: false, skipped: true, reason: "already_sent" };
   }
 
+  if (order.ownershipReviewRequired) return { sent: false, skipped: true, reason: "ownership_review" };
   const receiptEmail = order.customerEmail ?? order.user?.email ?? null;
 
   if (!receiptEmail) {
@@ -329,7 +331,7 @@ export async function prepareOrderReceipt(
     orderReference,
     planName: pkg?.title ?? "SIM.Africa eSIM plan",
     destination: pkg?.operator?.country?.title ?? null,
-    amountLabel,
+    amountLabel: order.replacementForId ? `${amountLabel} — replacement, no additional customer charge` : amountLabel,
     displayAmountLabel: order.checkout?.quote ? formatCurrencyWithCode(order.checkout.quote.displayCents, order.checkout.quote.displayCurrency) : undefined,
     status: order.status,
     purchasedAt,

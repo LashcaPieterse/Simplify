@@ -15,6 +15,7 @@ export default defineConfig([...nextVitals, ...nextTypescript, {
   ".next/**",
   "node_modules/**",
   "scripts/**",
+  "docs/audits/**",
   "types/**/*.d.ts",
   "airalo-debug.ts",
   "next-env.d.ts",

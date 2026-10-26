@@ -40,6 +40,7 @@ export type MonitorSnapshot = {
   affiliates?: { overdueCommissions: number; overdueNotifications: number };
   unresolvedPayments?: number;
   receipts?: { overdue: number; review: number };
+  unresolvedOperations?: number;
 };
 
 const minutes = (now: Date, then: Date | null) => then ? (now.getTime() - then.getTime()) / 60000 : Infinity;
@@ -58,6 +59,7 @@ export function firstPaymentApproval(history: string | null, fallback: Date): Da
 
 export function findProductionIncidents(snapshot: MonitorSnapshot, now: Date): Incident[] {
   const incidents: Incident[] = [];
+  if (snapshot.unresolvedOperations) incidents.push({ key: "operations:review", category: "financial_operation_review", entityId: null, title: "Financial operations require reconciliation", detail: `${snapshot.unresolvedOperations} provider operations are pending or uncertain. Review saved requests before another financial action.` });
   if (snapshot.unresolvedPayments) incidents.push({ key: "payments:unresolved", category: "payment_reconciliation_delayed", entityId: null,
     title: "Payments await completion or review", detail: `${snapshot.unresolvedPayments} unresolved payments are over fifteen minutes old. Reconcile existing transactions; do not charge or capture automatically.` });
   if (snapshot.receipts?.overdue || snapshot.receipts?.review) incidents.push({ key: "receipts:delayed", category: "receipt_delivery_delayed", entityId: null,
@@ -67,7 +69,7 @@ export function findProductionIncidents(snapshot: MonitorSnapshot, now: Date): I
   const manualOrders = new Set<string>();
   for (const order of snapshot.supplierOrders) {
     const age = minutes(now, order.createdAt);
-    const blocked = ["airalo_failed", "airalo_outcome_unknown"].includes(order.status) && age >= 5;
+    const blocked = ["airalo_failed", "airalo_rejected", "airalo_outcome_unknown"].includes(order.status) && age >= 5;
     const submitting = order.status === "airalo_submitting" && age >= 10;
     const unresolved = order.unresolved && !order.deliveryReady && order.status !== "completed" && age >= 45;
     if (!blocked && !submitting && !unresolved) continue;

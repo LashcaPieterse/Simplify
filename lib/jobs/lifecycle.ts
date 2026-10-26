@@ -1,3 +1,5 @@
+import { reconcileAdminOperations } from "../admin/financial";
+import { orderDisposition } from "../orders/fulfillment-disposition";
 import type { PrismaClient } from "@prisma/client";
 import prisma from "../db/client";
 import { claimJob, enqueueJob, finishJob, type JobKind } from "./store";
@@ -93,8 +95,8 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: {
         break;
       }
       case "reconcile_supplier": {
-        const order = await db.esimOrder.findUniqueOrThrow({ where: { id: job.targetId }, include: { profiles: true, checkout: true } });
-        done = order.status === "completed" && Boolean(order.orderNumber) && (order.checkout?.intent === "top-up" || order.profiles.length > 0);
+        const order = await db.esimOrder.findUniqueOrThrow({ where: { id: job.targetId }, include: { profiles: true, checkout: true, saleCheckout: true } });
+        done = order.status === "completed" && Boolean(order.orderNumber) && ((order.saleCheckout ?? order.checkout)?.intent === "top-up" || order.profiles.length > 0);
         if (!done) {
           const result = await recoverAiraloOrders({ prisma: db, orderId: order.id, limit: 1 });
           done = result.recovered > 0;
@@ -102,8 +104,10 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: {
         break;
       }
       case "complete_installation": {
-        const order = await db.esimOrder.findUniqueOrThrow({ where: { id: job.targetId }, include: { installation: true, profiles: true, checkout: true } });
-        if (order.checkout?.intent === "top-up") { done = order.status === "completed"; break; }
+        const disposition = await orderDisposition(db, job.targetId);
+        if (disposition.blocked) { await finishJob(db, job, disposition.permanent ? "done" : "retry", "delivery_held_or_superseded"); return { result: disposition.permanent ? "done" as const : "retry" as const }; }
+        const order = await db.esimOrder.findUniqueOrThrow({ where: { id: job.targetId }, include: { installation: true, profiles: true, checkout: true, saleCheckout: true } });
+        if ((order.saleCheckout ?? order.checkout)?.intent === "top-up") { done = order.status === "completed"; break; }
         if (order.orderNumber && order.profiles.length) {
           await ensureOrderInstallation(order.id, { prisma: db });
           const current = await db.esimOrder.findUniqueOrThrow({ where: { id: order.id }, include: { installation: true, profiles: true } });
@@ -148,6 +152,7 @@ export async function reconcilePayment(paymentId: string, db: PrismaClient = pri
 
 export async function runLifecycleTick(db: PrismaClient = prisma) {
   const deadline = Date.now() + 240_000;
+  await reconcileAdminOperations(db);
   await seedLifecycleWork(db);
   const stages: Record<string, { checked: number; completed: number; unresolved: number; failed: number }> = {};
   for (const kind of kinds) {

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import prisma from "@/lib/db/client";
-import { formatDate } from "@/lib/format";
+import { formatCurrencyWithCode } from "@/lib/format";
+import { resolveRetailPrices } from "@/lib/catalog/retail-prices";
+import { formatOpsTime } from "@/lib/admin/queries";
 
 const PAGE_SIZE = 20;
 
@@ -46,34 +48,29 @@ export default async function AdminPackagesPage({ searchParams }: { searchParams
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Package pricing</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Supplier catalogue</h1>
       <form className="flex gap-2">
         <input defaultValue={q} name="q" placeholder="Search package/operator/country" className="w-full rounded border border-slate-200 px-3 py-2 text-sm" />
         <button className="button-ribbon-primary rounded-full px-3 py-2 text-sm font-semibold">Search</button>
       </form>
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-slate-50">
             <tr>
-              <th className="px-3 py-2 text-left">Package</th><th className="px-3 py-2 text-left">Operator / Country</th><th className="px-3 py-2 text-left">Source</th><th className="px-3 py-2 text-left">DB</th><th className="px-3 py-2 text-left">Last synced</th>
+              <th className="px-3 py-2 text-left">Package</th><th className="px-3 py-2 text-left">Operator / Country</th><th className="px-3 py-2 text-left">Checkout price</th><th className="px-3 py-2 text-left">Availability</th><th className="px-3 py-2 text-left">Last synced</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((pkg) => {
-              const currency = pkg.state?.currencyCode ?? "USD";
-              const source = pkg.state?.sourcePriceDecimal?.toString() ?? pkg.netPrice?.toString() ?? "-";
-              const dbPrice =
-                pkg.state?.sellPriceDecimal?.toString() ??
-                (typeof pkg.state?.sellingPriceCents === "number"
-                  ? (pkg.state.sellingPriceCents / 100).toFixed(2)
-                  : "-");
+              const prices = resolveRetailPrices(pkg.pricesRecommendedRetailPrice);
+              const source = prices?.NAD ? formatCurrencyWithCode(prices.NAD, "NAD") : "Unavailable";
               return (
                 <tr key={pkg.id} className="border-t border-slate-100">
                   <td className="px-3 py-2"><Link href={`/admin/packages/${pkg.id}`} className="text-brand-700 underline">{pkg.title}</Link><p className="text-xs text-slate-500">{pkg.airaloPackageId}</p></td>
                   <td className="px-3 py-2">{pkg.operator.title} / {pkg.operator.country.title}</td>
-                  <td className="px-3 py-2">{source} {currency}</td>
-                  <td className="px-3 py-2">{dbPrice} {currency}</td>
-                  <td className="px-3 py-2">{pkg.state?.lastSyncedAt ? formatDate(pkg.state.lastSyncedAt) : "-"}</td>
+                  <td className="px-3 py-2">{source}</td>
+                  <td className="px-3 py-2">{pkg.state?.isActive ? "Active" : "Inactive"}</td>
+                  <td className="px-3 py-2">{pkg.state?.lastSyncedAt ? formatOpsTime(pkg.state.lastSyncedAt) : "-"}</td>
                 </tr>
               );
             })}

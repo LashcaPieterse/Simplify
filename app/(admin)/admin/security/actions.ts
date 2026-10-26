@@ -1,12 +1,16 @@
 "use server";
 import type { Route } from "next";
+import { headers } from "next/headers";
+import { enforceRates, trustedClientIp } from "@/lib/security/rate-limit";
 import { redirect } from "next/navigation";
-import { requireAdminSession, revokeAdminSessions, clearAdminSession } from "@/lib/auth";
+import { requireAdminSession, revokeAdminSessions, clearAdminSession, validateAdminCredentials } from "@/lib/auth";
 import prisma from "@/lib/db/client";
 import { reviewReceipt } from "@/lib/notifications/receipt-outbox";
 
-export async function revokeAllAdminSessions() {
+export async function revokeAllAdminSessions(form: FormData) {
   const session = await requireAdminSession();
+  await enforceRates([{ scope: "admin-security-password", identifier: trustedClientIp(await headers()), limit: 5, windowSeconds: 900 }]);
+  if (form.get("confirmation") !== "on" || !validateAdminCredentials(session.email, String(form.get("password") ?? ""))) throw new Error("Confirm the administrator password and session revocation.");
   await revokeAdminSessions(session.email);
   await clearAdminSession();
   redirect("/admin/login");

@@ -1,186 +1,28 @@
-import { KpiCard } from "@/components/admin/KpiCard";
-import type { Prisma } from "@prisma/client";
-import { SimpleBarChart } from "@/components/admin/SimpleBarChart";
-import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
-import { DpoGatewayControl } from "@/components/admin/DpoGatewayControl";
 import prisma from "@/lib/db/client";
-import { formatCurrency } from "@/lib/format";
-import { supplierCostCents } from "@/lib/affiliates/queries";
+import { requireAdminSession } from "@/lib/auth";
+import { formatCurrencyWithCode } from "@/lib/format";
+import { DpoGatewayControl } from "@/components/admin/DpoGatewayControl";
 import { getActiveDpoMode } from "@/lib/payments/dpo-settings";
 import { getDpoCredentialStatus } from "@/lib/payments/dpo";
+import { SimpleLineChart } from "@/components/admin/SimpleLineChart";
+import { OpsLink, PageTitle, Panel } from "@/components/admin/OpsUI";
+import { countFulfilledSales } from "@/lib/admin/reporting";
 
-function dateRangeFromParams(range?: string) {
-  const now = new Date();
-  switch (range) {
-    case "7d":
-      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    case "30d":
-    default:
-      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  }
-}
+function reportingStart(days: number) { return new Date(Date.now() - days * 86400000); }
 
-export default async function AdminDashboard({ searchParams }: { searchParams?: Promise<Record<string, string | string[]>> }) {
-  const resolvedSearchParams = await searchParams;
-  const rangeKey = typeof resolvedSearchParams?.range === "string" ? resolvedSearchParams.range : "30d";
-  const rangeStart = dateRangeFromParams(rangeKey);
-
-  const dpoMode = await getActiveDpoMode();
-
-  const allOrders = await prisma.esimOrder.findMany({
-    where: { createdAt: { gte: rangeStart } },
-    select: {
-      id: true,
-      packageId: true,
-      quantity: true,
-      totalCents: true,
-      currency: true,
-      createdAt: true,
-    },
-  });
-
-  const currencies = Array.from(new Set(allOrders.map(order => order.currency ?? "USD"))).sort();
-  const requestedCurrency = typeof resolvedSearchParams?.currency === "string" ? resolvedSearchParams.currency : "NAD";
-  const currencyCode = /^[A-Z]{3}$/.test(requestedCurrency) ? requestedCurrency : "NAD";
-  const orders = allOrders.filter(order => (order.currency ?? "USD") === currencyCode);
-
-  const uuidRegex =
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-  const packageIds = Array.from(new Set(orders.map((order) => order.packageId).filter(Boolean)));
-  const packageUuidIds = packageIds.filter((id) => uuidRegex.test(id));
-  const packageExternalIds = packageIds.filter((id) => !uuidRegex.test(id));
-
-  const packages = packageIds.length
-    ? await prisma.package.findMany({
-        where: {
-          OR: [
-            packageUuidIds.length ? { id: { in: packageUuidIds } } : undefined,
-            packageExternalIds.length ? { airaloPackageId: { in: packageExternalIds } } : undefined,
-          ].filter(Boolean) as Prisma.PackageWhereInput[],
-        },
-        include: {
-          operator: { include: { country: true } },
-          state: true,
-        },
-      })
-    : [];
-
-  const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const packageByExternalId = new Map(packages.map((pkg) => [pkg.airaloPackageId, pkg]));
-  const totalRevenue = orders.reduce((sum, order) => sum + (order.totalCents ?? 0), 0);
-  let missingCosts = 0;
-  const totalCost = orders.reduce((sum, order) => {
-    const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
-    const cost = supplierCostCents(pkg?.pricesNetPrice, currencyCode === "NAD" ? "ZAR" : currencyCode)
-      ?? (pkg?.state?.currencyCode === currencyCode ? pkg.state.basePriceCents : null);
-    if (cost === null) { missingCosts++; return sum; }
-    return sum + cost * order.quantity;
-  }, 0);
-  const totalOrders = orders.length;
-  const averageOrderValue = totalOrders === 0 ? 0 : totalRevenue / totalOrders;
-
-  const revenueByDate = orders.reduce<Record<string, number>>((acc, order) => {
-    const key = order.createdAt.toISOString().slice(0, 10);
-    acc[key] = (acc[key] ?? 0) + (order.totalCents ?? 0);
-    return acc;
-  }, {});
-
-  const linePoints = Object.entries(revenueByDate)
-    .sort(([a], [b]) => (a > b ? 1 : -1))
-    .map(([date, value]) => ({ label: date, value }));
-
-  const revenueByCountry = orders.reduce<Record<string, number>>((acc, order) => {
-    const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
-    const country = pkg?.operator?.country?.title ?? "Unknown";
-    const amount = order.totalCents ?? 0;
-    acc[country] = (acc[country] ?? 0) + amount;
-    return acc;
-  }, {});
-
-  const countryBars = Object.entries(revenueByCountry)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 8)
-    .map(([label, value]) => ({ label, value }));
-
-  const revenueByPackage = orders.reduce<Record<string, { name: string; value: number }>>((acc, order) => {
-    const pkg = packageById.get(order.packageId) ?? packageByExternalId.get(order.packageId);
-    if (!pkg) return acc;
-    const amount = order.totalCents ?? 0;
-    const key = pkg.id;
-    const name = pkg.title;
-    acc[key] = { name, value: (acc[key]?.value ?? 0) + amount };
-    return acc;
-  }, {});
-
-  const topPackages = Object.values(revenueByPackage)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10)
-    .map((item) => ({ label: item.name.slice(0, 20), value: item.value }));
-
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Sales & Analytics</p>
-          <h1 className="text-3xl font-bold text-slate-900">Performance overview</h1>
-          <p className="text-sm text-slate-600">Amounts shown in {currencyCode}. Historical currencies are reported separately.</p>
-        </div>
-        <form method="get" className="flex items-center gap-3 text-sm text-slate-700">
-          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            Range
-            <select name="range" defaultValue={rangeKey} className="bg-transparent text-sm focus:outline-none">
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-            </select>
-          </label>
-          <label>Currency <select name="currency" defaultValue={currencyCode} className="rounded border border-slate-200 p-2">{Array.from(new Set(["NAD", ...currencies])).map(code => <option key={code} value={code}>{code}</option>)}</select></label>
-          <button type="submit" className="button-ribbon-primary rounded-full px-4 py-2 font-semibold">
-            Apply
-          </button>
-        </form>
-      </div>
-
-      <DpoGatewayControl activeMode={dpoMode} configured={getDpoCredentialStatus()} />
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total revenue" value={formatCurrency(totalRevenue, currencyCode)} helper={`Across ${packages.length} packages`} />
-        <KpiCard label="Total profit" value={missingCosts ? "Unavailable" : formatCurrency(totalRevenue - totalCost, currencyCode)} helper="Estimated from current same-currency supplier prices" tone="success" />
-        <KpiCard label="Total orders" value={`${totalOrders}`} helper={rangeKey === "7d" ? "Last 7 days" : "Last 30 days"} />
-        <KpiCard label="Average order value" value={formatCurrency(Math.round(averageOrderValue), currencyCode)} helper={currencyCode} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:col-span-2">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Revenue over time</h3>
-              <p className="text-sm text-slate-600">Daily totals for the selected range.</p>
-            </div>
-          </div>
-          <div className="mt-4 h-64">
-            <SimpleLineChart points={linePoints} />
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-900">Sales by country</h3>
-          <p className="text-sm text-slate-600">Top destinations by revenue.</p>
-          <div className="mt-4 h-64">
-            <SimpleBarChart bars={countryBars} />
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Top packages by revenue</h3>
-            <p className="text-sm text-slate-600">Cross-region winners.</p>
-          </div>
-        </div>
-        <div className="mt-4 h-64">
-          <SimpleBarChart bars={topPackages} />
-        </div>
-      </div>
-    </div>
-  );
+export default async function AdminDashboard({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  await requireAdminSession(); const params = await searchParams;
+  const currency = typeof params.currency === "string" && /^[A-Z]{3}$/.test(params.currency) ? params.currency : "NAD";
+  const range = params.range === "7d" ? "7d" : "30d"; const from = reportingStart(range === "7d" ? 7 : 30);
+  const mode = params.mode === "test" ? "test" : "live";
+  const [gross, refunds, legacyRefunds, fulfilled, daily, currencies, activeMode] = await Promise.all([
+    prisma.paymentTransaction.aggregate({ where: { status: "approved", dpoMode: mode, currency, approvedAt: { gte: from } }, _sum: { amountCents: true }, _count: true }),
+    prisma.paymentRefund.aggregate({ where: { status: "confirmed", currency, confirmedAt: { gte: from }, payment: { dpoMode: mode } }, _sum: { amountCents: true } }),
+    prisma.$queryRaw<Array<{ total: bigint }>>`SELECT COALESCE(sum(a."saleRefundCents"),0)::bigint AS total FROM "AffiliateSaleAdjustment" a JOIN "CheckoutSession" c ON c.id=a."checkoutId" WHERE a."createdAt">=${from} AND c.currency=${currency} AND EXISTS (SELECT 1 FROM "PaymentTransaction" p WHERE p."checkoutId"=c.id AND p.status='approved' AND p."dpoMode"::text=${mode}) AND NOT EXISTS (SELECT 1 FROM "PaymentRefund" r JOIN "PaymentTransaction" rp ON rp.id=r."paymentId" WHERE r.reference=a.reference AND rp."checkoutId"=c.id)`,
+    countFulfilledSales(prisma, { from, currency, mode }),
+    prisma.$queryRaw<Array<{ label: string; value: bigint }>>`SELECT to_char("approvedAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Africa/Windhoek','YYYY-MM-DD') AS label, sum("amountCents")::bigint AS value FROM "PaymentTransaction" WHERE status='approved' AND "dpoMode"::text=${mode} AND currency=${currency} AND "approvedAt">=${from} GROUP BY 1 ORDER BY 1`,
+    prisma.paymentTransaction.findMany({ distinct: ["currency"], select: { currency: true } }), getActiveDpoMode(),
+  ]);
+  const captured = gross._sum.amountCents ?? 0; const refunded = (refunds._sum.amountCents ?? 0) + Number(legacyRefunds[0]?.total ?? 0);
+  return <div className="space-y-6"><PageTitle title="Performance overview" description="Approved payments, refunds, and fulfilled sales are reported separately. Amounts stay in their original currency; test payments are excluded by default." /><div className="flex flex-wrap gap-4 text-sm"><OpsLink href="/admin/operations">Open operations inbox</OpsLink><OpsLink href="/admin/payments?filter=attention">Payments needing attention</OpsLink><OpsLink href="/admin/health">System health</OpsLink></div><form className="flex flex-wrap items-end gap-3"><label className="text-sm">Period<select name="range" defaultValue={range} className="ml-2 min-h-11 rounded-lg border bg-white p-2"><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select></label><label className="text-sm">Currency<select name="currency" defaultValue={currency} className="ml-2 min-h-11 rounded-lg border bg-white p-2">{Array.from(new Set(["NAD", ...currencies.map(row => row.currency)])).map(code => <option key={code}>{code}</option>)}</select></label><label className="text-sm">Environment<select name="mode" defaultValue={mode} className="ml-2 min-h-11 rounded-lg border bg-white p-2"><option value="live">Live</option><option value="test">Test</option></select></label><button className="min-h-11 rounded-full bg-brand-900 px-4 py-2 text-white">Apply</button></form><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[["Gross approved payments", formatCurrencyWithCode(captured, currency)], ["Confirmed refunds", formatCurrencyWithCode(refunded, currency)], ["Net receipts", formatCurrencyWithCode(captured - refunded, currency)], ["Fulfilled sales", String(fulfilled)]].map(([label, value]) => <Panel key={label} title={label}><p className="text-2xl font-semibold">{value}</p></Panel>)}</div><Panel title="Approved payments over time"><div className="h-64"><SimpleLineChart points={daily.map(row => ({ label: row.label, value: Number(row.value) }))} /></div><p className="mt-3 text-xs text-slate-600">{gross._count} approved payments in the selected period. Refunds use confirmation dates, so net receipts can be negative when refunding older purchases. Fulfilled sales count current verified delivery once per sale with a payment approved in this period, including non-affiliate and subsequently refunded sales. Historical records without an approval timestamp require evidence backfill before inclusion.</p></Panel><DpoGatewayControl activeMode={activeMode} configured={getDpoCredentialStatus()} /></div>;
 }

@@ -9,6 +9,8 @@ export type DpoClientOptions = {
 
 export class DpoCreationRejectedError extends Error {}
 
+export type DpoMutationResult = { code: string; accepted: boolean; alreadyCharged: boolean };
+
 export type CreateDpoTransactionInput = {
   amount: number;
   currency: string;
@@ -108,6 +110,16 @@ export class DpoClient {
     }
 
     return response.text();
+  }
+
+  async mutateTransaction(kind: "capture" | "refund" | "cancel", token: string, options: { amountCents?: number; reason?: string; reference?: string } = {}): Promise<DpoMutationResult> {
+    if (!token) throw new Error("A saved transaction token is required.");
+    if (kind === "refund" && (!Number.isSafeInteger(options.amountCents) || options.amountCents! <= 0)) throw new Error("Invalid refund amount.");
+    const body = `<API3G><CompanyToken>${escapeXml(this.companyToken)}</CompanyToken><Request>${({ capture: "chargeTokenAuth", refund: "refundToken", cancel: "cancelToken" })[kind]}</Request><TransactionToken>${escapeXml(token)}</TransactionToken>${kind === "refund" ? `<refundAmount>${(options.amountCents! / 100).toFixed(2)}</refundAmount><refundDetails>${escapeXml(options.reason ?? "Operator refund")}</refundDetails><refundRef>${escapeXml(options.reference ?? "")}</refundRef>` : ""}</API3G>`;
+    const xml = await this.fetchXml(`${this.serviceUrl}/`, { method: "POST", headers: { "Content-Type": "application/xml; charset=utf-8", Accept: "application/xml" }, body });
+    const code = extractTag(xml, "Result");
+    if (!code || !/^\d{3}$/.test(code)) throw new Error("The provider response did not establish the mutation outcome.");
+    return { code, accepted: code === "000", alreadyCharged: kind === "capture" && code === "905" };
   }
 
   async createTransaction(input: CreateDpoTransactionInput): Promise<CreateDpoTransactionResult> {

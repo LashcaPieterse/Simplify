@@ -1,3 +1,4 @@
+import { paymentAttentionWhere, receiptOverdueWhere, activeDeliveryOrderWhere, supplierAttentionWhere, affiliateCommissionAttentionWhere, affiliateNotificationAttentionWhere } from "../admin/queries";
 import type { PrismaClient } from "@prisma/client";
 import { affiliateInfrastructureEnabled } from "../affiliates/referral";
 
@@ -28,8 +29,10 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
         db.checkoutSession.findMany({
           where: {
             AND: [
+              { fulfillmentHold: null },
               { OR: [{ status: "paid" }, { payments: { some: { status: "approved" } } }] },
               { OR: [
+                { activeOrderId: { not: null } },
                 { order: { is: null } }, { order: { is: { status: { not: "completed" } } } },
                 { order: { is: { orderNumber: null } } },
                 { intent: "purchase", order: { is: { OR: [
@@ -42,15 +45,13 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
           select: {
             id: true, intent: true, updatedAt: true,
             payments: { where: { status: "approved" }, orderBy: { createdAt: "asc" }, take: 1, select: { updatedAt: true, statusHistory: true } },
+            activeOrder: { select: { id: true, status: true, orderNumber: true, receiptSentAt: true, profiles: { select: { activationCode: true } }, installation: { select: { payload: true } } } },
             order: { select: { id: true, status: true, orderNumber: true, receiptSentAt: true,
               profiles: { select: { activationCode: true } }, installation: { select: { payload: true } } } },
           },
         }),
         db.esimOrder.findMany({
-          where: { OR: [
-            { status: { in: ["airalo_failed", "airalo_outcome_unknown", "airalo_submitting"] } },
-            { status: "pending", recoveryAttempts: { some: { result: "unresolved" } } },
-          ] },
+          where: supplierAttentionWhere(),
           select: { id: true, status: true, createdAt: true,
             profiles: { select: { activationCode: true } }, installation: { select: { payload: true } },
             recoveryAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { result: true } },
@@ -74,14 +75,15 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
       ]);
       const health = healthRows[0];
       const now = Date.now();
-      const unresolvedPayments = await db.paymentTransaction.count({ where: { provider: "dpo", status: { in: ["creating", "creation_unknown", "pending", "authorized", "partially_paid", "verification_error", "verification_mismatch"] }, createdAt: { lte: new Date(now - 15 * 60_000) } } });
+      const unresolvedPayments = await db.paymentTransaction.count({ where: paymentAttentionWhere(new Date(now)) });
       const receipts = {
-        overdue: await db.receiptDelivery.count({ where: { status: { in: ["pending", "leased"] }, createdAt: { lte: new Date(now - 10 * 60_000) }, order: { status: "completed", installation: { isNot: null } } } }),
-        review: await db.receiptDelivery.count({ where: { status: "review" } }),
+        overdue: await db.receiptDelivery.count({ where: receiptOverdueWhere(new Date(now)) }),
+        review: await db.receiptDelivery.count({ where: { status: "review", order: activeDeliveryOrderWhere() } }),
       };
+      const unresolvedOperations = await db.adminOperation.count({ where: { kind: { in: ["capture", "cancel_payment", "refund", "replace_order", "supplier_refund"] }, OR: [{ status: { in: ["unknown", "provider_pending"] } }, { status: "running", leaseUntil: { lte: new Date(now) } }] } });
       const affiliates = affiliateInfrastructureEnabled() ? {
-        overdueCommissions: await db.checkoutSession.count({ where: { affiliateId: { not: null }, affiliateCommission: null, order: { is: { fulfilledAt: { lte: new Date(now - 30 * 60_000) } } }, payments: { some: { status: "approved" } } } }),
-        overdueNotifications: await db.affiliateNotification.count({ where: { sentAt: null, createdAt: { lte: new Date(now - 60 * 60_000) } } }),
+        overdueCommissions: await db.checkoutSession.count({ where: affiliateCommissionAttentionWhere(new Date(now)) }),
+        overdueNotifications: await db.affiliateNotification.count({ where: affiliateNotificationAttentionWhere(new Date(now)) }),
       } : undefined;
       let responseValid = false;
       try {
@@ -92,14 +94,15 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
         activatedAt: config.activatedAt,
         affiliates,
         unresolvedPayments,
+        unresolvedOperations,
         receipts,
-        checkouts: checkouts.map(checkout => ({
+        checkouts: checkouts.map(checkout => { const effectiveOrder = checkout.activeOrder ?? checkout.order; return ({
           id: checkout.id, intent: checkout.intent,
           paidAt: firstPaymentApproval(checkout.payments[0]?.statusHistory ?? null, checkout.payments[0]?.updatedAt ?? checkout.updatedAt),
-          orderId: checkout.order?.id ?? null, orderStatus: checkout.order?.status ?? null,
-          supplierOrderId: checkout.order?.orderNumber ?? null,
-          receiptSent: Boolean(checkout.order?.receiptSentAt), deliveryReady: deliveryReady(checkout.order),
-        })),
+          orderId: effectiveOrder?.id ?? null, orderStatus: effectiveOrder?.status ?? null,
+          supplierOrderId: effectiveOrder?.orderNumber ?? null,
+          receiptSent: Boolean(effectiveOrder?.receiptSentAt), deliveryReady: deliveryReady(effectiveOrder),
+        }); }),
         supplierOrders: supplierOrders.map(order => ({
           id: order.id, status: order.status, createdAt: order.createdAt,
           deliveryReady: deliveryReady(order), unresolved: order.recoveryAttempts[0]?.result === "unresolved",
@@ -110,7 +113,17 @@ export function productionAlertStore(db: PrismaClient, config: AlertConfig): Ale
       } satisfies MonitorSnapshot;
     },
     async sync(incidents: Incident[]) {
-      await db.$queryRaw`SELECT recovery_ops.sync_alerts(${JSON.stringify(incidents)}::jsonb)::text`;
+      await db.$transaction(async tx => {
+        const before = await tx.$queryRaw<Array<{ incident_id: string; alert_key: string; detail: string }>>`SELECT incident_id, alert_key, detail FROM recovery_ops.production_alerts WHERE resolved_at IS NULL`;
+        await tx.$queryRaw`SELECT recovery_ops.sync_alerts(${JSON.stringify(incidents)}::jsonb)::text`;
+        const after = await tx.$queryRaw<Array<{ incident_id: string; alert_key: string; detail: string }>>`SELECT incident_id, alert_key, detail FROM recovery_ops.production_alerts WHERE resolved_at IS NULL`;
+        const active = new Set(after.map(row => row.incident_id));
+        const events = [
+          ...after.map(row => ({ incidentId: row.incident_id, alertKey: row.alert_key, eventKey: `${row.incident_id}:detected`, actorEmail: "system", action: "detected", note: row.detail })),
+          ...before.filter(row => !active.has(row.incident_id) && row.alert_key !== "monitor:endpoint").map(row => ({ incidentId: row.incident_id, alertKey: row.alert_key, eventKey: `${row.incident_id}:resolved`, actorEmail: "system", action: "resolved", note: "The condition cleared after verified recovery or financial disposition." })),
+        ];
+        if (events.length) await tx.incidentReview.createMany({ data: events, skipDuplicates: true });
+      });
     },
     async claim(key, payload) {
       const rows = await db.$queryRaw<Array<{ notification_key: string; payload: SendEmailOptions }>>`

@@ -122,6 +122,22 @@ export function mapAuditResultToLegacySyncResult(result: Pick<RunSyncAuditResult
 }
 
 export async function runSyncAuditJob(options: RunSyncOptions): Promise<RunSyncAuditResult> {
+  // A durable lease avoids holding a spare database connection while fetching pages.
+  const operation = await prisma.$transaction(async tx => {
+    await tx.adminOperation.updateMany({ where: { kind: "catalog_sync", targetId: "catalog-sync", status: { in: ["running", "unknown"] }, leaseUntil: { lt: new Date() } }, data: { status: "rejected", resultCode: "execution_lease_expired" } });
+    return tx.adminOperation.create({ data: { idempotencyKey: randomUUID(), kind: "catalog_sync", targetId: "catalog-sync", actorEmail: options.triggeredBy ?? "system", reason: options.notes ?? "Catalogue synchronization", expectedVersion: "lease", leaseUntil: new Date(Date.now() + 360_000) } });
+  });
+  try {
+    const result = await runSyncAuditJobUnlocked(options);
+    await prisma.adminOperation.update({ where: { id: operation.id }, data: { status: "succeeded", resultCode: "sync_finished" } });
+    return result;
+  } catch (error) {
+    await prisma.adminOperation.update({ where: { id: operation.id }, data: { status: "rejected", resultCode: "sync_failed" } });
+    throw error;
+  }
+}
+
+async function runSyncAuditJobUnlocked(options: RunSyncOptions): Promise<RunSyncAuditResult> {
   const startedAt = new Date();
   const run = await prisma.syncRun.create({
     data: {

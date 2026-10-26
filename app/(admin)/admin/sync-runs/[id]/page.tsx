@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import prisma from "@/lib/db/client";
 import { notFound } from "next/navigation";
-import { formatDate } from "@/lib/format";
+import { formatOpsTime as formatDate } from "@/lib/admin/queries";
 
 export default async function SyncRunDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -81,6 +81,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:postgres
+      - run: npm run test:admin-postgres
 
   supabase-platform:
     runs-on: ubuntu-latest

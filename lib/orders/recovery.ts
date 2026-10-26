@@ -13,7 +13,7 @@ import { resolveAiraloActivationCode, resolveAiraloClient, resolveAiraloOrderId 
 import { assertWebhookOrderIdentity, resolveWebhookLocalOrderId } from "./webhook-matching";
 
 type RecoveryOrder = Prisma.EsimOrderGetPayload<{
-  include: { profiles: true; package: true; checkout: true };
+  include: { profiles: true; package: true; checkout: true; saleCheckout: true };
 }>;
 type RecoverySupplier = Pick<AiraloClient, "getOrderById" | "findOrdersByDescription">;
 
@@ -56,7 +56,8 @@ export async function applyRecoveredPurchase(
 ): Promise<void> {
   const data = WebhookPayloadSchema.parse({ data: purchase }).data;
   assertWebhookOrderIdentity(order, data);
-  const topUp = order.checkout?.intent === "top-up" ? order.checkout : null;
+  const sale = order.saleCheckout ?? order.checkout;
+  const topUp = sale?.intent === "top-up" ? sale : null;
   if (purchase.status !== "completed" || (!topUp && !data.iccid)) {
     throw new Error("Supplier fulfillment is not yet confirmed with a completed SIM.");
   }
@@ -148,7 +149,7 @@ export async function recoverAiraloOrders(options: {
     where: {
       ...(options.orderId ? { id: options.orderId } : {}),
       status: { in: ["pending", "airalo_submitting", "airalo_outcome_unknown", "airalo_failed", "completed"] },
-      createdAt: { lte: new Date(Date.now() - staleMinutes * 60000) },
+      ...(options.orderId ? {} : { createdAt: { lte: new Date(Date.now() - staleMinutes * 60000) } }),
       recoveryAttempts: { none: { createdAt: { gte: new Date(Date.now() - 5 * 60000) } } },
       AND: [
         { OR: [{ orderNumber: null }, { profiles: { none: {} } }] },
@@ -157,7 +158,7 @@ export async function recoverAiraloOrders(options: {
         { OR: [{ status: { not: "completed" } }, { checkout: { is: null } }, { checkout: { is: { intent: "purchase" } } }] },
       ],
     },
-    include: { profiles: true, package: true, checkout: true },
+    include: { profiles: true, package: true, checkout: true, saleCheckout: true },
     take: batchSize,
     orderBy: { updatedAt: "asc" },
   });
@@ -190,7 +191,7 @@ export async function recoverAiraloOrders(options: {
       continue;
     }
     try {
-      if (order.checkout?.intent !== "top-up") await sendOrderReceipt(order.id, { prisma: db });
+      if ((order.saleCheckout ?? order.checkout)?.intent !== "top-up") await sendOrderReceipt(order.id, { prisma: db });
     } catch (error) {
       logOrderWarn("airalo.order.recovery.delivery_email_failed", {
         orderId: order.id,

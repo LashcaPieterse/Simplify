@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { RunSyncButton } from "@/components/admin/RunSyncButton";
 import prisma from "@/lib/db/client";
-import { formatDate } from "@/lib/format";
+import { formatOpsTime as formatDate } from "@/lib/admin/queries";
 
 export default async function SyncCenterPage() {
   const runs = await prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 10 });

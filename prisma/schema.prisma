@@ -217,6 +217,12 @@ model EsimOrder {
   fulfilledAt          DateTime?
   affiliateCommission  AffiliateCommission?
   receiptDeliveries    ReceiptDelivery[]
+  replacementForId    String?
+  replacementFor      EsimOrder? @relation("OrderReplacements", fields: [replacementForId], references: [id], onDelete: Restrict)
+  replacements        EsimOrder[] @relation("OrderReplacements")
+  saleCheckoutId      String?
+  saleCheckout        CheckoutSession? @relation("ReplacementSale", fields: [saleCheckoutId], references: [id], onDelete: Restrict)
+  activeForCheckout   CheckoutSession? @relation("ActiveFulfillment")
 
   @@index([packageId])
   @@index([userId, createdAt])
@@ -333,6 +339,10 @@ model CheckoutSession {
   topUpForIccid   String?
   order            EsimOrder?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId         String?              @unique
+  activeOrderId   String?              @unique
+  activeOrder     EsimOrder? @relation("ActiveFulfillment", fields: [activeOrderId], references: [id], onDelete: Restrict)
+  replacements    EsimOrder[] @relation("ReplacementSale")
+  fulfillmentHold String?
   metadata        String?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
@@ -409,6 +419,7 @@ model PaymentTransaction {
   checkoutId        String?
   orders            EsimOrder[]
   webhookEvents     PaymentTransactionEvent[]
+  refunds           PaymentRefund[]
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
 
@@ -725,4 +736,71 @@ model AuditLog {
   entityId   String
   details    String?
   createdAt  DateTime   @default(now())
+}
+
+model AdminOperation {
+  id String @id @default(cuid())
+  idempotencyKey String @unique
+  kind String
+  targetId String
+  actorEmail String
+  reason String
+  expectedVersion String
+  status String @default("running")
+  resultCode String?
+  reference String?
+  payload Json?
+  startedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  leaseUntil DateTime
+  refund PaymentRefund?
+  @@index([targetId, startedAt])
+  @@index([status, leaseUntil])
+}
+
+model PaymentRefund {
+  id String @id @default(cuid())
+  paymentId String
+  payment PaymentTransaction @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  operationId String @unique
+  operation AdminOperation @relation(fields: [operationId], references: [id], onDelete: Restrict)
+  amountCents Int
+  currency String
+  status String @default("reserved")
+  reference String
+  evidence String?
+  createdAt DateTime @default(now())
+  confirmedAt DateTime?
+  accountingAppliedAt DateTime?
+  @@index([paymentId, status])
+  @@unique([paymentId, reference])
+}
+
+model IncidentReview {
+  id String @id @default(cuid())
+  eventKey String? @unique
+  incidentId String
+  alertKey String
+  actorEmail String
+  action String
+  note String
+  reference String?
+  createdAt DateTime @default(now())
+  @@index([incidentId, createdAt])
+}
+
+model OperationsSettings {
+  id String @id @default("operations")
+  checkoutPaused Boolean @default(false)
+  reason String?
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentCallbackDiagnostic {
+  id String @id @default(cuid())
+  correlationId String @unique
+  status Int
+  result String
+  receivedAt DateTime @default(now())
+  @@index([receivedAt])
 }

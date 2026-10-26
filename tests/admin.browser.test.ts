@@ -1,0 +1,72 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { PGlite } from "@electric-sql/pglite";
+import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
+import { PrismaClient } from "@prisma/client";
+import { chromium } from "playwright";
+import { loadEnvConfig } from "@next/env";
+
+test("browser: admin warning leads to receipt review and verified resolution on desktop and mobile", { timeout: 120_000 }, async t => {
+  const sql = await PGlite.create(); const server = new PGLiteSocketServer({ db: sql, host: "127.0.0.1", port: 0, maxConnections: 6 });
+  let database: PrismaClient | undefined;
+  t.after(async () => { if (database) await database.$disconnect(); await server.stop(); await sql.close(); });
+  await sql.exec("CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;");
+  const directory = new URL("../prisma/migrations/", import.meta.url);
+  for (const name of readdirSync(directory).filter(name => /^\d/.test(name)).sort()) await sql.exec(readFileSync(new URL(`${name}/migration.sql`, directory), "utf8"));
+  // Install the real private incident table definitions; no timers or outbound HTTP functions run.
+  const monitor = readFileSync(new URL("../prisma/platform/003_production_monitor.sql", import.meta.url), "utf8");
+  const tableSql = monitor.slice(monitor.indexOf("CREATE TABLE recovery_ops.alert_config"), monitor.indexOf("ALTER TABLE recovery_ops.alert_config"));
+  await sql.exec(`CREATE SCHEMA recovery_ops; ${tableSql}`);
+  await server.start(); const databaseUrl = `postgresql://postgres:postgres@${server.getServerConn()}/postgres?sslmode=disable&connection_limit=2&pool_timeout=30`;
+  const db = database = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
+  const country = await db.country.create({ data: { countryCode: "NA", slug: "browser-ops", title: "Namibia" } });
+  const operator = await db.operator.create({ data: { countryId: country.id, title: "Fixture network", info: [] } });
+  const pkg = await db.package.create({ data: { operatorId: operator.id, airaloPackageId: "browser-ops", title: "Namibia fixture plan", type: "sim", amount: 1024, data: "1 GB", day: 7, price: 5, manualInstallation: "", qrInstallation: "" } });
+  const order = await db.esimOrder.create({ data: { packageId: pkg.id, customerEmail: "traveller@example.test", status: "completed", orderNumber: "fixture-supplier" } });
+  const receipt = await db.receiptDelivery.create({ data: { orderId: order.id, businessKey: `receipt:${order.id}:v1`, status: "review", lastError: "legacy_acceptance_unconfirmed" } });
+  await db.$executeRaw`INSERT INTO recovery_ops.production_alerts (alert_key,category,title,detail) VALUES ('receipts:delayed','receipt_delivery_delayed','Receipt delivery needs attention','0 receipts are overdue; 1 requires operator review.')`;
+  await db.$disconnect();
+  await sql.exec("DEALLOCATE ALL;");
+  const baseUrl = "http://127.0.0.1:3113";
+  // NEXT_PUBLIC values are compiled into the production artifact. Match its public
+  // origin while forwarding this isolated browser journey to the local fixture.
+  const buildOrigin = new URL(process.env.ADMIN_BROWSER_BUILD_ORIGIN ?? loadEnvConfig(process.cwd(), false).combinedEnv.NEXT_PUBLIC_APP_URL ?? baseUrl).origin;
+  const appLogs: string[] = [];
+  const app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "3113"], { env: { ...process.env, NODE_ENV: "production", DATABASE_URL: databaseUrl, NEXT_PUBLIC_APP_URL: baseUrl, NEXTAUTH_URL: baseUrl, NEXTAUTH_SECRET: "browser-ops-secret", RATE_LIMIT_SECRET: "browser-ops-rate", ORDER_ACCESS_SECRET: "browser-ops-access", ADMIN_SESSION_SECRET: "browser-ops-session", ADMIN_EMAIL: "admin@example.test", ADMIN_ALLOWED_EMAILS: "admin@example.test", ADMIN_PASSWORD: "fixture-admin-password", TRUSTED_CLIENT_IP_HEADER: "x-fixture-ip", VERCEL: "1", DPO_TEST_COMPANY_TOKEN: "", DPO_LIVE_COMPANY_TOKEN: "", RESEND_API_KEY: "", AIRALO_CLIENT_ID: "", AIRALO_CLIENT_SECRET: "", PURCHASE_LIFECYCLE_ENABLED: "false", RECEIPT_OUTBOX_ENABLED: "false", ADMIN_CAPTURE_ENABLED: "false", ADMIN_REFUNDS_ENABLED: "false", ADMIN_REPLACEMENTS_ENABLED: "false", ADMIN_SUPPLIER_REFUNDS_ENABLED: "false" }, stdio: "pipe" });
+  app.stdout.on("data", chunk => { appLogs.push(String(chunk)); }); app.stderr.on("data", chunk => { appLogs.push(String(chunk)); });
+  t.after(() => { app.kill("SIGTERM"); });
+  let ready = false; for (let attempt = 0; attempt < 100; attempt++) { try { ready = (await fetch(`${baseUrl}/admin/login`)).ok; } catch { /* Local fixture server is starting. */ } if (ready) break; await new Promise(resolve => setTimeout(resolve, 200)); } assert.ok(ready);
+  const originProbe = await fetch(`${baseUrl}/api/admin/operations`, { method: "POST", headers: { Origin: buildOrigin, "Content-Type": "application/json" }, body: "{}" }); assert.equal(originProbe.status, 401, JSON.stringify({ buildOrigin, logs: appLogs.join(" ").slice(-2000) }));
+  const chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? (existsSync(chrome) ? chrome : undefined) }); t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, extraHTTPHeaders: { "x-fixture-ip": "127.0.0.1" } });
+  await page.route("**/api/admin/**", async route => {
+    const response = await route.fetch({ headers: { ...route.request().headers(), origin: buildOrigin } });
+    await route.fulfill({ response });
+  });
+  await page.goto(`${baseUrl}/admin/operations`); assert.match(page.url(), /admin\/login/);
+  await page.getByLabel("Email").fill("admin@example.test"); await page.getByLabel("Password", { exact: true }).fill("fixture-admin-password"); await page.getByRole("button", { name: /sign in/i }).click(); await page.waitForURL(`${baseUrl}/admin`, { timeout: 10000 }).catch(async () => { throw new Error(`Fixture ${server.getServerConn()} sign-in: ${await page.locator("body").innerText()}; server logs: ${appLogs.join(" ").slice(-4000)}`); });
+  await page.goto(`${baseUrl}/admin/operations`); await page.getByRole("heading", { name: "Receipt delivery needs attention" }).waitFor({ timeout: 10000 }).catch(async () => { throw new Error(`Fixture page: ${await page.locator("body").innerText()}; server logs: ${appLogs.join(" ").slice(-4000)}`); });
+  await page.screenshot({ path: "/private/tmp/simplify-admin-operations-desktop.png", fullPage: true });
+  await page.getByRole("link", { name: "Investigate affected records" }).click(); await page.waitForURL("**/admin/receipts?filter=attention");
+  await page.getByRole("link", { name: receipt.id, exact: true }).click(); await page.getByRole("button", { name: "Confirm provider acceptance", exact: true }).click();
+  const review = page.locator("form").filter({ has: page.getByRole("button", { name: "Confirm provider acceptance", exact: true }) });
+  await review.getByLabel("Verified provider message ID").fill("fixture-provider-accepted"); await review.getByLabel("Reason and evidence").fill("Independently verified provider acceptance in fixture");
+  await review.getByRole("checkbox").focus(); await page.keyboard.press("Space");
+  const operationResponse = page.waitForResponse(response => new URL(response.url()).pathname === "/api/admin/operations");
+  await review.getByRole("button", { name: "Confirm provider acceptance", exact: true }).focus(); await page.keyboard.press("Enter");
+  const response = await operationResponse; assert.equal(response.status(), 200, JSON.stringify(await response.json()));
+  await page.getByRole("status").filter({ hasText: "Completed" }).waitFor();
+  assert.equal((await sql.query<{ status: string }>('SELECT status FROM "ReceiptDelivery" WHERE id=$1', [receipt.id])).rows[0]?.status, "accepted");
+  assert.equal((await sql.query<{ count: number }>('SELECT count(*)::int AS count FROM "AdminOperation" WHERE kind=\'confirm_receipt\' AND status=\'succeeded\'')).rows[0]?.count, 1);
+  await page.setViewportSize({ width: 375, height: 844 }); await page.goto(`${baseUrl}/admin/operations`);
+  await page.getByRole("navigation", { name: "Admin navigation" }).getByRole("link", { name: "Payments", exact: true }).waitFor();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  await page.screenshot({ path: "/private/tmp/simplify-admin-operations-mobile.png", fullPage: true });
+  const unauthorized = await fetch(`${baseUrl}/api/admin/operations`, { method: "POST", headers: { Origin: buildOrigin, "Content-Type": "application/json" }, body: "{}" }); assert.equal(unauthorized.status, 401);
+  const cookie = (await page.context().cookies()).map(value => `${value.name}=${value.value}`).join("; ");
+  const crossOrigin = await fetch(`${baseUrl}/api/admin/operations`, { method: "POST", headers: { Cookie: cookie, Origin: "https://untrusted.example", "Content-Type": "application/json" }, body: "{}" }); assert.equal(crossOrigin.status, 403);
+  await page.close();
+});
