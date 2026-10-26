@@ -1,12 +1,11 @@
-import { getServerSession } from "next-auth";
+import { requireVerifiedCustomerSession } from "@/lib/auth/customer";
 import { redirect } from "next/navigation";
 
-import { authOptions } from "@/lib/auth/options";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPaymentsPage() {
-  const session = await getServerSession(authOptions);
+  const session = await requireVerifiedCustomerSession("/account/payments");
 
   if (!session?.user?.id) {
     redirect(`/auth/signin?callbackUrl=${encodeURIComponent("/account/payments")}`);

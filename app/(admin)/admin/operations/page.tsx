@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BulkPriceEditor } from "@/components/admin/BulkPriceEditor";
 import prisma from "@/lib/db/client";
 import { formatDate } from "@/lib/format";
@@ -39,6 +40,7 @@ export default async function OperationsPage() {
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand-600">Operations</p>
           <h1 className="text-3xl font-bold text-slate-900">Efficiency toolkit</h1>
+          <Link href={"/admin/security" as import("next").Route} className="mt-3 inline-block underline">Security, ownership, and receipt review</Link>
           <p className="text-sm text-slate-600">Bulk pricing, tagging, and audit visibility for ops teams.</p>
         </div>
       </div>

@@ -30,9 +30,9 @@ const MultiCurrencyPriceSchema = z
   })
   .passthrough();
 
-const MultiCurrencyPricesSchema = z.record(MultiCurrencyPriceSchema).optional();
+const MultiCurrencyPricesSchema = z.record(z.string(), MultiCurrencyPriceSchema).optional();
 
-const CurrencyAmountMapSchema = z.record(z.coerce.number()).optional();
+const CurrencyAmountMapSchema = z.record(z.string(), z.coerce.number()).optional();
 
 const ListPackagesPackageSchema = z
   .object({
@@ -86,7 +86,7 @@ export const ListPackagesCountrySchema = z
 
 export const ListPackagesDataSchema = z.union([
   z.array(ListPackagesCountrySchema),
-  z.record(ListPackagesCountrySchema),
+  z.record(z.string(), ListPackagesCountrySchema),
 ]);
 
 const PricingSchema = z
@@ -155,7 +155,7 @@ const PaginationMetaSchema = z
   .passthrough();
 
 const PackagesArraySchema = z.array(PackageSchema);
-const PackagesIndexSchema = z.record(PackagesArraySchema);
+const PackagesIndexSchema = z.record(z.string(), PackagesArraySchema);
 export const LegacyPackagesDataSchema = z.union([
   PackagesArraySchema,
   PackagesIndexSchema,
@@ -435,7 +435,7 @@ export const WebhookPayloadSchema = z.preprocess(
         reference: z.string().optional(),
         request_id: z.string().optional(),
         requestId: z.string().optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       })
       .passthrough(),
   })
@@ -541,7 +541,7 @@ const SimSharingSchema = z
   })
   .passthrough();
 
-const InstallationGuidesSchema = z.record(z.string()).optional();
+const InstallationGuidesSchema = z.record(z.string(), z.string()).optional();
 
 const SimSimableSchema = z
   .object({

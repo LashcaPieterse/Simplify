@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { runLifecycleTick } from "@/lib/jobs/lifecycle";
 import { recoverAiraloOrders } from "@/lib/orders/recovery";
 import { authenticateRecoveryRequest } from "@/lib/orders/recovery-auth";
 import { reconcileAffiliateCommissions } from "@/lib/affiliates/accounting";
@@ -14,14 +15,15 @@ export async function POST(request: Request) {
   }
   try {
     // Accounting continues even when the supplier is unavailable, and cannot invalidate its acknowledgements.
-    const [recovery, affiliateWork] = await Promise.allSettled([recoverAiraloOrders({ limit: 5 }), (async () => {
+    const recover = process.env.PURCHASE_LIFECYCLE_ENABLED === "true" ? runLifecycleTick() : recoverAiraloOrders({ limit: 5 }).then(result => ({ ...result, ok: true, lifecycleEnabled: false }));
+    const [recovery, affiliateWork] = await Promise.allSettled([recover, (async () => {
       const commissions = await reconcileAffiliateCommissions();
       const notifications = await deliverAffiliateNotifications();
       return { ...commissions, notifications };
     })()]);
     if (affiliateWork.status === "rejected") console.error("affiliate.recovery.failed");
     if (recovery.status === "rejected") throw recovery.reason;
-    return NextResponse.json({ ...recovery.value, ...(affiliateWork.status === "fulfilled" ? { affiliates: affiliateWork.value } : {}) });
+    return NextResponse.json({ ...recovery.value, ...(affiliateWork.status === "fulfilled" ? { affiliates: affiliateWork.value } : {}) }, { status: recovery.value.ok && affiliateWork.status === "fulfilled" ? 200 : 503 });
   } catch (error) {
     console.error("Airalo recovery job failed", {
       message: error instanceof Error ? error.message : "Unknown error",

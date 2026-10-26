@@ -1,3 +1,4 @@
+import { fixtureOutbox } from "../testing/durable-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Prisma, PrismaClient } from "@prisma/client";
@@ -46,7 +47,8 @@ function transactionStub(owner = "local-1", claimCount = 1) {
   const writes: { table: string; input: unknown }[] = [];
   const write = (table: string) => async (input: unknown) => { writes.push({ table, input }); return {}; };
   const tx = {
-    esimOrder: { updateMany: async (input: unknown) => { writes.push({ table: "order", input }); return { count: claimCount }; } },
+    receiptDelivery: fixtureOutbox(),
+    esimOrder: { findUnique: async () => ({ ...order, receiptSentAt: null }), updateMany: async (input: unknown) => { writes.push({ table: "order", input }); return { count: claimCount }; } },
     esimProfile: { upsert: async (input: unknown) => { writes.push({ table: "profile", input }); return { id: "profile-1", orderId: owner }; } },
     usageSnapshot: { create: write("usage") },
     esimInstallationPayload: { upsert: write("installation") },

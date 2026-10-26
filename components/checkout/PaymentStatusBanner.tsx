@@ -45,7 +45,9 @@ function toneClasses(tone: "info" | "success" | "error"): string {
 
 export function PaymentStatusBanner({ status, message }: PaymentStatusBannerProps) {
   const key = status?.toLowerCase() ?? "pending";
-  const copy = STATUS_COPY[key] ?? STATUS_COPY.pending;
+  const copy = STATUS_COPY[key] ?? (["declined", "expired"].includes(key) ? STATUS_COPY.failed :
+    key === "authorized" ? { title: "Payment authorized", description: "We are checking completion. Please do not pay again.", tone: "info" as const } :
+    ["verification_mismatch", "verification_error", "creation_unknown"].includes(key) ? { title: "Payment under review", description: "Please contact support before paying again.", tone: "info" as const } : STATUS_COPY.pending);
   const tone = copy.tone;
 
   return (

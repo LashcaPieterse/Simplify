@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import prisma from "@/lib/db/client";
 
 import {
   setScopedAccessCookie,
@@ -22,7 +23,8 @@ export async function GET(
   const token = url.searchParams.get("token");
   const orderId = decodeURIComponent(encodedOrderId);
 
-  if (!verifyScopedAccessToken(token, "order", orderId)) {
+  const order = await prisma.esimOrder.findUnique({ where: { id: orderId }, select: { accessVersion: true } });
+  if (!order || !verifyScopedAccessToken(token, "order", orderId, { accessVersion: order.accessVersion })) {
     return new NextResponse("Order link is invalid or expired.", {
       status: 403,
     });
@@ -30,6 +32,6 @@ export async function GET(
 
   const destination = new URL(`/orders/${encodeURIComponent(orderId)}`, url);
   const response = NextResponse.redirect(destination);
-  setScopedAccessCookie(response.cookies, "order", orderId);
+  setScopedAccessCookie(response.cookies, "order", orderId, order.accessVersion);
   return response;
 }

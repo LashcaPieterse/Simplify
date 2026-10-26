@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readJsonBody, BodyError } from "@/lib/http/bounded-body";
 
 import { jsonApiError, jsonForbidden, jsonServerError } from "@/lib/api/errors";
 import {
@@ -29,14 +30,11 @@ async function parseBody(request: Request): Promise<unknown> {
     return null;
   }
 
-  try {
-    return await request.json();
-  } catch {
-    return null;
-  }
+  return readJsonBody(request);
 }
 
 function buildErrorResponse(error: unknown): NextResponse {
+  if (error instanceof BodyError) return jsonApiError(error.status, "invalid_request_body", error.message);
   if (error instanceof OrderOutOfStockError) {
     return jsonApiError(error.status, "order_out_of_stock", error.message);
   }
@@ -62,13 +60,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = await parseBody(request);
-
-  if (!body) {
-    return jsonApiError(422, "invalid_request_body", "Request body must be JSON.");
-  }
-
   try {
+    const body = await parseBody(request);
+    if (!body) return jsonApiError(422, "invalid_request_body", "Request body must be JSON.");
     const result = await createOrder(body, { submissionMode: "sync" });
 
     return NextResponse.json({
@@ -78,7 +72,7 @@ export async function POST(request: Request) {
       ...(result.installation ? { installation: result.installation } : {}),
     });
   } catch (error: unknown) {
-    console.error("Failed to create order", error);
+    console.error("order.create.failed");
     return buildErrorResponse(error);
   }
 }

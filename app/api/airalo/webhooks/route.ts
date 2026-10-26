@@ -1,3 +1,4 @@
+import { readBoundedText, BodyError } from "@/lib/http/bounded-body";
 import { createHash } from "node:crypto";
 
 import { NextResponse } from "next/server";
@@ -30,6 +31,8 @@ import {
 } from "@/lib/orders/airalo-metadata";
 import { ensureOrderInstallation } from "@/lib/orders/installation";
 import { sendOrderReceipt } from "@/lib/notifications/receipts";
+import { queueOrderReceipt } from "@/lib/notifications/receipt-outbox";
+import { enqueueJob } from "@/lib/jobs/store";
 import { stampAffiliateFulfilment, safelyAccrueCommission } from "@/lib/affiliates/accounting";
 import {
   findOrderForWebhook,
@@ -122,7 +125,8 @@ export async function POST(request: Request) {
     return jsonServerError("webhook_secret_missing", "Webhook secret is not configured.");
   }
 
-  const rawBody = await request.text();
+  let rawBody: string;
+  try { rawBody = await readBoundedText(request, 1024 * 1024); } catch (error) { return NextResponse.json({ message: "Invalid callback body." }, { status: error instanceof BodyError ? error.status : 400 }); }
   const auth = authenticateAiraloWebhookRequest({
     requestUrl: request.url,
     secret,
@@ -296,7 +300,11 @@ export async function POST(request: Request) {
         orderId: order?.id ?? null,
         payload,
       });
-      if (order) await stampAffiliateFulfilment(tx, order.id);
+      if (order) {
+        await stampAffiliateFulfilment(tx, order.id);
+        await queueOrderReceipt(tx, order.id);
+        await enqueueJob(tx, "complete_installation", order.id);
+      }
 
       await tx.webhookEvent.update({
         where: { id: eventRecord.id },

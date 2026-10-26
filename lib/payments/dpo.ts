@@ -7,6 +7,8 @@ export type DpoClientOptions = {
   serviceType: string;
 };
 
+export class DpoCreationRejectedError extends Error {}
+
 export type CreateDpoTransactionInput = {
   amount: number;
   currency: string;
@@ -99,11 +101,10 @@ export class DpoClient {
   }
 
   private async fetchXml(input: RequestInfo | URL, init: RequestInit = {}): Promise<string> {
-    const response = await fetch(input, init);
+    const response = await fetch(input, { ...init, signal: init.signal ?? AbortSignal.timeout(15_000) });
 
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`DPO request failed with ${response.status}: ${text}`);
+      throw new Error(`DPO request failed with HTTP ${response.status}.`);
     }
 
     return response.text();
@@ -159,13 +160,13 @@ export class DpoClient {
         Accept: "application/xml",
       },
       body: xml,
+      signal: AbortSignal.timeout(30_000),
     });
 
     const result = extractTag(responseXml, "Result");
     const resultExplanation = extractTag(responseXml, "ResultExplanation");
     if (result && result !== "000") {
-      const error = resultExplanation ?? "DPO createToken failed";
-      throw new Error(error);
+      throw new DpoCreationRejectedError(`DPO rejected payment creation (${result}).`);
     }
 
     const token = extractTag(responseXml, "TransToken") ?? extractTag(responseXml, "TransactionToken") ?? "";
@@ -191,16 +192,16 @@ export class DpoClient {
     };
   }
 
-  async verifyTransaction(token: string, companyRef?: string): Promise<VerifyDpoTransactionResult> {
+  async verifyTransaction(token: string, companyRef?: string, options: { markProcessed?: boolean } = {}): Promise<VerifyDpoTransactionResult> {
     const url = `${this.serviceUrl}/`;
 
     const xml = [
       `<API3G>`,
       `<CompanyToken>${escapeXml(this.companyToken)}</CompanyToken>`,
       `<Request>verifyToken</Request>`,
-      `<TransactionToken>${escapeXml(token)}</TransactionToken>`,
+      token ? `<TransactionToken>${escapeXml(token)}</TransactionToken>` : "",
       companyRef ? `<CompanyRef>${escapeXml(companyRef)}</CompanyRef>` : "",
-      `<VerifyTransaction>1</VerifyTransaction>`,
+      `<VerifyTransaction>${options.markProcessed ? "1" : "0"}</VerifyTransaction>`,
       `</API3G>`,
     ].join("");
 

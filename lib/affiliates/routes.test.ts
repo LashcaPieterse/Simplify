@@ -1,3 +1,4 @@
+import prisma from "../db/client";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHmac } from "node:crypto";
@@ -11,10 +12,12 @@ test("affiliate HTTP boundaries require admin auth, reject cross-origin changes,
   const old = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
   Object.assign(process.env, overrides);
   const make = (path: string, init: NonNullable<ConstructorParameters<typeof NextRequest>[1]> = {}) => new NextRequest(`https://sim.example.test${path}`, init);
+  const previousFindState = prisma.adminAuthState.findUnique;
+  prisma.adminAuthState.findUnique = (async () => ({ id: "admin", version: 0 })) as typeof prisma.adminAuthState.findUnique;
   try {
     assert.equal((await adminPost(make("/api/admin/affiliates", { method: "POST" }))).status, 401);
     assert.equal((await exportPayouts(make("/api/admin/affiliates/payouts/export"))).status, 401);
-    const payload = `admin@example.test|${Date.now()}`;
+    const payload = `v2|admin@example.test|${Date.now()}|0`;
     const token = `${payload}|${createHmac("sha256", overrides.ADMIN_SESSION_SECRET).update(payload).digest("hex")}`;
     assert.equal((await adminPost(make("/api/admin/affiliates", { method: "POST", headers: { cookie: `simplify-admin-session=${encodeURIComponent(token)}`, origin: "https://evil.example" } }))).status, 403);
     assert.equal((await forgetReferral(make("/api/affiliates/referral", { method: "DELETE", headers: { origin: "https://evil.example" } }))).status, 403);
@@ -28,5 +31,5 @@ test("affiliate HTTP boundaries require admin auth, reject cross-origin changes,
     const disabled = await referralGet(make("/api/affiliates/referral"));
     assert.deepEqual(await disabled.json(), { enabled: false, guide: null });
     assert.equal(disabled.headers.get("cache-control"), "private, no-store");
-  } finally { for (const key of Object.keys(overrides)) { if (old[key] === undefined) delete process.env[key]; else process.env[key] = old[key]; } }
+  } finally { prisma.adminAuthState.findUnique = previousFindState; for (const key of Object.keys(overrides)) { if (old[key] === undefined) delete process.env[key]; else process.env[key] = old[key]; } }
 });

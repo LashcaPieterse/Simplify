@@ -1,3 +1,5 @@
+import { readJsonBody, BodyError } from "@/lib/http/bounded-body";
+import { enforceRates, trustedClientIp, abuseResponse } from "@/lib/security/rate-limit";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -21,7 +23,9 @@ export async function POST(request: Request) {
   const recipient = process.env.BUSINESS_LEADS_EMAIL?.trim();
   if (!recipient) return NextResponse.json({ message: "Business enquiries are temporarily unavailable. Email support@sim.africa instead." }, { status: 503 });
 
-  const parsed = leadSchema.safeParse(await request.json().catch(() => null));
+  try {
+  await enforceRates([{ scope: "business-lead", identifier: trustedClientIp(request.headers), limit: 3, windowSeconds: 3600 }]);
+  const parsed = leadSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) return NextResponse.json({ message: parsed.error.issues[0]?.message ?? "Check the form fields and try again." }, { status: 422 });
   const lead = parsed.data;
   if (lead.website) return NextResponse.json({ ok: true });
@@ -31,4 +35,7 @@ export async function POST(request: Request) {
   const result = await sendEmail({ to: recipient, subject: `Business travel enquiry — ${lead.companyName}`, text, html, from: process.env.BUSINESS_EMAIL_FROM ?? "business@sim.africa" });
   if (result.skipped) return NextResponse.json({ message: "Business enquiries are temporarily unavailable. Email support@sim.africa instead." }, { status: 503 });
   return NextResponse.json({ ok: true }, { status: 201 });
+  } catch (error) {
+    return abuseResponse(error) ?? NextResponse.json({ message: error instanceof BodyError ? error.message : "Business enquiries are temporarily unavailable." }, { status: error instanceof BodyError ? error.status : 503 });
+  }
 }

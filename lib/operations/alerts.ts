@@ -38,6 +38,8 @@ export type MonitorSnapshot = {
   };
   monitor: { active: boolean | null; lastSuccess: Date | null };
   affiliates?: { overdueCommissions: number; overdueNotifications: number };
+  unresolvedPayments?: number;
+  receipts?: { overdue: number; review: number };
 };
 
 const minutes = (now: Date, then: Date | null) => then ? (now.getTime() - then.getTime()) / 60000 : Infinity;
@@ -56,6 +58,10 @@ export function firstPaymentApproval(history: string | null, fallback: Date): Da
 
 export function findProductionIncidents(snapshot: MonitorSnapshot, now: Date): Incident[] {
   const incidents: Incident[] = [];
+  if (snapshot.unresolvedPayments) incidents.push({ key: "payments:unresolved", category: "payment_reconciliation_delayed", entityId: null,
+    title: "Payments await completion or review", detail: `${snapshot.unresolvedPayments} unresolved payments are over fifteen minutes old. Reconcile existing transactions; do not charge or capture automatically.` });
+  if (snapshot.receipts?.overdue || snapshot.receipts?.review) incidents.push({ key: "receipts:delayed", category: "receipt_delivery_delayed", entityId: null,
+    title: "Receipt delivery needs attention", detail: `${snapshot.receipts.overdue} receipts have waited over ten minutes; ${snapshot.receipts.review} require operator review. Review Admin → Security before resending.` });
   if (snapshot.affiliates?.overdueCommissions) incidents.push({ key: "affiliates:commissions", category: "affiliate_commissions_delayed", entityId: null, title: "Affiliate commission reconciliation is delayed", detail: `${snapshot.affiliates.overdueCommissions} fulfilled paid referrals have waited over thirty minutes for commission posting. Review Admin → Affiliates and the protected recovery scheduler.` });
   if (snapshot.affiliates?.overdueNotifications) incidents.push({ key: "affiliates:notifications", category: "affiliate_notifications_delayed", entityId: null, title: "Affiliate email delivery is delayed", detail: `${snapshot.affiliates.overdueNotifications} affiliate emails have waited over an hour. Review Admin → Affiliates and the email sender configuration.` });
   const manualOrders = new Set<string>();

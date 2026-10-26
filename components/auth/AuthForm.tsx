@@ -8,6 +8,7 @@ import { ArrowRight, Loader2, Lock, Mail, ShieldCheck, User } from "lucide-react
 
 import { Button } from "@/components/ui/button";
 import { registerWithPassword } from "@/app/auth/signup/actions";
+import { safeReturnPath } from "@/lib/auth/return-path";
 
 export type ProviderInfo = {
   id: string;
@@ -18,7 +19,7 @@ export type ProviderInfo = {
 export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode: "signin" | "signup" }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const callbackUrl = safeReturnPath(searchParams.get("callbackUrl"), "/account/esims");
   const initialEmail = searchParams.get("email") ?? "";
 
   const oauthProviders = useMemo(() => providers.filter((provider) => provider.type === "oauth"), [providers]);
@@ -70,10 +71,6 @@ export function AuthForm({ providers, mode }: { providers: ProviderInfo[]; mode:
           setError("Invalid email or password.");
           return;
         }
-      }
-      if (callbackUrl.startsWith("http")) {
-        window.location.assign(callbackUrl);
-        return;
       }
       router.push(callbackUrl as Route);
     });

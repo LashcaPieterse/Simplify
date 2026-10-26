@@ -7,7 +7,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
     async createUser(data: Omit<AdapterUser, "id">) {
       const user = await prisma.user.create({
         data: {
-          email: data.email ?? "",
+          email: data.email?.trim().toLowerCase() ?? "",
           name: data.name ?? null,
           phone: null,
           emailVerifiedAt: data.emailVerified ?? null,
@@ -31,7 +31,9 @@ export function PrismaUserIdentityAdapter(): Adapter {
       };
     },
     async getUserByEmail(email: string) {
-      const user = await prisma.user.findUnique({ where: { email } });
+      const matches = await prisma.user.findMany({ where: { email: { equals: email.trim().toLowerCase(), mode: "insensitive" } }, take: 2 });
+      if (matches.length > 1) throw new Error("This account requires an operator address review.");
+      const user = matches[0];
       if (!user) return null;
       return {
         id: user.id,
@@ -57,7 +59,7 @@ export function PrismaUserIdentityAdapter(): Adapter {
       const updated = await prisma.user.update({
         where: { id: user.id },
         data: {
-          email: user.email ?? undefined,
+          email: user.email?.trim().toLowerCase() ?? undefined,
           name: user.name ?? undefined,
           emailVerifiedAt: user.emailVerified ?? undefined,
         },
@@ -122,12 +124,11 @@ export function PrismaUserIdentityAdapter(): Adapter {
       if (!existing) {
         return null;
       }
-      await prisma.verificationToken.delete({
-        where: {
-          identifier_token: { identifier: params.identifier, token: params.token },
-        },
+      // deleteMany is atomic and lets concurrent redemptions have one winner.
+      const consumed = await prisma.verificationToken.deleteMany({
+        where: { identifier: params.identifier, token: params.token },
       });
-      return existing;
+      return consumed.count === 1 ? existing : null;
     },
     async getSessionAndUser() {
       // JWT strategy used; no session store.

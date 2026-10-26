@@ -1,3 +1,4 @@
+import { reconcilePayment } from "../jobs/lifecycle";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -56,7 +57,7 @@ test("DPO sandbox: migration, persistent mode, audit atomicity and verification 
     INSERT INTO "PaymentTransaction" (id, provider, "amountCents", currency, "updatedAt")
       VALUES ('legacy-dpo', 'dpo', 1000, 'USD', CURRENT_TIMESTAMP), ('other-provider', 'other', 1000, 'USD', CURRENT_TIMESTAMP);
   `);
-  await sql.exec(readFileSync(new URL("../../prisma/migrations/20261019120000_add_dpo_gateway_mode/migration.sql", import.meta.url), "utf8"));
+  await sql.exec(readFileSync(new URL("../../prisma/migration-history/migrations/20261019120000_add_dpo_gateway_mode/migration.sql", import.meta.url), "utf8"));
   await server.start();
   const databaseUrl = `postgresql://postgres:postgres@${server.getServerConn()}/postgres?sslmode=disable&connection_limit=1&pool_timeout=30`;
   let db = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
@@ -121,7 +122,7 @@ test("DPO sandbox: migration, persistent mode, audit atomicity and verification 
   } });
   const purchasePackage = await makePackage("sim", "dpo-sandbox-sim");
   const topUpPackage = await makePackage("topup", "dpo-sandbox-topup");
-  const topUpOwner = await db.user.create({ data: { email: "dpo-topup@example.test" } });
+  const topUpOwner = await db.user.create({ data: { email: "dpo-topup@example.test", emailProofAt: new Date(), emailProofSource: "email", } });
   await db.esimOrder.create({ data: { id: "original-order", userId: topUpOwner.id, packageId: purchasePackage.id, status: "completed", profiles: { create: { iccid: "8900000000000000001", status: "active" } } } });
   const requests: string[] = [];
   let creations = 0;
@@ -169,7 +170,7 @@ test("DPO sandbox: migration, persistent mode, audit atomicity and verification 
       recordPaymentEvent: async (id: string, eventType: string, payload: unknown) => {
         await db.paymentTransactionEvent.create({ data: { transactionId: id, eventType, payload: JSON.stringify(payload) } });
       },
-      verifyPaymentTransaction: (id: string) => verifyPaymentTransaction(id, { prisma: db, source: "dpo-push" }),
+      verifyPaymentTransaction: async (id: string) => { await reconcilePayment(id, db); return { paymentStatus: "pending" }; },
     };
     for (let replay = 0; replay < 2; replay++) {
       const result = await handleDpoPushPayment({ rawBody: `<API3G><TransactionToken>${livePayment.transactionToken}</TransactionToken></API3G>`, contentType: "application/xml", deps });

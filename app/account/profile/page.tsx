@@ -1,15 +1,14 @@
-import { getServerSession } from "next-auth";
+import { requireVerifiedCustomerSession } from "@/lib/auth/customer";
 import { redirect } from "next/navigation";
 
 import prisma from "@/lib/db/client";
-import { authOptions } from "@/lib/auth/options";
 import { formatDate } from "@/lib/format";
 import { CurrencySelector } from "@/components/currency/CurrencyProvider";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountProfilePage() {
-  const session = await getServerSession(authOptions);
+  const session = await requireVerifiedCustomerSession("/account/profile");
   const userId = session?.user?.id;
 
   if (!userId) {
