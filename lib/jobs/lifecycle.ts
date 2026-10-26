@@ -133,6 +133,15 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: {
 
 export async function reconcilePayment(paymentId: string, db: PrismaClient = prisma) {
   const job = await enqueueJob(db, "verify_payment", paymentId);
+  // A later callback may report payment after an earlier terminal observation.
+  // Reopen verification only; supplier claims and review jobs stay untouched.
+  if (job.status === "done" || job.status === "review") {
+    await db.lifecycleJob.updateMany({
+      where: { id: job.id, kind: "verify_payment", status: job.status, updatedAt: job.updatedAt },
+      data: { status: "pending", lastError: null,
+        nextAttemptAt: new Date(Math.max(Date.now(), job.updatedAt.getTime() + 15_000)) },
+    });
+  }
   if (process.env.PURCHASE_LIFECYCLE_ENABLED !== "true") return { result: "busy" as const };
   return runLifecycleJob(db, job.id);
 }

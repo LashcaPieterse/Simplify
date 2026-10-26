@@ -8,7 +8,7 @@ import { recordEmailProof, verifiedOAuthEmail } from "../auth/ownership-proof";
 import { authOptions } from "../auth/options";
 import { commitPaymentTransition, paymentState } from "../payments/transitions";
 import { enqueueJob, claimJob, finishJob } from "../jobs/store";
-import { seedLifecycleWork, runLifecycleJob } from "../jobs/lifecycle";
+import { seedLifecycleWork, runLifecycleJob, reconcilePayment } from "../jobs/lifecycle";
 import type { AiraloClient } from "../airalo/client";
 import { OrderResponseSchema } from "../airalo/schemas";
 import { queueOrderReceipt, deliverReceipt, reviewReceipt } from "../notifications/receipt-outbox";
@@ -117,6 +117,67 @@ test("remediation: clean baseline, proof lifecycle, atomic transitions, durable 
     const claimed = one ?? two!;
     await finishJob(database, claimed, "retry");
     assert.equal((await database.lifecycleJob.findUniqueOrThrow({ where: { id: job.id } })).status, "pending");
+  });
+
+  await t.test("late paid callbacks reopen closed verification without reopening supplier review", async () => {
+    const overrides = { PURCHASE_LIFECYCLE_ENABLED: "true", DPO_TEST_COMPANY_TOKEN: "late-fixture", DPO_TEST_SERVICE_TYPE: "late-fixture", DPO_SERVICE_URL: "https://late-dpo.example.test/API/v6" };
+    const previous = Object.fromEntries(Object.keys(overrides).map(key => [key, process.env[key]]));
+    const originalFetch = globalThis.fetch;
+    Object.assign(process.env, overrides);
+    let verifications = 0;
+    globalThis.fetch = async (url, init) => {
+      assert.equal(String(url), "https://late-dpo.example.test/API/v6/");
+      assert.match(String(init?.body), /<Request>verifyToken<\/Request>/);
+      assert.match(String(init?.body), /<VerifyTransaction>0<\/VerifyTransaction>/);
+      verifications++;
+      return new Response("<API3G><Result>000</Result><TransactionAmount>10</TransactionAmount><TransactionCurrency>NAD</TransactionCurrency></API3G>");
+    };
+    try {
+      const supplierReview = await enqueueJob(database, "reconcile_supplier", "unknown-supplier-fixture");
+      await database.lifecycleJob.update({ where: { id: supplierReview.id }, data: { status: "review", lastError: "supplier_outcome_unknown" } });
+      const before = await database.lifecycleJob.findUniqueOrThrow({ where: { id: supplierReview.id } });
+      for (const closed of ["done", "review"]) {
+        const checkout = await database.checkoutSession.create({ data: { packageId: pkg.id, totalCents: 1000, currency: "NAD" } });
+        const payment = await database.paymentTransaction.create({ data: { checkoutId: checkout.id, provider: "dpo", dpoMode: "test", transactionToken: "late-fixture-only", amountCents: 1000, currency: "NAD" } });
+        await commitPaymentTransition(database, { paymentId: payment.id, status: closed === "done" ? "declined" : "verification_mismatch", providerCode: closed === "done" ? "901" : "002", source: "fixture", payload: "{}" });
+        const job = await enqueueJob(database, "verify_payment", payment.id);
+        await database.lifecycleJob.update({ where: { id: job.id }, data: { status: closed, updatedAt: new Date(Date.now() - 60_000), nextAttemptAt: new Date(Date.now() + 300_000) } });
+        await Promise.all([reconcilePayment(payment.id, database), reconcilePayment(payment.id, database)]);
+        assert.equal((await database.paymentTransaction.findUniqueOrThrow({ where: { id: payment.id } })).status, "approved");
+        assert.equal(await database.lifecycleJob.count({ where: { businessKey: `fulfill_checkout:${checkout.id}` } }), 1);
+        assert.equal(await database.esimOrder.count({ where: { paymentTransactionId: payment.id } }), 0, "Verification must not submit a supplier purchase.");
+      }
+      assert.equal(verifications, 2, "Concurrent callbacks share one verification per payment.");
+      assert.deepEqual(await database.lifecycleJob.findUniqueOrThrow({ where: { id: supplierReview.id } }), before);
+    } finally {
+      globalThis.fetch = originalFetch;
+      for (const key of Object.keys(overrides)) {
+        if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+      }
+    }
+  });
+
+  await t.test("callback wakeups preserve active leases and do not postpone the verification cooldown", async () => {
+    const previous = process.env.PURCHASE_LIFECYCLE_ENABLED;
+    process.env.PURCHASE_LIFECYCLE_ENABLED = "true";
+    try {
+      const job = await enqueueJob(database, "verify_payment", "callback-coalescing-fixture");
+      const lease = await claimJob(database, job.id);
+      assert.ok(lease);
+      assert.equal((await reconcilePayment(job.targetId, database)).result, "busy");
+      assert.deepEqual(await database.lifecycleJob.findUniqueOrThrow({ where: { id: job.id } }), lease);
+      await finishJob(database, lease, "done");
+      assert.equal((await reconcilePayment(job.targetId, database)).result, "busy");
+      const queued = await database.lifecycleJob.findUniqueOrThrow({ where: { id: job.id } });
+      assert.equal(queued.status, "pending");
+      assert.ok(queued.nextAttemptAt.getTime() > Date.now());
+      assert.equal((await reconcilePayment(job.targetId, database)).result, "busy");
+      const repeated = await database.lifecycleJob.findUniqueOrThrow({ where: { id: job.id } });
+      assert.equal(repeated.nextAttemptAt.getTime(), queued.nextAttemptAt.getTime());
+      assert.equal(repeated.attempts, 1);
+    } finally {
+      if (previous === undefined) delete process.env.PURCHASE_LIFECYCLE_ENABLED; else process.env.PURCHASE_LIFECYCLE_ENABLED = previous;
+    }
   });
 
   const makeDeliverable = async () => database.esimOrder.create({ data: { packageId: pkg.id, customerEmail: "traveller@example.test", status: "completed", orderNumber: `supplier-${Math.random()}`,
