@@ -129,6 +129,7 @@ export class DpoClient {
       `<Transaction>`,
       `<PaymentAmount>${escapeXml(input.amount.toFixed(2))}</PaymentAmount>`,
       `<PaymentCurrency>${escapeXml(input.currency)}</PaymentCurrency>`,
+      `<TransactionChargeType>1</TransactionChargeType>`,
       `<CompanyRef>${escapeXml(input.reference)}</CompanyRef>`,
       `<CompanyRefUnique>0</CompanyRefUnique>`,
       `<PTL>${escapeXml(ptl)}</PTL>`,

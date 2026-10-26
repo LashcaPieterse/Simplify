@@ -46,6 +46,10 @@ test("DpoClient escapes interpolated XML values when creating transactions", asy
 
   assert.match(requestBody, /<CompanyToken>company&lt;&amp;&quot;&apos;&gt;<\/CompanyToken>/);
   assert.match(requestBody, /<PaymentCurrency>U&amp;G<\/PaymentCurrency>/);
+  assert.match(
+    requestBody,
+    /<Transaction>[\s\S]*<TransactionChargeType>1<\/TransactionChargeType>[\s\S]*<\/Transaction>/,
+  );
   assert.match(requestBody, /<CompanyRef>ref&lt;&amp;&quot;&apos;&gt;<\/CompanyRef>/);
   assert.match(requestBody, /<PTL>15<\/PTL>/);
   assert.match(requestBody, /<PTLtype>minutes<\/PTLtype>/);
