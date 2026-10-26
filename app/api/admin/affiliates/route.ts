@@ -9,7 +9,7 @@ import { recordAffiliateRefund, recordAffiliateSaleRefund, reconcileAffiliateCom
 import { deferAffiliatePayout, prepareAffiliatePayout, transitionAffiliatePayout } from "@/lib/affiliates/payouts";
 import { deliverAffiliateNotifications } from "@/lib/affiliates/notifications";
 
-const inputSchema = z.record(z.string().max(2000));
+const inputSchema = z.record(z.string(), z.string().max(2000));
 export async function POST(request: NextRequest) {
   const session = await requireAdminApiSession(request);
   if (!session) return NextResponse.json({ message: "Unauthorized." }, { status: 401 });

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "crypto";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 import {
   LegacyPackagesDataSchema,
   ListPackagesDataSchema,
@@ -432,7 +432,7 @@ export interface GetSimOptions {
 
 interface AiraloRequestOptions<T> {
   path: string;
-  schema: ZodType<T, ZodTypeDef, unknown>;
+  schema: ZodType<T, unknown>;
   init?: RequestInit;
   requiresAuth?: boolean;
   endpoint?: AiraloThrottledEndpoint;
