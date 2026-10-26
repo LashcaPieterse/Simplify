@@ -17,7 +17,7 @@ test("editorial contract migration removes populated legacy tables and preserves
   assert.equal(baseline.status, 0, baseline.stderr);
   await sql.exec(baseline.stdout);
 
-  const foundation = readFileSync(new URL("../../prisma/migrations/20260315110000_sync_audit_pricing_integrity/migration.sql", import.meta.url), "utf8");
+  const foundation = readFileSync(new URL("../../prisma/migration-history/migrations/20260315110000_sync_audit_pricing_integrity/migration.sql", import.meta.url), "utf8");
   const legacyTables = foundation.match(/CREATE TABLE IF NOT EXISTS (?:pricing_audits|publishing_state) \([\s\S]*?\n\);/g);
   assert.equal(legacyTables?.length, 2);
   await sql.exec(legacyTables!.join("\n"));
@@ -40,7 +40,7 @@ test("editorial contract migration removes populated legacy tables and preserves
   `);
   const tables = ["countries", "operators", "packages", "EsimOrder", "sync_runs", "sync_run_items", "entity_snapshots"];
   const before = await Promise.all(tables.map(async (table) => (await sql.query(`SELECT * FROM "${table}"`)).rows));
-  await sql.exec(readFileSync(new URL("../../prisma/migrations/20261023120000_remove_editorial_publishing/migration.sql", import.meta.url), "utf8"));
+  await sql.exec(readFileSync(new URL("../../prisma/migration-history/migrations/20261023120000_remove_editorial_publishing/migration.sql", import.meta.url), "utf8"));
   const retired = await sql.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('publishing_state', 'pricing_audits')");
   assert.deepEqual(retired.rows, []);
   for (let index = 0; index < tables.length; index++) {

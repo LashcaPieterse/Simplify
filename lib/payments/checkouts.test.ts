@@ -1,3 +1,4 @@
+import { fixtureOutbox } from "../testing/durable-fixture";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -140,6 +141,8 @@ class FakeAiraloClient {
 }
 
 class FakeCheckoutDb {
+  readonly receiptDelivery = fixtureOutbox();
+  readonly lifecycleJob = fixtureOutbox();
   readonly orders: Array<Record<string, unknown>> = [];
   readonly paymentEvents: Array<Record<string, unknown>> = [];
   readonly profiles: Array<Record<string, unknown>> = [];
@@ -154,6 +157,9 @@ class FakeCheckoutDb {
     transactionToken: "token-1",
     redirectUrl: "https://payments.example/checkout",
     status: "approved",
+    version: 0,
+    providerCode: null as string | null,
+    approvedAt: null as Date | null,
     amountCents: 2500,
     currency: "UGX",
     statusHistory: null as string | null,
@@ -306,6 +312,11 @@ class FakeCheckoutDb {
   };
 
   readonly paymentTransaction = {
+    findUniqueOrThrow: async () => this.payment,
+    updateMany: async ({ where, data }: { where: { id: string; version?: number }; data: Record<string, unknown> }) => {
+      if (where.id !== this.payment.id || (where.version !== undefined && where.version !== this.payment.version)) return { count: 0 };
+      Object.assign(this.payment, data); return { count: 1 };
+    },
     findUnique: async ({
       where,
       include,
@@ -513,6 +524,28 @@ function createFinaliseOptions(db: FakeCheckoutDb, airalo: FakeAiraloClient) {
   };
 }
 
+test("compatibility forceStatus cannot fulfill a payment that is not independently approved", async () => {
+  for (const status of ["pending", "authorized", "partially_paid", "verification_mismatch", "000"]) {
+    const db = new FakeCheckoutDb();
+    db.payment.status = status;
+    const airalo = createSyncAiraloClient();
+    await assert.rejects(finaliseOrderFromCheckout(db.checkout.id, createFinaliseOptions(db, airalo)), /not been approved/);
+    assert.equal(airalo.syncPayloads.length, 0); assert.equal(db.orders.length, 0);
+  }
+});
+
+test("leased verification persists approval and work without submitting a supplier purchase", async () => {
+  const db = new FakeCheckoutDb();
+  db.payment.status = "pending"; db.checkout.status = "pending";
+  const airalo = createSyncAiraloClient();
+  const result = await verifyPaymentTransaction(db.payment.id, {
+    ...createFinaliseOptions(db, airalo), deferFulfillment: true,
+    dpoClient: { verifyTransaction: async () => ({ status: "000", resultCode: "000", amount: 25, currency: "UGX", rawResponse: {} }) },
+  });
+  assert.equal(result.paymentStatus, "approved"); assert.equal(db.payment.status, "approved");
+  assert.equal(db.checkout.status, "paid"); assert.equal(db.orders.length, 0); assert.equal(airalo.syncPayloads.length, 0);
+});
+
 test("finaliseOrderFromCheckout reserves a local order before Airalo and uses the checkout snapshot", async () => {
   const db = new FakeCheckoutDb();
   const airalo = createSyncAiraloClient();
@@ -673,7 +706,7 @@ test("verifyPaymentTransaction rejects verified DPO amount mismatches before Air
   assert.match(result.message ?? "", /amount mismatch/i);
   assert.equal(db.checkout.orderId, null);
   assert.equal(db.orders.length, 0);
-  assert.equal(db.paymentEvents[0]?.eventType, "dpo-push-mismatch");
+  assert.equal(db.paymentEvents[0]?.eventType, "dpo-push-transition");
 });
 
 type PurchaseMode = "sync" | "async" | "top-up";

@@ -45,15 +45,15 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
   assert.equal(diff.status, 0, diff.stderr);
   await sql.exec(diff.stdout);
   await sql.exec("CREATE ROLE anon; CREATE ROLE authenticated;");
-  await sql.exec(readFileSync(new URL("../../prisma/migrations/20261018120000_add_affiliate_program/migration.sql", import.meta.url), "utf8"));
-  await sql.exec(readFileSync(new URL("../../prisma/migrations/20261018183000_add_affiliate_topup_commissions/migration.sql", import.meta.url), "utf8"));
+  await sql.exec(readFileSync(new URL("../../prisma/migration-history/migrations/20261018120000_add_affiliate_program/migration.sql", import.meta.url), "utf8"));
+  await sql.exec(readFileSync(new URL("../../prisma/migration-history/migrations/20261018183000_add_affiliate_topup_commissions/migration.sql", import.meta.url), "utf8"));
   await server.start();
   const database = new PrismaClient({ datasources: { db: { url: `postgresql://postgres:postgres@${server.getServerConn()}/postgres?sslmode=disable&connection_limit=1&pool_timeout=30` } } });
   resources.db = database;
   await database.dpoSettings.create({ data: { id: "dpo" } });
   const actorEmail = "admin@example.test";
   const user = await database.user.create({ data: { email: "guide@example.test", name: "Guide One" } });
-  const traveller = await database.user.create({ data: { email: "traveller@example.test", emailVerifiedAt: new Date() } });
+  const traveller = await database.user.create({ data: { email: "traveller@example.test", emailProofSource: "email", emailProofAt: new Date() } });
   const country = await database.country.create({ data: { countryCode: "NA", slug: "namibia", title: "Namibia" } });
   const operator = await database.operator.create({ data: { countryId: country.id, title: "Sandbox", info: [] } });
   const pkg = await database.package.create({ data: {
@@ -64,7 +64,7 @@ test("affiliate sandbox: additive migrations, purchases and top-ups, commissions
   await saveAffiliateSettings({ enabled: true, percentage: "10", actorEmail }, database);
   const guide = await applyToAffiliateProgram(user.id, { legalName: "Guide One", publicName: "Safari Guide", country: "Namibia", contactEmail: user.email, phone: "+264811234567", promotion: "I guide weekly tours throughout Namibia.", terms: "on", website: "" }, database);
   await assert.rejects(reviewAffiliate({ id: guide.id, status: "approved", rateOverride: "", reason: "", actorEmail }, database), /verified account email/);
-  await database.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } });
+  await database.user.update({ where: { id: user.id }, data: { emailProofSource: "email", emailProofAt: new Date() } });
   await reviewAffiliate({ id: guide.id, status: "approved", rateOverride: "", reason: "", actorEmail }, database);
   const sent: string[] = [];
   await deliverAffiliateNotifications(database, 10, async message => { sent.push(message.subject); return { skipped: false, id: "sandbox-email" }; });

@@ -1,3 +1,5 @@
+import { enqueueJob } from "../jobs/store";
+import { commitPaymentTransition, paymentState } from "./transitions";
 import type { AiraloClient } from "../airalo/client";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { resolveCheckoutReferral } from "../affiliates/program";
@@ -11,7 +13,7 @@ import {
 } from "../catalog/package-resolver";
 import prismaClient from "../db/client";
 import { centsToMajorUnits } from "../format";
-import { sendOrderReceipt } from "../notifications/receipts";
+import { queueOrderReceipt } from "../notifications/receipt-outbox";
 import { logOrderError, logOrderInfo } from "../observability/logging";
 import { DEFAULT_QUANTITY, MAX_QUANTITY, normaliseQuantity } from "../orders/quantity";
 import { CheckoutRequestError, normalizeEmailAddress } from "./checkout-request";
@@ -41,8 +43,9 @@ import type {
   CreateOrderResult,
   ReservedOrderSnapshot,
 } from "../orders/service";
-import { appendStatusHistory, createStatusHistory, serialise } from "./status-history";
+import { serialise } from "./status-history";
 import {
+  DpoCreationRejectedError,
   resolveDpoClient,
   type DpoClient,
   type VerifyDpoTransactionResult,
@@ -53,7 +56,7 @@ const checkoutInputSchema = z.object({
   packageId: z.string().min(1, "A package selection is required."),
   quoteId: z.string().min(1).optional(),
   quantity: z
-    .number({ invalid_type_error: "Quantity must be a number." })
+    .number({ error: "Quantity must be a number." })
     .int("Quantity must be an integer.")
     .positive("Quantity must be at least 1.")
     .max(MAX_QUANTITY, "You can purchase one eSIM per checkout.")
@@ -104,7 +107,6 @@ export type CreateCheckoutResult = {
 
 const STATUS_PENDING = "pending";
 const STATUS_PAID = "paid";
-const STATUS_FAILED = "failed";
 const STATUS_APPROVED = "approved";
 const STATUS_FINALIZING = "finalizing";
 const STATUS_VERIFICATION_MISMATCH = "verification_mismatch";
@@ -120,10 +122,10 @@ async function resolveCheckoutUserId(
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true },
+    select: { id: true, emailProofAt: true, recoveryRequired: true },
   });
 
-  if (user) {
+  if (user?.emailProofAt && !user.recoveryRequired) {
     return user.id;
   }
 
@@ -271,6 +273,15 @@ export async function createCheckout(
 
   let response: Awaited<ReturnType<typeof dpoClient.createTransaction>>;
 
+  const attempt = await db.$transaction(async tx => {
+    const payment = await tx.paymentTransaction.create({ data: {
+      userId: checkoutUserId, checkoutId: checkout.id, provider: PROVIDER, dpoMode,
+      providerReference: checkout.id, status: "creating", amountCents: totalCents, currency: checkout.currency,
+    } });
+    await enqueueJob(tx, "verify_payment", payment.id);
+    return payment;
+  });
+
   try {
     response = await dpoClient.createTransaction({
       amount,
@@ -294,31 +305,26 @@ export async function createCheckout(
       data: { status: "payment_creation_unknown" },
     });
 
+    await db.paymentTransaction.update({ where: { id: attempt.id }, data: { status: error instanceof DpoCreationRejectedError ? "creation_rejected" : "creation_unknown" } });
     throw error;
   }
 
-  const transaction = await db.paymentTransaction.create({
+  const transaction = await db.paymentTransaction.update({
+    where: { id: attempt.id },
     data: {
-      user: checkoutUserId ? { connect: { id: checkoutUserId } } : undefined,
       provider: PROVIDER,
       dpoMode,
       providerReference: response.transactionRef ?? response.reference ?? null,
       transactionToken: response.token,
       redirectUrl: response.redirectUrl,
-      status: STATUS_PENDING,
       amountCents: totalCents,
       currency: checkout.currency,
       metadata: response.rawResponse ? serialise(response.rawResponse) : null,
-      statusHistory: createStatusHistory({
-        status: STATUS_PENDING,
-        at: new Date().toISOString(),
-        source: "checkout",
-      }),
-      checkout: {
-        connect: { id: checkout.id },
-      },
+
     },
   });
+
+  await db.paymentTransaction.updateMany({ where: { id: attempt.id, status: "creating" }, data: { status: STATUS_PENDING } });
 
   await db.paymentTransactionEvent.create({
     data: {
@@ -444,18 +450,6 @@ function validateApprovedDpoVerification(
   return null;
 }
 
-async function markCheckoutStatus(
-  checkoutId: string,
-  status: string,
-  options: { prisma?: PrismaClient } = {},
-): Promise<void> {
-  const db = options.prisma ?? prismaClient;
-  await db.checkoutSession.update({
-    where: { id: checkoutId },
-    data: { status },
-  });
-}
-
 export async function verifyCheckoutPayment(
   checkoutId: string,
   options: { prisma?: PrismaClient } = {},
@@ -478,7 +472,7 @@ export async function verifyCheckoutPayment(
 
   const payment = checkout.payments[0];
 
-  if (!payment?.transactionToken) {
+  if (!payment) {
     throw new Error("Checkout has no associated payment token.");
   }
 
@@ -496,11 +490,13 @@ async function verifyCheckoutPaymentRecord(
     source: string;
     dpoClient?: Pick<DpoClient, "verifyTransaction">;
     airaloOptions?: CreateOrderOptions;
+    deferFulfillment?: boolean;
   },
 ): Promise<VerifyPaymentTransactionResult> {
   const db = options.prisma;
 
   if (payment.status === STATUS_APPROVED) {
+    if (options.deferFulfillment) return { paymentStatus: payment.status, orderId: checkout.orderId };
     try {
       const order = await finaliseOrderFromCheckout(checkout.id, {
         prisma: db,
@@ -530,14 +526,11 @@ async function verifyCheckoutPaymentRecord(
     }
   }
 
-  if (!payment.transactionToken) {
-    throw new Error("Payment transaction has no DPO transaction token.");
-  }
 
   let verification;
   try {
     const dpoClient = options.dpoClient ?? resolveDpoClient(payment.dpoMode);
-    verification = await dpoClient.verifyTransaction(payment.transactionToken, checkout.id);
+    verification = await dpoClient.verifyTransaction(payment.transactionToken ?? "", checkout.id);
     // Log key verification fields to help debug DPO responses in callback and return flows.
     console.info("dpo.verifyTransaction", {
       checkoutId: checkout.id,
@@ -564,91 +557,26 @@ async function verifyCheckoutPaymentRecord(
     };
   }
   const resultCode = verification.resultCode ?? verification.status;
-  const isPaid = resultCode === "000";
-  const normalizedStatus =
-    (isPaid ? STATUS_APPROVED : verification.status?.toLowerCase?.()) ??
-    verification.status ??
-    STATUS_PENDING;
-  const verificationMessage = !isPaid && verification.resultExplanation ? verification.resultExplanation : undefined;
-
-  if (isPaid) {
-    const mismatchMessage = validateApprovedDpoVerification(payment, verification);
-    if (mismatchMessage) {
-      const updated = await db.paymentTransaction.update({
-        where: { id: payment.id },
-        data: {
-          status: STATUS_VERIFICATION_MISMATCH,
-          metadata: serialise({
-            reason: mismatchMessage,
-            verification: verification.rawResponse,
-          }),
-          statusHistory: appendStatusHistory(payment.statusHistory, {
-            status: STATUS_VERIFICATION_MISMATCH,
-            at: new Date().toISOString(),
-            source: options.source,
-          }),
-        },
-      });
-
-      await db.paymentTransactionEvent.create({
-        data: {
-          transactionId: payment.id,
-          eventType: `${options.source}-mismatch`,
-          payload: serialise({
-            reason: mismatchMessage,
-            verification: verification.rawResponse,
-          }),
-        },
-      });
-
-      logOrderError("payments.checkout.verification_mismatch", {
-        checkoutId: checkout.id,
-        paymentId: payment.id,
-        message: mismatchMessage,
-      });
-
-      return {
-        paymentStatus: updated.status,
-        orderId: checkout.orderId ?? null,
-        redirectOrderId:
-          checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId,
-        message: mismatchMessage,
-      };
-    }
-  }
-
-  const updated = await db.paymentTransaction.update({
-    where: { id: payment.id },
-    data: {
-      status: normalizedStatus,
-      providerReference: payment.providerReference,
-      statusHistory: appendStatusHistory(payment.statusHistory, {
-        status: normalizedStatus,
-        at: new Date().toISOString(),
-        source: options.source,
-      }),
-    },
+  const mismatchMessage = resultCode === "000" ? validateApprovedDpoVerification(payment, verification) : null;
+  const normalizedStatus = mismatchMessage ? STATUS_VERIFICATION_MISMATCH : paymentState(resultCode);
+  const updated = await commitPaymentTransition(db, {
+    paymentId: payment.id, status: normalizedStatus, providerCode: resultCode,
+    explanation: mismatchMessage ?? verification.resultExplanation,
+    source: options.source, payload: serialise(verification.rawResponse),
   });
-
-  await db.paymentTransactionEvent.create({
-    data: {
-      transactionId: payment.id,
-      eventType: "verification-response",
-      payload: serialise(verification.rawResponse),
-    },
-  });
+  const isPaid = updated.status === STATUS_APPROVED;
+  const verificationMessage = mismatchMessage ?? (!isPaid ? verification.resultExplanation : undefined);
 
   let orderId = checkout.orderId ?? null;
   let redirectOrderId =
     checkout.intent === "top-up" ? checkout.topUpForOrderId : checkout.orderId;
 
   if (isPaid || normalizedStatus === STATUS_APPROVED) {
-    await markCheckoutStatus(checkout.id, STATUS_PAID, { prisma: db });
-
+    if (options.deferFulfillment) return { paymentStatus: updated.status, orderId, redirectOrderId };
     try {
       const order = await finaliseOrderFromCheckout(checkout.id, {
         prisma: db,
-        forceStatus: normalizedStatus,
+        forceStatus: updated.status,
         airaloOptions: options.airaloOptions,
       });
       orderId = order.orderId;
@@ -668,11 +596,9 @@ async function verifyCheckoutPaymentRecord(
         message,
       };
     }
-  } else if (normalizedStatus === STATUS_FAILED) {
-    await markCheckoutStatus(checkout.id, STATUS_FAILED, { prisma: db });
   }
 
-  return { paymentStatus: updated.status, orderId, redirectOrderId, message: verificationMessage };
+  return { paymentStatus: updated.status, orderId, redirectOrderId, message: verificationMessage, retryable: !isPaid && !["declined", "expired", "cancelled", "verification_mismatch"].includes(updated.status) };
 }
 
 export async function verifyPaymentTransaction(
@@ -682,6 +608,7 @@ export async function verifyPaymentTransaction(
     source?: string;
     dpoClient?: Pick<DpoClient, "verifyTransaction">;
     airaloOptions?: CreateOrderOptions;
+    deferFulfillment?: boolean;
   } = {},
 ): Promise<VerifyPaymentTransactionResult> {
   const db = options.prisma ?? prismaClient;
@@ -708,15 +635,13 @@ export async function verifyPaymentTransaction(
     throw new Error("Payment transaction is not linked to a checkout.");
   }
 
-  if (!payment.transactionToken) {
-    throw new Error("Payment transaction has no DPO transaction token.");
-  }
 
   return verifyCheckoutPaymentRecord(payment.checkout, payment, {
     prisma: db,
     source: options.source ?? "verify",
     dpoClient: options.dpoClient,
     airaloOptions: options.airaloOptions,
+    deferFulfillment: options.deferFulfillment,
   });
 }
 
@@ -976,31 +901,11 @@ async function markCheckoutFinalized({
   order: CreateOrderResult;
 }): Promise<void> {
   await db.$transaction(async (tx) => {
-    const currentPayment = await tx.paymentTransaction.findUnique({
-      where: { id: payment.id },
-      select: { statusHistory: true },
-    });
-
     await tx.checkoutSession.update({
       where: { id: checkout.id },
       data: {
         orderId: order.orderId,
         status: STATUS_PAID,
-      },
-    });
-
-    await tx.paymentTransaction.update({
-      where: { id: payment.id },
-      data: {
-        status: STATUS_APPROVED,
-        statusHistory: appendStatusHistory(
-          currentPayment?.statusHistory ?? payment.statusHistory,
-          {
-            status: STATUS_APPROVED,
-            at: new Date().toISOString(),
-            source: "finalize",
-          },
-        ),
       },
     });
 
@@ -1040,8 +945,9 @@ export async function finaliseOrderFromCheckout(
     throw new Error("Checkout has no payment record.");
   }
 
-  const status = options.forceStatus ?? payment.status ?? STATUS_PENDING;
-  const isApproved = status.toLowerCase() === STATUS_APPROVED || status.toLowerCase() === STATUS_PAID;
+  // Compatibility options cannot grant approval; independent verification must
+  // already have persisted the successful state before any supplier claim.
+  const isApproved = payment.status === STATUS_APPROVED;
 
   if (!isApproved) {
     throw new Error("Payment has not been approved.");
@@ -1078,14 +984,7 @@ export async function finaliseOrderFromCheckout(
           });
         }
         if (checkout.affiliateId) await safelyAccrueCommission(result.orderId, db);
-        sendOrderReceipt(result.orderId, {
-          prisma: options.prisma ?? prismaClient,
-        }).catch((error) => {
-          logOrderError("payments.receipt.send_failed", {
-            orderId: result.orderId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
+        await queueOrderReceipt(db, result.orderId);
         return result;
       }
     }
@@ -1132,12 +1031,9 @@ export async function finaliseOrderFromCheckout(
 
     if (checkout.affiliateId) await safelyAccrueCommission(order.orderId, db);
 
-    sendOrderReceipt(order.orderId, { prisma: options.prisma ?? prismaClient }).catch((error) => {
-      logOrderError("payments.receipt.send_failed", {
-        orderId: order.orderId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
+    await queueOrderReceipt(db, order.orderId);
+    await enqueueJob(db, "reconcile_supplier", order.orderId);
+    await enqueueJob(db, "complete_installation", order.orderId);
 
     return order;
   } catch (error) {
@@ -1165,45 +1061,6 @@ export async function recordPaymentEvent(
       payload: serialise(payload),
     },
   });
-}
-
-export async function updatePaymentStatus(
-  transactionId: string,
-  status: string,
-  options: { prisma?: PrismaClient; metadata?: Record<string, unknown> } = {},
-): Promise<void> {
-  const db = options.prisma ?? prismaClient;
-
-  const payment = await db.paymentTransaction.findUnique({
-    where: { id: transactionId },
-  });
-
-  if (!payment) {
-    throw new Error("Payment transaction not found.");
-  }
-
-  const normalizedStatus = status?.toLowerCase?.() ?? status;
-
-  await db.paymentTransaction.update({
-    where: { id: transactionId },
-    data: {
-      status: normalizedStatus,
-      metadata: options.metadata ? serialise(options.metadata) : payment.metadata,
-      statusHistory: appendStatusHistory(payment.statusHistory, {
-        status: normalizedStatus,
-        at: new Date().toISOString(),
-        source: "verify",
-      }),
-    },
-  });
-}
-
-export async function setCheckoutStatus(
-  checkoutId: string,
-  status: string,
-  options: { prisma?: PrismaClient } = {},
-): Promise<void> {
-  await markCheckoutStatus(checkoutId, status, options);
 }
 
 export async function fetchCheckoutWithPayment(

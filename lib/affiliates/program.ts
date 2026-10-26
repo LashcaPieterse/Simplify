@@ -13,7 +13,7 @@ export async function findPublicGuide(code: string, db: PrismaClient = prisma) {
   const program = await getAffiliateProgram(db);
   if (!program?.enabled || !program.defaultRateBps) return null;
   return db.affiliateProfile.findFirst({
-    where: { code: normalizeAffiliateCode(code), status: "approved", user: { emailVerifiedAt: { not: null } } },
+    where: { code: normalizeAffiliateCode(code), status: "approved", user: { emailProofAt: { not: null } } },
     select: { code: true, publicName: true },
   });
 }
@@ -36,8 +36,8 @@ export async function resolveCheckoutReferral(input: {
     if (explicit) throw new CheckoutRequestError("Affiliate referrals are currently unavailable.", 422, "affiliateCode");
     return {};
   }
-  const guide = await db.affiliateProfile.findUnique({ where: { code }, include: { user: { select: { email: true, emailVerifiedAt: true } } } });
-  if (!guide || guide.status !== "approved" || !guide.user.emailVerifiedAt) {
+  const guide = await db.affiliateProfile.findUnique({ where: { code }, include: { user: { select: { email: true, emailProofAt: true } } } });
+  if (!guide || guide.status !== "approved" || !guide.user.emailProofAt) {
     if (explicit) throw new CheckoutRequestError("This referral code is invalid or inactive.", 422, "affiliateCode");
     return {};
   }
@@ -68,8 +68,8 @@ async function resolveTopUpReferral(input: {
     select: { checkout: { select: { intent: true, affiliateId: true } } },
   });
   if (original?.checkout?.intent !== "purchase" || !original.checkout.affiliateId) return {};
-  const guide = await db.affiliateProfile.findUnique({ where: { id: original.checkout.affiliateId }, include: { user: { select: { email: true, emailVerifiedAt: true } } } });
-  if (!guide || guide.status !== "approved" || !guide.user.emailVerifiedAt) return {};
+  const guide = await db.affiliateProfile.findUnique({ where: { id: original.checkout.affiliateId }, include: { user: { select: { email: true, emailProofAt: true } } } });
+  if (!guide || guide.status !== "approved" || !guide.user.emailProofAt) return {};
   if (isSelfReferral({ userId: guide.userId, userEmail: guide.user.email }, { userId: input.userId, email: input.customerEmail }) || isSelfReferral({ userId: guide.userId, userEmail: guide.contactEmail }, { userId: input.userId, email: input.customerEmail })) return {};
   return { affiliateId: guide.id, affiliateCode: guide.code, affiliateRateBps: guide.rateOverrideBps ?? program.defaultRateBps, affiliateSource: "original-order" };
 }

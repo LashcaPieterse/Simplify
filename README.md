@@ -20,8 +20,8 @@ Guides live in `content/resources/*.md` with local images in `public/images/reso
 ## Database (Supabase/Postgres across environments)
 
 - **Single Prisma schema:** `prisma/schema.prisma` now targets Postgres/Supabase everywhere, backed by the migrations in `prisma/migrations`.
-- **Local + production workflow:** point `DATABASE_URL` at your Supabase Postgres URL (include `?sslmode=require`) and run `npx prisma migrate dev` locally to evolve the schema. Deploy the same migrations to Supabase with `npx prisma migrate deploy` once you’re ready. The editorial-publishing removal migration must run **after** the new application is deployed and verified; follow [its rollout procedure](docs/operations/editorial-removal.md).
-- **Safety while shipping the MVP:** until you spin up a separate dev Supabase project, be careful not to point your local environment at the production database. As soon as the MVP stabilizes, create a dedicated dev Supabase project (or schema) so you can iterate without touching production data.
+- **Provisioning and baseline adoption:** follow the [security rollout and database runbook](docs/operations/security-remediation.md). Existing databases must pass the staged additive upgrades and parity checks before the new baseline is marked applied. Keep all historical migration records. Fresh installations use the active baseline plus forward migrations; Supabase platform objects have a separate bootstrap.
+- **Development:** use a separate disposable database for `prisma migrate dev`. Never reset or replay baseline creation against an existing business database. The editorial-publishing removal migration retains its [deployment-first prerequisite](docs/operations/editorial-removal.md).
 
 ## Useful commands
 
@@ -123,7 +123,7 @@ Sync package requests default to:
 
 Airalo supports a single full-catalog response when no `limit` is provided, but SIM.Africa intentionally uses paginated syncs. Paging keeps Vercel function memory predictable, preserves each raw response page for audit/debug replay, and handles Airalo's documented page 2+ indexed-country response shape. Pagination follows Airalo `links.next` / `meta.current_page` / `meta.last_page` values instead of inferring completion from country counts.
 
-Deploy pending Prisma migrations with `npx prisma migrate deploy` before or during production releases. If `package_sync_pages.raw_payload_json` is not present yet, the sync job will continue without raw page snapshots and log a warning until the migration is applied.
+After completing [baseline adoption](docs/operations/security-remediation.md), deploy forward migrations with `npx prisma migrate deploy`. If `package_sync_pages.raw_payload_json` is not present yet, the sync job continues without raw page snapshots and logs a warning until the migration is applied.
 
 If needed for partner compatibility, set `AIRALO_PACKAGES_SEND_CREDENTIALS=true` to include `client_id` and `client_secret` on `/packages` requests, or allow the built-in 401 auth-rejection fallback to retry once with those credentials.
 

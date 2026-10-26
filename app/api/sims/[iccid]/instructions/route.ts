@@ -80,6 +80,8 @@ export async function GET(
         select: {
           id: true,
           userId: true,
+          accessVersion: true,
+          ownershipReviewRequired: true,
         },
       },
     },
@@ -97,6 +99,7 @@ export async function GET(
     request.headers.get("cookie"),
     "order",
     profile.order.id,
+    profile.order.accessVersion,
   );
 
   if (!canAccessOwnerScopedRecord(profile.order, session, hasOrderToken)) {

@@ -66,7 +66,7 @@ test("manual codes override cookies; inactive and self referrals cannot earn", a
   const secret = process.env.AFFILIATE_REFERRAL_SECRET;
   process.env.AFFILIATE_PROGRAM_ENABLED = "true";
   process.env.AFFILIATE_REFERRAL_SECRET = "test-secret-that-is-longer-than-thirty-two-characters";
-  const profile = { id: "guide-id", code: "ABCDEF123456", userId: "guide-user", contactEmail: "guide@example.com", status: "approved", rateOverrideBps: 1250, user: { email: "guide@example.com", emailVerifiedAt: new Date() } };
+  const profile = { id: "guide-id", code: "ABCDEF123456", userId: "guide-user", contactEmail: "guide@example.com", status: "approved", rateOverrideBps: 1250, user: { email: "guide@example.com", emailProofSource: "email", emailProofAt: new Date() } };
   const db = { affiliateProgramSettings: { findUnique: async () => ({ enabled: true, defaultRateBps: 1000 }) }, affiliateProfile: { findUnique: async ({ where }: { where: { code: string } }) => where.code === profile.code ? profile : null } } as unknown as PrismaClient;
   try {
     const token = signReferral("999999999999");
@@ -89,7 +89,7 @@ test("top-ups retain the original eSIM's guide and current rate without browser 
   process.env.AFFILIATE_PROGRAM_ENABLED = "true";
   process.env.AFFILIATE_REFERRAL_SECRET = "test-secret-that-is-longer-than-thirty-two-characters";
   const program = { enabled: true, defaultRateBps: 1000 };
-  const guide = { id: "original-guide", code: "ABCDEF123456", userId: "guide-user", contactEmail: "contact@example.com", status: "approved", rateOverrideBps: 1250 as number | null, user: { email: "guide@example.com", emailVerifiedAt: new Date() as Date | null } };
+  const guide = { id: "original-guide", code: "ABCDEF123456", userId: "guide-user", contactEmail: "contact@example.com", status: "approved", rateOverrideBps: 1250 as number | null, user: { email: "guide@example.com", emailProofSource: "email", emailProofAt: new Date() as Date | null } };
   const original = { checkout: { intent: "purchase", affiliateId: guide.id as string | null } };
   const db = {
     affiliateProgramSettings: { findUnique: async () => program },
@@ -116,9 +116,9 @@ test("top-ups retain the original eSIM's guide and current rate without browser 
     original.checkout.intent = "purchase";
     guide.status = "suspended";
     assert.deepEqual(await resolveCheckoutReferral(input, db), {});
-    guide.status = "approved"; guide.user.emailVerifiedAt = null;
+    guide.status = "approved"; guide.user.emailProofAt = null;
     assert.deepEqual(await resolveCheckoutReferral(input, db), {});
-    guide.user.emailVerifiedAt = new Date(); program.enabled = false;
+    guide.user.emailProofAt = new Date(); program.enabled = false;
     assert.deepEqual(await resolveCheckoutReferral(input, db), {});
     program.enabled = true; process.env.AFFILIATE_PROGRAM_ENABLED = "false";
     assert.deepEqual(await resolveCheckoutReferral(input, db), {});

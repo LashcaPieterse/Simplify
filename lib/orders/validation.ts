@@ -6,7 +6,7 @@ import { DEFAULT_QUANTITY, MAX_QUANTITY } from "./quantity";
 export const createOrderInputSchema = z.object({
   packageId: z.string().min(1, "A package selection is required."),
   quantity: z
-    .number({ invalid_type_error: "Quantity must be a number." })
+    .number({ error: "Quantity must be a number." })
     .int("Quantity must be an integer.")
     .positive("Quantity must be at least 1.")
     .max(MAX_QUANTITY, "You can purchase one eSIM per checkout.")

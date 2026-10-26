@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "crypto";
-import type { ZodType, ZodTypeDef } from "zod";
+import type { ZodType } from "zod";
 import {
   LegacyPackagesDataSchema,
   ListPackagesDataSchema,
@@ -432,7 +432,7 @@ export interface GetSimOptions {
 
 interface AiraloRequestOptions<T> {
   path: string;
-  schema: ZodType<T, ZodTypeDef, unknown>;
+  schema: ZodType<T, unknown>;
   init?: RequestInit;
   requiresAuth?: boolean;
   endpoint?: AiraloThrottledEndpoint;
@@ -535,7 +535,11 @@ export class AiraloClient {
       .digest("hex")
       .slice(0, 16);
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_BASE_URL);
-    this.fetchFn = options.fetchImplementation ?? fetch;
+    const transport = options.fetchImplementation ?? fetch;
+    this.fetchFn = (input, init = {}) => {
+      const purchase = ["POST", "PUT"].includes((init.method ?? "GET").toUpperCase()) && String(input).includes("/orders");
+      return transport(input, { ...init, signal: init.signal ?? AbortSignal.timeout(purchase ? 30_000 : 20_000) });
+    };
     this.tokenCache = options.tokenCache ?? new MemoryTokenCache();
     this.tokenExpiryBufferSeconds =
       options.tokenExpiryBufferSeconds ?? DEFAULT_TOKEN_BUFFER_SECONDS;

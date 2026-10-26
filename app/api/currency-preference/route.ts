@@ -1,4 +1,5 @@
 import { isSameOriginRequest } from "@/lib/http/same-origin";
+import { readJsonBody, BodyError } from "@/lib/http/bounded-body";
 import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db/client";
@@ -12,15 +13,16 @@ async function preference(request: NextRequest, update: boolean) {
     const session = await getServerSession(authOptions);
     const browserCurrency = request.cookies.get(CURRENCY_COOKIE)?.value;
     const user = session?.user?.id ? await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, preferredCurrency: true } }) : null;
-    const incoming = update ? (await request.json()).currency : undefined;
+    const incoming = update ? (await readJsonBody(request) as { currency?: unknown } | null)?.currency : undefined;
     if (update && !isCurrency(incoming)) return NextResponse.json({ message: "Choose USD, NAD, ZAR, EUR or GBP." }, { status: 422 });
-    const currency = update ? incoming : isCurrency(user?.preferredCurrency) ? user.preferredCurrency : isCurrency(browserCurrency) ? browserCurrency : "USD";
+    const currency = update && isCurrency(incoming) ? incoming : isCurrency(user?.preferredCurrency) ? user.preferredCurrency : isCurrency(browserCurrency) ? browserCurrency : "USD";
     // Adoption is an explicit PUT from the client after authentication; GET remains read-only.
     if (update && user) await prisma.user.update({ where: { id: user.id }, data: { preferredCurrency: currency } });
     const response = NextResponse.json({ currency, needsAdoption: Boolean(user && !isCurrency(user.preferredCurrency)) }, { headers: { "Cache-Control": "private, no-store" } });
     response.cookies.set(CURRENCY_COOKIE, currency, { httpOnly: false, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: CURRENCY_COOKIE_SECONDS });
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof BodyError) return NextResponse.json({ message: error.message }, { status: error.status });
     return NextResponse.json({ message: "Currency preferences are temporarily unavailable." }, { status: 503 });
   }
 }

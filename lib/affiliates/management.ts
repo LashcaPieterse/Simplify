@@ -52,9 +52,9 @@ export async function reviewAffiliate(input: { id: string; status: string; rateO
   if (["rejected", "suspended"].includes(input.status) && !input.reason.trim()) throw new Error("Enter a reason for rejecting or suspending a guide.");
   const rateOverrideBps = percentageToBps(input.rateOverride, true);
   return affiliateTransaction(db, async tx => {
-    const profile = await tx.affiliateProfile.findUniqueOrThrow({ where: { id: input.id }, include: { user: { select: { email: true, emailVerifiedAt: true } } } });
+    const profile = await tx.affiliateProfile.findUniqueOrThrow({ where: { id: input.id }, include: { user: { select: { email: true, emailProofAt: true } } } });
     const program = await tx.affiliateProgramSettings.findUnique({ where: { id: "program" } });
-    if (input.status === "approved" && (!profile.user.emailVerifiedAt || !program?.defaultRateBps)) throw new Error("Approval requires a verified account email and a configured default commission rate.");
+    if (input.status === "approved" && (!profile.user.emailProofAt || !program?.defaultRateBps)) throw new Error("Approval requires a verified account email and a configured default commission rate.");
     const updated = await tx.affiliateProfile.update({ where: { id: input.id }, data: { status: input.status, rateOverrideBps, statusReason: input.reason.trim() || null } });
     await auditAffiliate(tx, input.actorEmail, "guide_reviewed", profile.id, { beforeStatus: profile.status, status: input.status, rateOverrideBps, reason: input.reason });
     if (input.status === "approved" && profile.status !== "approved") {
