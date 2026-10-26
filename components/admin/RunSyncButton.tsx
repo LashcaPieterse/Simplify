@@ -11,6 +11,7 @@ export function RunSyncButton() {
     <button
       onClick={async () => {
         setStatus("running");
+        try {
         const res = await fetch("/api/admin/sync", { method: "POST" });
         if (res.ok) {
           setStatus("done");
@@ -18,12 +19,13 @@ export function RunSyncButton() {
         } else {
           setStatus("error");
         }
+        } catch { setStatus("error"); }
       }}
       className="button-ribbon-primary flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-60"
       disabled={status === "running"}
     >
       {status === "running" ? "Syncing..." : "Run Sync Now"}
-      {status === "error" ? <span className="text-amber-200">Retry</span> : null}
+      {status === "error" ? <span className="text-amber-200">Check Sync Runs before retrying</span> : null}
       {status === "done" ? <span className="text-emerald-100">✓</span> : null}
     </button>
   );

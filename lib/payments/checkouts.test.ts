@@ -58,6 +58,7 @@ test("signed-in checkout requests default to the session email", () => {
 });
 
 class FakeCreateCheckoutDb {
+  readonly operationsSettings = { findUnique: async () => ({ checkoutPaused: false }) };
   lastWhere: unknown = null;
 
   readonly package = {
@@ -141,6 +142,7 @@ class FakeAiraloClient {
 }
 
 class FakeCheckoutDb {
+  readonly operationsSettings = { findUnique: async () => ({ checkoutPaused: false }) };
   readonly receiptDelivery = fixtureOutbox();
   readonly lifecycleJob = fixtureOutbox();
   readonly orders: Array<Record<string, unknown>> = [];

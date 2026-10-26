@@ -65,10 +65,11 @@ async function resolveTopUpReferral(input: {
   if (!program?.enabled || !program.defaultRateBps) return {};
   const original = await db.esimOrder.findFirst({
     where: { id: input.topUpForOrderId, userId: input.userId, profiles: { some: { iccid: input.topUpForIccid } } },
-    select: { checkout: { select: { intent: true, affiliateId: true } } },
+    select: { checkout: { select: { intent: true, affiliateId: true } }, saleCheckout: { select: { intent: true, affiliateId: true } } },
   });
-  if (original?.checkout?.intent !== "purchase" || !original.checkout.affiliateId) return {};
-  const guide = await db.affiliateProfile.findUnique({ where: { id: original.checkout.affiliateId }, include: { user: { select: { email: true, emailProofAt: true } } } });
+  const sale = original?.saleCheckout ?? original?.checkout;
+  if (sale?.intent !== "purchase" || !sale.affiliateId) return {};
+  const guide = await db.affiliateProfile.findUnique({ where: { id: sale.affiliateId }, include: { user: { select: { email: true, emailProofAt: true } } } });
   if (!guide || guide.status !== "approved" || !guide.user.emailProofAt) return {};
   if (isSelfReferral({ userId: guide.userId, userEmail: guide.user.email }, { userId: input.userId, email: input.customerEmail }) || isSelfReferral({ userId: guide.userId, userEmail: guide.contactEmail }, { userId: input.userId, email: input.customerEmail })) return {};
   return { affiliateId: guide.id, affiliateCode: guide.code, affiliateRateBps: guide.rateOverrideBps ?? program.defaultRateBps, affiliateSource: "original-order" };

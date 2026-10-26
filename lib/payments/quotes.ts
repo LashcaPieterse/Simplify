@@ -70,6 +70,7 @@ export async function validateTopUpContext(input: { packageId: string; topUpForO
 
 export async function createCheckoutQuote(rawInput: QuoteInput, owner: QuoteOwner, db: PrismaClient = prisma, options: { airaloClient?: AiraloClient } = {}): Promise<QuoteSummary> {
   assertNewCheckoutEnabled();
+  if ((await db.operationsSettings.findUnique({ where: { id: "operations" } }))?.checkoutPaused) throw new CheckoutRequestError("New payments are temporarily unavailable. Existing orders are still being processed.", 503);
   const input = quoteInputSchema.parse(rawInput);
   if (!owner.userId && !owner.guestSessionId) throw new CheckoutRequestError("A checkout session is required.", 403);
   const pkg = await findActivePackageByIdentifier(db, input.packageId, input.intent === "top-up" ? { packageType: "topup", activeOnly: true, publicCatalogOnly: false } : undefined);

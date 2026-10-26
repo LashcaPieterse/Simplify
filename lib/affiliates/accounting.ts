@@ -29,30 +29,31 @@ function installationReady(payload: string | null | undefined, activationCode?: 
 /** Run inside the supplier persistence transaction, independently of email or ledger delivery. */
 export async function stampAffiliateFulfilment(tx: Prisma.TransactionClient, orderId: string, now = new Date()) {
   if (!affiliateInfrastructureEnabled()) return;
-  const order = await tx.esimOrder.findUnique({ where: { id: orderId }, include: { checkout: true, profiles: true, installation: true } });
-  if (!order?.checkout?.affiliateId || order.fulfilledAt || order.status !== "completed" || !order.orderNumber) return;
-  if (order.checkout.intent === "top-up") {
-    const checkout = order.checkout;
+  const record = await tx.esimOrder.findUnique({ where: { id: orderId }, include: { checkout: { include: { activeOrder: { include: { profiles: true, installation: true } } } }, saleCheckout: { include: { activeOrder: { include: { profiles: true, installation: true } } } }, profiles: true, installation: true } });
+  const checkout = record?.saleCheckout ?? record?.checkout;
+  if (!record || !checkout?.affiliateId || checkout.fulfillmentHold) return;
+  const order = checkout.activeOrder ?? record;
+  if (order.status !== "completed" || !order.orderNumber) return;
+  if (checkout.intent === "top-up") {
     if (!checkout.topUpForOrderId || !checkout.topUpForIccid || checkout.affiliateSource !== "original-order") return;
-    const original = await tx.esimOrder.findFirst({
-      where: { id: checkout.topUpForOrderId, profiles: { some: { iccid: checkout.topUpForIccid } } },
-      select: { checkout: { select: { intent: true, affiliateId: true } } },
-    });
-    if (original?.checkout?.intent !== "purchase" || original.checkout.affiliateId !== checkout.affiliateId) return;
-  } else {
-    if (order.checkout.intent !== "purchase" || !order.profiles.length || !installationReady(order.installation?.payload, order.profiles[0]?.activationCode)) return;
-  }
-  await tx.esimOrder.updateMany({ where: { id: order.id, fulfilledAt: null }, data: { fulfilledAt: now } });
+    const original = await tx.esimOrder.findFirst({ where: { id: checkout.topUpForOrderId, profiles: { some: { iccid: checkout.topUpForIccid } } }, select: { checkout: { select: { intent: true, affiliateId: true } }, saleCheckout: { select: { intent: true, affiliateId: true } } } });
+    const source = original?.saleCheckout ?? original?.checkout;
+    if (source?.intent !== "purchase" || source.affiliateId !== checkout.affiliateId) return;
+  } else if (checkout.intent !== "purchase" || !order.profiles.length || !installationReady(order.installation?.payload, order.profiles[0]?.activationCode)) return;
+  // The original sale owns the commission; a replacement never earns a second one.
+  await tx.esimOrder.updateMany({ where: { id: checkout.orderId ?? order.id, fulfilledAt: null }, data: { fulfilledAt: now } });
+
 }
 
 export async function accrueCommissionForOrder(orderId: string, db: PrismaClient = prisma, now = new Date()) {
   if (!affiliateInfrastructureEnabled()) return null;
   return affiliateTransaction(db, async tx => {
     await stampAffiliateFulfilment(tx, orderId, now);
-    const order = await tx.esimOrder.findUnique({ where: { id: orderId }, include: { checkout: true, payment: true } });
+    const record = await tx.esimOrder.findUnique({ where: { id: orderId }, include: { checkout: true, payment: true, saleCheckout: { include: { order: { include: { payment: true, checkout: true } } } } } });
+    const order = record?.saleCheckout?.order ?? record;
     const checkout = order?.checkout;
     const payment = order?.payment;
-    if (!order?.fulfilledAt || !checkout?.affiliateId || !checkout.affiliateRateBps || !["purchase", "top-up"].includes(checkout.intent) || !payment || payment.status !== "approved" || payment.checkoutId !== checkout.id || payment.amountCents !== checkout.totalCents || payment.currency !== checkout.currency) return null;
+    if (checkout?.fulfillmentHold || !order?.fulfilledAt || !checkout?.affiliateId || !checkout.affiliateRateBps || !["purchase", "top-up"].includes(checkout.intent) || !payment || payment.status !== "approved" || payment.checkoutId !== checkout.id || payment.amountCents !== checkout.totalCents || payment.currency !== checkout.currency) return null;
     const existing = await tx.affiliateCommission.findUnique({ where: { checkoutId: checkout.id } });
     if (existing) return existing;
     const amount = commissionAmount(checkout.totalCents, checkout.affiliateRateBps);
@@ -93,7 +94,7 @@ export async function safelyAccrueCommission(orderId: string, db: PrismaClient =
 export async function reconcileAffiliateCommissions(db: PrismaClient = prisma, limit = 25) {
   if (!affiliateInfrastructureEnabled()) return { checked: 0, failed: 0 };
   const candidates = await db.checkoutSession.findMany({
-    where: { affiliateId: { not: null }, affiliateCommission: null, intent: { in: ["purchase", "top-up"] }, order: { is: { OR: [{ fulfilledAt: { not: null } }, { status: "completed" }] } } },
+    where: { affiliateId: { not: null }, affiliateCommission: null, intent: { in: ["purchase", "top-up"] }, OR: [{ order: { is: { OR: [{ fulfilledAt: { not: null } }, { status: "completed" }] } } }, { activeOrder: { is: { status: "completed" } } }] },
     select: { id: true, orderId: true }, orderBy: [{ affiliateCheckedAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }], take: limit,
   });
   let failed = 0;
@@ -120,7 +121,13 @@ export async function recordAffiliateSaleRefund(input: { checkoutId: string; sal
       if (duplicate.saleRefundCents !== input.saleRefundCents) throw new Error("That refund reference was already recorded with a different amount.");
       return duplicate;
     }
+    await tx.$queryRaw`SELECT id FROM "CheckoutSession" WHERE id=${input.checkoutId} FOR UPDATE`;
     const checkout = await tx.checkoutSession.findUniqueOrThrow({ where: { id: input.checkoutId }, include: { affiliateCommission: true, affiliateAdjustments: true } });
+    const journal = await tx.paymentRefund.findMany({ where: { payment: { checkoutId: checkout.id }, status: { in: ["reserved", "unknown", "confirmed"] } }, select: { reference: true, amountCents: true } });
+    const recorded = new Set(checkout.affiliateAdjustments.map(adjustment => adjustment.reference));
+    const unrecorded = journal.filter(refund => refund.reference !== input.reference.trim() && !recorded.has(refund.reference)).reduce((sum, refund) => sum + refund.amountCents, 0);
+    if (checkout.affiliateAdjustments.reduce((sum, adjustment) => sum + adjustment.saleRefundCents, 0) + input.saleRefundCents + unrecorded > checkout.totalCents) throw new Error("Refund exceeds the sale balance including reserved refunds.");
+    await tx.checkoutSession.update({ where: { id: checkout.id }, data: { updatedAt: new Date() } });
     if (!checkout.affiliateId || !checkout.affiliateRateBps) throw new Error("This checkout has no affiliate attribution.");
     const totalRefunded = checkout.affiliateAdjustments.reduce((sum, item) => sum + item.saleRefundCents, 0) + input.saleRefundCents;
     refundCommission(checkout.totalCents, checkout.affiliateRateBps, totalRefunded);

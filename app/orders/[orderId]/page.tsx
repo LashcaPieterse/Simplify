@@ -21,6 +21,8 @@ import { WhatsAppSupportLink } from "@/components/site/WhatsAppSupportLink";
 import { findPackageDisplayByIdentifier } from "@/lib/catalog/package-resolver";
 import { formatCurrency, formatCurrencyWithCode } from "@/lib/format";
 import {
+  canIssueScopedAccessTokens,
+  createOrderAccessLink,
   canAccessOwnerScopedRecord,
   canStartTopUpCheckout,
   hasScopedAccessFromCookieStore,
@@ -163,6 +165,14 @@ export default async function OrderPage({ params }: OrderPageParams) {
     notFound();
   }
 
+  const disposition = await prisma.checkoutSession.findFirst({ where: { OR: [{ orderId: existingOrder.id }, { activeOrderId: existingOrder.id }] }, select: { activeOrderId: true, fulfillmentHold: true } });
+  if (disposition?.activeOrderId && disposition.activeOrderId !== existingOrder.id) {
+    const replacement = await prisma.esimOrder.findUnique({ where: { id: disposition.activeOrderId }, select: { id: true, accessVersion: true, userId: true, ownershipReviewRequired: true } });
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXTAUTH_URL;
+    const replacementLink = replacement && !replacement.ownershipReviewRequired && replacement.userId === existingOrder.userId && baseUrl && canIssueScopedAccessTokens() ? createOrderAccessLink(replacement.id, baseUrl, { accessVersion: replacement.accessVersion }) : null;
+    return <main className="page-container py-12"><h1 className="text-2xl font-semibold">A replacement is available for this order</h1><p className="mt-3">Your original purchase remains on record. No additional payment is required.</p>{replacementLink ? <a className="mt-5 inline-block underline" href={replacementLink}>Open my replacement eSIM</a> : <Link className="mt-5 inline-block underline" href="/account/esims">Open my eSIMs</Link>}</main>;
+  }
+  if (disposition?.fulfillmentHold === "refunded") return <main className="page-container py-12"><h1 className="text-2xl font-semibold">Payment refunded</h1><p className="mt-3">This payment has been refunded. Supplier cancellation and bank processing are tracked separately. Contact support if you need help with this order.</p></main>;
   const order = await ensureOrderInstallation(existingOrder.id);
 
   if (!order) {

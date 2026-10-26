@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "crypto";
 import type { ZodType } from "zod";
+import { z } from "zod";
 import {
   LegacyPackagesDataSchema,
   ListPackagesDataSchema,
@@ -979,6 +980,12 @@ export class AiraloClient {
   async createTopUpOrder(payload: CreateTopUpOrderPayload): Promise<Order> {
     const response = await this.createTopUpOrderResponse(payload);
     return response.data;
+  }
+
+  async requestRefund(input: { iccids: string[]; reason: string; notes: string; email: string }): Promise<string> {
+    const response = await this.request({ path: "/refund", schema: z.object({ data: z.object({ refund_id: z.union([z.string(), z.number()]) }) }),
+      init: { method: "POST", body: this.buildMultipartPayload({ iccids: JSON.stringify(input.iccids), reason: JSON.stringify(input.reason), notes: input.notes, email: input.email }) } });
+    return String(response.data.refund_id);
   }
 
   async createOrderAsyncResponse(

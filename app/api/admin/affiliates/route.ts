@@ -4,8 +4,8 @@ import { z } from "zod";
 import { requireAdminApiSession } from "@/lib/admin/guards";
 import { isAffiliateSameOrigin } from "@/lib/affiliates/http";
 import { affiliateInfrastructureEnabled } from "@/lib/affiliates/referral";
-import { parseRefundAmount, reviewAffiliate, saveAffiliateSettings } from "@/lib/affiliates/management";
-import { recordAffiliateRefund, recordAffiliateSaleRefund, reconcileAffiliateCommissions, setCommissionHold } from "@/lib/affiliates/accounting";
+import { reviewAffiliate, saveAffiliateSettings } from "@/lib/affiliates/management";
+import { reconcileAffiliateCommissions, setCommissionHold } from "@/lib/affiliates/accounting";
 import { deferAffiliatePayout, prepareAffiliatePayout, transitionAffiliatePayout } from "@/lib/affiliates/payouts";
 import { deliverAffiliateNotifications } from "@/lib/affiliates/notifications";
 
@@ -24,8 +24,7 @@ export async function POST(request: NextRequest) {
     switch (data.operation) {
       case "settings": await saveAffiliateSettings({ enabled: data.enabled === "on", percentage: data.percentage ?? "", actorEmail }); break;
       case "review": await reviewAffiliate({ id: required("id"), status: required("status"), rateOverride: data.rateOverride ?? "", reason: data.reason ?? "", actorEmail }); break;
-      case "refund": await recordAffiliateRefund({ commissionId: required("commissionId"), saleRefundCents: parseRefundAmount(required("amount")), reference: required("reference"), reason: required("reason"), actorEmail }); break;
-      case "sale-refund": await recordAffiliateSaleRefund({ checkoutId: required("checkoutId"), saleRefundCents: parseRefundAmount(required("amount")), reference: required("reference"), reason: required("reason"), actorEmail }); break;
+      case "refund": case "sale-refund": throw new Error("Open the original payment in Payments to record a verified external refund. Its refund journal applies the affiliate adjustment exactly once.");
       case "hold": await setCommissionHold(required("commissionId"), data.onHold === "true", required("reason"), actorEmail); break;
       case "prepare": await prepareAffiliatePayout(required("affiliateId"), required("currency").toUpperCase(), actorEmail); break;
       case "defer": await deferAffiliatePayout(required("affiliateId"), required("reason"), actorEmail); break;

@@ -1,3 +1,4 @@
+import { orderDisposition } from "../orders/fulfillment-disposition";
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prepareOrderReceipt } from "./receipts";
@@ -6,8 +7,8 @@ import { retryAt } from "../jobs/store";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 export async function queueOrderReceipt(db: Db, orderId: string) {
-  const order = await db.esimOrder.findUnique({ where: { id: orderId }, select: { receiptSentAt: true, checkout: { select: { intent: true } } } });
-  if (!order || order.checkout?.intent === "top-up") return null;
+  const order = await db.esimOrder.findUnique({ where: { id: orderId }, select: { receiptSentAt: true, saleCheckout: { select: { intent: true } }, checkout: { select: { intent: true } } } });
+  if (!order || (order.saleCheckout ?? order.checkout)?.intent === "top-up") return null;
   return db.receiptDelivery.upsert({ where: { businessKey: `receipt:${orderId}:v1` }, update: {}, create: {
     businessKey: `receipt:${orderId}:v1`, orderId,
     ...(order.receiptSentAt ? { status: "review", lastError: "legacy_acceptance_unconfirmed" } : {}),
@@ -17,10 +18,18 @@ export async function queueOrderReceipt(db: Db, orderId: string) {
 export async function deliverReceipt(db: PrismaClient, id: string, options: { now?: Date; send?: typeof sendEmail; baseUrl?: string } = {}) {
   const now = options.now ?? new Date();
   const leaseToken = randomUUID();
-  const claimed = await db.receiptDelivery.updateMany({ where: { id, nextAttemptAt: { lte: now },
-    OR: [{ status: "pending" }, { status: "leased", leaseUntil: { lte: now } }] }, data: {
-      status: "leased", leaseToken, leaseUntil: new Date(now.getTime() + 120_000), attempts: { increment: 1 },
-    } });
+  const claimed = await db.$transaction(async tx => {
+    const delivery = await tx.receiptDelivery.findUnique({ where: { id }, select: { orderId: true } });
+    if (!delivery) return { count: 0 };
+    const context = await orderDisposition(tx, delivery.orderId);
+    if (context.sale) await tx.$queryRaw`SELECT id FROM "CheckoutSession" WHERE id=${context.sale.id} FOR UPDATE`;
+    const current = await orderDisposition(tx, delivery.orderId);
+    if (current.blocked || current.order?.ownershipReviewRequired) return { count: 0 };
+    return tx.receiptDelivery.updateMany({ where: { id, nextAttemptAt: { lte: now },
+      OR: [{ status: "pending" }, { status: "leased", leaseUntil: { lte: now } }] }, data: {
+        status: "leased", leaseToken, leaseUntil: new Date(now.getTime() + 120_000), attempts: { increment: 1 },
+      } });
+  });
   if (!claimed.count) return "busy";
   const job = await db.receiptDelivery.findUniqueOrThrow({ where: { id } });
   const where = { id, leaseToken, status: "leased" };
@@ -29,6 +38,8 @@ export async function deliverReceipt(db: PrismaClient, id: string, options: { no
       nextAttemptAt: retryAt(job.attempts, now), lastError: code, acceptanceUnknown } });
     return status;
   };
+  const disposition = await orderDisposition(db, job.orderId);
+  if (disposition.blocked) return release(disposition.permanent ? "superseded" : "pending", "delivery_held_or_superseded");
   let acceptanceUnknown = job.acceptanceUnknown;
   if (job.acceptanceUnknown && job.firstAttemptAt && now.getTime() - job.firstAttemptAt.getTime() >= 23 * 3_600_000) {
     return release("review", "idempotency_window_exceeded");
@@ -84,6 +95,7 @@ export async function reviewReceipt(db: PrismaClient, input: { id: string; actio
   if (!input.reason.trim() || (input.action === "confirm" && !input.providerMessageId?.trim())) throw new Error("A reason and acceptance evidence are required.");
   return db.$transaction(async tx => {
     const job = await tx.receiptDelivery.findUniqueOrThrow({ where: { id: input.id } });
+    if ((await orderDisposition(tx, job.orderId)).blocked) throw new Error("Delivery is held or superseded.");
     if (job.status !== "review") throw new Error("Only a receipt awaiting review can be resolved.");
     // Serialize repeated operator actions. A resend must create exactly one new key.
     const claimed = await tx.receiptDelivery.updateMany({ where: { id: job.id, status: "review" }, data: { status: input.action === "confirm" ? "accepted" : "superseded", providerMessageId: input.providerMessageId, acceptedAt: input.action === "confirm" ? new Date() : null } });

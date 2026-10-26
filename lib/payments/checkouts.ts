@@ -1,3 +1,4 @@
+import { assertCheckoutOpen } from "../orders/fulfillment-disposition";
 import { enqueueJob } from "../jobs/store";
 import { commitPaymentTransition, paymentState } from "./transitions";
 import type { AiraloClient } from "../airalo/client";
@@ -150,6 +151,7 @@ export async function createCheckout(
 
   const input = parsed.data;
   const db = options.prisma ?? prismaClient;
+  if ((await db.operationsSettings.findUnique({ where: { id: "operations" } }))?.checkoutPaused) throw new CheckoutRequestError("New payments are temporarily unavailable. Existing orders are still being processed.", 503);
   const quantity = normaliseQuantity(input.quantity);
   const packageIdIsUuid = isUuid(input.packageId);
   const checkoutUserId = await resolveCheckoutUserId(db, options.userId);
@@ -953,6 +955,7 @@ export async function finaliseOrderFromCheckout(
     throw new Error("Payment has not been approved.");
   }
 
+  await assertCheckoutOpen(db, checkout.id);
   const topUpContext = await resolveTopUpCheckoutContext(db, checkout);
   let reservation: { orderId: string; existing: boolean };
 

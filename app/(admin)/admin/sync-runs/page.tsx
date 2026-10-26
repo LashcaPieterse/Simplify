@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import prisma from "@/lib/db/client";
-import { formatDate } from "@/lib/format";
+import { formatOpsTime as formatDate } from "@/lib/admin/queries";
 
 const PAGE_SIZE = 20;
 

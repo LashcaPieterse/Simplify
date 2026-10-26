@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 
 export async function authorizedCheckout(request: Request, id: string, db: PrismaClient = prisma) {
   const checkout = await db.checkoutSession.findUnique({ where: { id }, include: {
-    payments: { orderBy: { createdAt: "desc" }, take: 1 }, order: { include: { installation: true, profiles: true } },
+    payments: { orderBy: { createdAt: "desc" }, take: 1 }, activeOrder: { include: { installation: true, profiles: true } }, order: { include: { installation: true, profiles: true } },
   } });
   if (!checkout) return null;
   const session = await getServerSession(authOptions);
@@ -17,20 +17,20 @@ export async function authorizedCheckout(request: Request, id: string, db: Prism
 }
 
 export async function checkoutStatusResponse(checkout: NonNullable<Awaited<ReturnType<typeof authorizedCheckout>>>, db: PrismaClient = prisma) {
-  const order = checkout.order;
+  const order = checkout.activeOrder ?? checkout.order;
   const payment = checkout.payments[0];
   let payload = null;
   try { payload = order?.installation ? JSON.parse(order.installation.payload) : null; } catch { /* Missing readiness is not completion. */ }
   const ready = checkout.intent === "top-up" || Boolean(order?.profiles.length && resolveReceiptDeliveryDetails(payload, order.profiles[0]?.activationCode).ready);
-  const isComplete = payment?.status === "approved" && order?.status === "completed" && Boolean(order.orderNumber) && ready;
+  const isComplete = !checkout.fulfillmentHold && payment?.status === "approved" && order?.status === "completed" && Boolean(order.orderNumber) && ready;
   const redirectOrderId = isComplete ? (checkout.intent === "top-up" ? checkout.topUpForOrderId : order?.id) : null;
   const job = payment ? await db.lifecycleJob.findUnique({ where: { businessKey: `verify_payment:${payment.id}` } }) : null;
   const response = NextResponse.json({ checkoutId: checkout.id, status: checkout.status,
     paymentStatus: payment?.status ?? "creating", paymentUrl: payment?.redirectUrl,
     orderId: order?.id ?? null, redirectOrderId, isComplete,
-    fulfillmentStatus: isComplete ? "completed" : order?.status ?? "awaiting_payment",
+    fulfillmentStatus: checkout.fulfillmentHold ?? (isComplete ? "completed" : order?.status ?? "awaiting_payment"),
     nextCheckAt: job && ["pending", "leased"].includes(job.status) ? job.nextAttemptAt.toISOString() : null,
-    message: payment?.status === "authorized" ? "Payment authorized. We are checking completion; please do not pay again." : undefined,
+    message: checkout.fulfillmentHold === "refunded" ? "This payment has been refunded. No new payment is required." : checkout.fulfillmentHold === "refund_pending" ? "A refund is being reconciled. Delivery is paused." : payment?.status === "authorized" ? "Payment authorized. We are checking completion; please do not pay again." : undefined,
   }, { headers: { "Cache-Control": "private, no-store" } });
   if (isComplete && redirectOrderId) {
     const target = redirectOrderId === order?.id ? order : await db.esimOrder.findUnique({ where: { id: redirectOrderId } });

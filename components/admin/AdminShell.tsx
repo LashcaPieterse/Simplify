@@ -14,6 +14,12 @@ const navItems = [
   { href: "/admin/sync-runs" as Route, label: "Sync Runs" },
   { href: "/admin/settings" as Route, label: "Settings" },
   { href: "/admin/operations" as Route, label: "Operations" },
+  { href: "/admin/payments" as Route, label: "Payments" },
+  { href: "/admin/orders" as Route, label: "Orders & delivery" },
+  { href: "/admin/receipts" as Route, label: "Receipts" },
+  { href: "/admin/health" as Route, label: "System health" },
+  { href: "/admin/security" as Route, label: "Security" },
+  { href: "/admin/audit" as Route, label: "Audit history" },
   { href: "/admin/affiliates" as Route, label: "Affiliates" },
 ] satisfies { href: Route; label: string }[];
 
@@ -22,6 +28,7 @@ export function AdminShell({ children, adminEmail }: { children: ReactNode; admi
 
   return (
     <div className="flex min-h-screen bg-sand-50">
+      <a href="#admin-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded focus:bg-white focus:p-3">Skip to admin content</a>
       <aside className="hidden w-64 border-r border-slate-200 bg-white px-4 py-6 lg:block">
         <div className="flex items-center justify-between gap-2 px-2">
           <div>
@@ -64,7 +71,8 @@ export function AdminShell({ children, adminEmail }: { children: ReactNode; admi
             <LogoutButton />
           </div>
         </header>
-        <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
+        <nav aria-label="Admin navigation" className="flex flex-wrap gap-2 border-b border-brand-100 bg-white p-3 lg:hidden">{navItems.map(item => <Link key={item.href} href={item.href} aria-current={pathname === item.href ? "page" : undefined} className={`min-h-11 rounded-lg px-3 py-3 text-sm font-medium ${pathname === item.href ? "bg-brand-900 text-white" : "text-brand-900 hover:bg-brand-50"}`}>{item.label}</Link>)}</nav>
+        <main id="admin-content" className="flex-1 px-4 py-6 lg:px-8">{children}</main>
       </div>
     </div>
   );

@@ -27,8 +27,9 @@
     "security:quarantine": "tsx scripts/security-quarantine.ts",
     "security:backfill": "tsx scripts/security-backfill.ts",
     "test:postgres": "tsx scripts/db-test-postgres.ts",
+    "test:admin-postgres": "tsx --test tests/admin.postgres.test.ts",
     "test:platform": "tsx scripts/db-test-platform.ts",
-    "test:browser": "tsx --test tests/checkout.browser.test.ts"
+    "test:browser": "tsx --test tests/*.browser.test.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.8.0",

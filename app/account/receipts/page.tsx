@@ -25,7 +25,7 @@ export default async function AccountReceiptsPage() {
       ownershipReviewRequired: false,
       paymentTransactionId: { not: null },
     },
-    include: { payment: true, checkout: { include: { quote: true } } },
+    include: { payment: { include: { refunds: { select: { amountCents: true, status: true } } } }, checkout: { include: { quote: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -98,6 +98,8 @@ export default async function AccountReceiptsPage() {
                 <p className="text-base font-semibold text-brand-900">
                   {payment?.status ?? "pending"}
                 </p>
+                {order.replacementForId ? <p className="text-sm text-brand-600">Replacement · No additional customer charge</p> : null}
+                {payment?.refunds.some(refund => refund.status === "confirmed") ? <p className="text-sm text-brand-600">Refunded {formatCurrencyWithCode(payment.refunds.filter(refund => refund.status === "confirmed").reduce((sum, refund) => sum + refund.amountCents, 0), payment.currency)}</p> : null}
                 <p className="text-sm text-brand-600">{amountLabel}{order.checkout?.quote ? <span className="mt-1 block text-xs font-normal text-brand-500">Original displayed estimate: {formatCurrencyWithCode(order.checkout.quote.displayCents, order.checkout.quote.displayCurrency)}</span> : null}</p>
               </div>
             </div>

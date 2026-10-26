@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { enforceRates } from "../security/rate-limit";
 import { readBoundedText, BodyError } from "../http/bounded-body";
 import { reconcilePayment } from "../jobs/lifecycle";
 import prismaClient from "../db/client";
@@ -56,10 +58,16 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
     },
   });
 
+  const correlationId = randomUUID();
+  try {
+    await enforceRates([{ scope: "callback-diagnostics", identifier: "dpo", limit: 60, windowSeconds: 60 }]);
+    await prismaClient.paymentCallbackDiagnostic.create({ data: { correlationId, status: result.status, result: result.status === 200 ? "matched_notification" : "rejected_unmatched_or_unavailable" } });
+  } catch { /* Diagnostics must not change the gateway's callback acknowledgement. */ }
   return new Response(result.body, {
     status: result.status,
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
+      "X-Correlation-ID": correlationId,
     },
   });
 }

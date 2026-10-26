@@ -2,7 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "codex/security-remediation-rollout": false
+      "codex/security-remediation-rollout": false,
+      "codex/admin-operations-overhaul": false
     }
   }
 }
