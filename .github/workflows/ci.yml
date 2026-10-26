@@ -48,8 +48,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Install browser for focused journey tests
-        run: npx playwright install --with-deps chromium
+      - name: Select browser for focused journey tests
+        timeout-minutes: 3
+        run: |
+          if command -v google-chrome >/dev/null; then
+            echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            npx playwright install --with-deps chromium
+          fi
 
       - name: Checkout and recovery browser tests
         run: npm run test:browser

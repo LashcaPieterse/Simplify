@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { PrismaClient } from "@prisma/client";
@@ -49,7 +51,7 @@ test("browser: admin warning leads to receipt review and verified resolution on 
   await page.goto(`${baseUrl}/admin/operations`); assert.match(page.url(), /admin\/login/);
   await page.getByLabel("Email").fill("admin@example.test"); await page.getByLabel("Password", { exact: true }).fill("fixture-admin-password"); await page.getByRole("button", { name: /sign in/i }).click(); await page.waitForURL(`${baseUrl}/admin`, { timeout: 10000 }).catch(async () => { throw new Error(`Fixture ${server.getServerConn()} sign-in: ${await page.locator("body").innerText()}; server logs: ${appLogs.join(" ").slice(-4000)}`); });
   await page.goto(`${baseUrl}/admin/operations`); await page.getByRole("heading", { name: "Receipt delivery needs attention" }).waitFor({ timeout: 10000 }).catch(async () => { throw new Error(`Fixture page: ${await page.locator("body").innerText()}; server logs: ${appLogs.join(" ").slice(-4000)}`); });
-  await page.screenshot({ path: "/private/tmp/simplify-admin-operations-desktop.png", fullPage: true });
+  await page.screenshot({ path: join(tmpdir(), "simplify-admin-operations-desktop.png"), fullPage: true });
   await page.getByRole("link", { name: "Investigate affected records" }).click(); await page.waitForURL("**/admin/receipts?filter=attention");
   await page.getByRole("link", { name: receipt.id, exact: true }).click(); await page.getByRole("button", { name: "Confirm provider acceptance", exact: true }).click();
   const review = page.locator("form").filter({ has: page.getByRole("button", { name: "Confirm provider acceptance", exact: true }) });
@@ -64,7 +66,7 @@ test("browser: admin warning leads to receipt review and verified resolution on 
   await page.setViewportSize({ width: 375, height: 844 }); await page.goto(`${baseUrl}/admin/operations`);
   await page.getByRole("navigation", { name: "Admin navigation" }).getByRole("link", { name: "Payments", exact: true }).waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-  await page.screenshot({ path: "/private/tmp/simplify-admin-operations-mobile.png", fullPage: true });
+  await page.screenshot({ path: join(tmpdir(), "simplify-admin-operations-mobile.png"), fullPage: true });
   const unauthorized = await fetch(`${baseUrl}/api/admin/operations`, { method: "POST", headers: { Origin: buildOrigin, "Content-Type": "application/json" }, body: "{}" }); assert.equal(unauthorized.status, 401);
   const cookie = (await page.context().cookies()).map(value => `${value.name}=${value.value}`).join("; ");
   const crossOrigin = await fetch(`${baseUrl}/api/admin/operations`, { method: "POST", headers: { Cookie: cookie, Origin: "https://untrusted.example", "Content-Type": "application/json" }, body: "{}" }); assert.equal(crossOrigin.status, 403);
