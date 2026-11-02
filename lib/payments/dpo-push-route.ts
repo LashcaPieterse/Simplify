@@ -1,14 +1,22 @@
 import { randomUUID } from "node:crypto";
+import { after } from "next/server";
+import type { PrismaClient } from "@prisma/client";
 import { enforceRates } from "../security/rate-limit";
 import { readBoundedText, BodyError } from "../http/bounded-body";
-import { reconcilePayment } from "../jobs/lifecycle";
+import { processPaymentCallback, queuePaymentVerification } from "../jobs/lifecycle";
 import prismaClient from "../db/client";
 import {
   recordPaymentEvent,
 } from "./checkouts";
 import { handleDpoPushPayment } from "./dpo-ipn";
 
-export async function handleDpoPushRoute(request: Request): Promise<Response> {
+export async function handleDpoPushRoute(request: Request, options: {
+  prisma?: PrismaClient;
+  afterResponse?: (work: () => Promise<void>) => void;
+  processCallback?: typeof processPaymentCallback;
+} = {}): Promise<Response> {
+  const db = options.prisma ?? prismaClient;
+  const afterResponse = options.afterResponse ?? after;
   let rawBody: string;
   try { rawBody = await readBoundedText(request, 256 * 1024); } catch (error) { return new Response("Invalid callback body.", { status: error instanceof BodyError ? error.status : 400 }); }
   const contentType = request.headers.get("content-type");
@@ -18,7 +26,7 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
     contentType,
     deps: {
       findPaymentTransactionByToken: (token) =>
-        prismaClient.paymentTransaction.findFirst({
+        db.paymentTransaction.findFirst({
           where: { transactionToken: token },
           select: {
             id: true,
@@ -28,7 +36,7 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
           },
         }),
       findPaymentTransactionByReference: (reference) =>
-        prismaClient.paymentTransaction.findFirst({
+        db.paymentTransaction.findFirst({
           where: { providerReference: reference },
           select: {
             id: true,
@@ -38,7 +46,7 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
           },
         }),
       findPaymentTransactionByCheckoutId: (checkoutId) =>
-        prismaClient.paymentTransaction.findFirst({
+        db.paymentTransaction.findFirst({
           where: { checkoutId },
           select: {
             id: true,
@@ -49,10 +57,18 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
         }),
       recordPaymentEvent: (transactionId, eventType, payload) =>
         recordPaymentEvent(transactionId, eventType, payload, {
-          prisma: prismaClient,
+          prisma: db,
         }),
       verifyPaymentTransaction: async transactionId => {
-        await reconcilePayment(transactionId, prismaClient);
+        await queuePaymentVerification(transactionId, db, true);
+        afterResponse(async () => {
+          try {
+            await (options.processCallback ?? processPaymentCallback)(transactionId, db);
+          } catch {
+            // The work was persisted before acknowledgement; the recovery worker retries it.
+            console.error("payments.callback.processing_failed", { transactionId });
+          }
+        });
         return { paymentStatus: "pending" };
       },
     },
@@ -60,8 +76,8 @@ export async function handleDpoPushRoute(request: Request): Promise<Response> {
 
   const correlationId = randomUUID();
   try {
-    await enforceRates([{ scope: "callback-diagnostics", identifier: "dpo", limit: 60, windowSeconds: 60 }]);
-    await prismaClient.paymentCallbackDiagnostic.create({ data: { correlationId, status: result.status, result: result.status === 200 ? "matched_notification" : "rejected_unmatched_or_unavailable" } });
+    await enforceRates([{ scope: "callback-diagnostics", identifier: "dpo", limit: 60, windowSeconds: 60 }], db);
+    await db.paymentCallbackDiagnostic.create({ data: { correlationId, status: result.status, result: result.status === 200 ? "matched_notification" : "rejected_unmatched_or_unavailable" } });
   } catch { /* Diagnostics must not change the gateway's callback acknowledgement. */ }
   return new Response(result.body, {
     status: result.status,
