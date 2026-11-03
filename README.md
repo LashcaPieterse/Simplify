@@ -59,7 +59,6 @@ DPO_LIVE_COMPANY_TOKEN=<dpo-live-company-id>
 DPO_LIVE_SERVICE_TYPE=<dpo-live-service-id>
 DPO_SERVICE_URL=https://secure.3gdirectpay.com/API/v6
 DPO_PAYMENT_URL=https://secure.3gdirectpay.com
-DPO_IPN_SECRET=<long-random-string>
 RESEND_API_KEY=<resend-api-key>
 RECEIPT_EMAIL_FROM=receipts@<your-domain>
 METRICS_BEARER_TOKEN=<long-random-string>
