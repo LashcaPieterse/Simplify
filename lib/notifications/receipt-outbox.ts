@@ -1,9 +1,10 @@
 import { orderDisposition } from "../orders/fulfillment-disposition";
 import { randomUUID } from "node:crypto";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient, ReceiptDelivery } from "@prisma/client";
 import { prepareOrderReceipt } from "./receipts";
 import { sendEmail, EmailSendError, type SendEmailOptions } from "./email";
 import { retryAt } from "../jobs/store";
+import { processingContext, withProcessingContext } from "../jobs/execution";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 export async function queueOrderReceipt(db: Db, orderId: string) {
@@ -15,27 +16,47 @@ export async function queueOrderReceipt(db: Db, orderId: string) {
   } });
 }
 
-export async function deliverReceipt(db: PrismaClient, id: string, options: { now?: Date; send?: typeof sendEmail; baseUrl?: string } = {}) {
+export async function wakeOrderReceipt(db: Db, orderId: string) {
+  const job = await queueOrderReceipt(db, orderId);
+  if (!job) return null;
+  const now = new Date();
+  const rows = await db.$queryRaw<ReceiptDelivery[]>`
+    UPDATE "ReceiptDelivery" SET "wakeVersion"="wakeVersion"+1, "updatedAt"=${now.toISOString()}::timestamp,
+      "nextAttemptAt"=CASE WHEN status='pending' THEN LEAST("nextAttemptAt",${now.toISOString()}::timestamp) ELSE "nextAttemptAt" END
+    WHERE id=${job.id} AND (status='leased' OR (status='pending' AND ("lastError" IS NULL OR "lastError"='fulfilment_pending')))
+    RETURNING *`;
+  return rows[0] ?? job;
+}
+
+async function deliverReceiptAttempt(db: PrismaClient, id: string, options: { now?: Date; send?: typeof sendEmail; baseUrl?: string } = {}) {
   const now = options.now ?? new Date();
   const leaseToken = randomUUID();
   const claimed = await db.$transaction(async tx => {
     const delivery = await tx.receiptDelivery.findUnique({ where: { id }, select: { orderId: true } });
-    if (!delivery) return { count: 0 };
+    if (!delivery) return { count: 0, job: null };
     const context = await orderDisposition(tx, delivery.orderId);
     if (context.sale) await tx.$queryRaw`SELECT id FROM "CheckoutSession" WHERE id=${context.sale.id} FOR UPDATE`;
     const current = await orderDisposition(tx, delivery.orderId);
-    if (current.blocked || current.order?.ownershipReviewRequired) return { count: 0 };
-    return tx.receiptDelivery.updateMany({ where: { id, nextAttemptAt: { lte: now },
+    if (current.blocked || current.order?.ownershipReviewRequired) return { count: 0, job: null };
+    const job = await tx.receiptDelivery.findUniqueOrThrow({ where: { id } });
+    const claimed = await tx.receiptDelivery.updateMany({ where: { id, wakeVersion: job.wakeVersion, nextAttemptAt: { lte: now },
       OR: [{ status: "pending" }, { status: "leased", leaseUntil: { lte: now } }] }, data: {
         status: "leased", leaseToken, leaseUntil: new Date(now.getTime() + 120_000), attempts: { increment: 1 },
       } });
+    return { ...claimed, job: { ...job, attempts: job.attempts + 1, leaseToken, status: "leased" } };
   });
-  if (!claimed.count) return "busy";
-  const job = await db.receiptDelivery.findUniqueOrThrow({ where: { id } });
+  if (!claimed.count || !claimed.job) return "busy";
+  const job = claimed.job;
   const where = { id, leaseToken, status: "leased" };
   const release = async (status: string, code: string, acceptanceUnknown = job.acceptanceUnknown) => {
-    await db.receiptDelivery.updateMany({ where, data: { status, leaseToken: null, leaseUntil: null,
-      nextAttemptAt: retryAt(job.attempts, now), lastError: code, acceptanceUnknown } });
+    // A readiness notification arriving during preparation must survive a late
+    // "not ready" result. Provider failures retain their normal retry backoff.
+    await db.$executeRaw`
+      UPDATE "ReceiptDelivery" SET status=${status}, "leaseToken"=NULL, "leaseUntil"=NULL,
+        "nextAttemptAt"=CASE WHEN ${status}='pending' AND ${code}='fulfilment_pending' AND "wakeVersion">${job.wakeVersion}
+          THEN (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') ELSE ${retryAt(job.attempts, now).toISOString()}::timestamp END,
+        "lastError"=${code}, "acceptanceUnknown"=${acceptanceUnknown}, "updatedAt"=(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      WHERE id=${id} AND "leaseToken"=${leaseToken} AND status='leased'`;
     return status;
   };
   const disposition = await orderDisposition(db, job.orderId);
@@ -71,6 +92,18 @@ export async function deliverReceipt(db: PrismaClient, id: string, options: { no
     const definite = error instanceof EmailSendError && error.definitelyRejected;
     // A rejection now cannot disprove acceptance of an earlier lost response.
     return release(error instanceof EmailSendError && error.requiresReview ? "review" : "pending", definite ? "email_rejected" : "send_or_persistence_unknown", job.acceptanceUnknown || (!definite && acceptanceUnknown));
+  }
+}
+
+export async function deliverReceipt(db: PrismaClient, id: string, options: Parameters<typeof deliverReceiptAttempt>[2] = {}): Promise<string> {
+  if (!processingContext()) return withProcessingContext({ trigger: "recovery", correlationId: randomUUID(), deadline: Date.now() + 120_000 }, () => deliverReceipt(db, id, options));
+  for (;;) {
+    if (processingContext()!.signal.aborted) return "pending";
+    const result = await deliverReceiptAttempt(db, id, options);
+    console.info("checkout.receipt.finished", { receiptId: id, result, trigger: processingContext()?.trigger, correlationId: processingContext()?.correlationId, at: new Date().toISOString() });
+    if (result !== "pending") return result;
+    const next = await db.receiptDelivery.findUnique({ where: { id }, select: { status: true, nextAttemptAt: true, lastError: true } });
+    if (!next || next.status !== "pending" || next.lastError !== "fulfilment_pending" || next.nextAttemptAt.getTime() > Date.now()) return result;
   }
 }
 

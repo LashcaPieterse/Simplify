@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "crypto";
+import { providerSignal, processingWait } from "../jobs/execution";
 import type { ZodType } from "zod";
 import { z } from "zod";
 import {
@@ -539,7 +540,7 @@ export class AiraloClient {
     const transport = options.fetchImplementation ?? fetch;
     this.fetchFn = (input, init = {}) => {
       const purchase = ["POST", "PUT"].includes((init.method ?? "GET").toUpperCase()) && String(input).includes("/orders");
-      return transport(input, { ...init, signal: init.signal ?? AbortSignal.timeout(purchase ? 30_000 : 20_000) });
+      return transport(input, { ...init, signal: providerSignal(purchase ? 30_000 : 20_000, init.signal) });
     };
     this.tokenCache = options.tokenCache ?? new MemoryTokenCache();
     this.tokenExpiryBufferSeconds =
@@ -1862,7 +1863,7 @@ export class AiraloClient {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, ms));
+    await processingWait(ms);
   }
 }
 

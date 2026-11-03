@@ -25,11 +25,16 @@ export async function checkoutStatusResponse(checkout: NonNullable<Awaited<Retur
   const isComplete = !checkout.fulfillmentHold && payment?.status === "approved" && order?.status === "completed" && Boolean(order.orderNumber) && ready;
   const redirectOrderId = isComplete ? (checkout.intent === "top-up" ? checkout.topUpForOrderId : order?.id) : null;
   const job = payment ? await db.lifecycleJob.findUnique({ where: { businessKey: `verify_payment:${payment.id}` } }) : null;
+  const checking = Boolean(job?.status === "leased" && job.leaseUntil && job.leaseUntil.getTime() > Date.now() && payment?.status !== "approved");
+  const terminal = ["declined", "expired", "cancelled", "failed", "verification_mismatch", "creation_rejected"].includes(payment?.status ?? "");
+  const eligible = process.env.PURCHASE_LIFECYCLE_ENABLED === "true" && !isComplete && !terminal && !checkout.fulfillmentHold;
   const response = NextResponse.json({ checkoutId: checkout.id, status: checkout.status,
     paymentStatus: payment?.status ?? "creating", paymentUrl: payment?.redirectUrl,
     orderId: order?.id ?? null, redirectOrderId, isComplete,
     fulfillmentStatus: checkout.fulfillmentHold ?? (isComplete ? "completed" : order?.status ?? "awaiting_payment"),
     nextCheckAt: job && ["pending", "leased"].includes(job.status) ? job.nextAttemptAt.toISOString() : null,
+    verificationInProgress: checking,
+    nextReconcileAt: eligible ? new Date(Math.max(Date.now(), payment?.status !== "approved" && job?.lastAttemptAt ? job.lastAttemptAt.getTime() + 15_000 : 0)).toISOString() : null,
     message: checkout.fulfillmentHold === "refunded" ? "This payment has been refunded. No new payment is required." : checkout.fulfillmentHold === "refund_pending" ? "A refund is being reconciled. Delivery is paused." : payment?.status === "authorized" ? "Payment authorized. We are checking completion; please do not pay again." : undefined,
   }, { headers: { "Cache-Control": "private, no-store" } });
   if (isComplete && redirectOrderId) {

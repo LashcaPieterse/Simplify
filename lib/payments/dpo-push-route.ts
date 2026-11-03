@@ -3,7 +3,7 @@ import { after } from "next/server";
 import type { PrismaClient } from "@prisma/client";
 import { enforceRates } from "../security/rate-limit";
 import { readBoundedText, BodyError } from "../http/bounded-body";
-import { processPaymentCallback, queuePaymentVerification } from "../jobs/lifecycle";
+import { processPaymentCallback, requestPaymentProcessing } from "../jobs/lifecycle";
 import prismaClient from "../db/client";
 import {
   recordPaymentEvent,
@@ -86,10 +86,10 @@ export async function handleDpoPushRoute(request: Request, options: {
           prisma: db,
         }),
       verifyPaymentTransaction: async transactionId => {
-        await queuePaymentVerification(transactionId, db, true);
+        await requestPaymentProcessing(transactionId, db, "dpo_push", requestTrace.correlationId);
         afterResponse(async () => {
           try {
-            await (options.processCallback ?? processPaymentCallback)(transactionId, db);
+            await (options.processCallback ?? processPaymentCallback)(transactionId, db, { trigger: "dpo_push", correlationId: requestTrace.correlationId });
           } catch {
             // The work was persisted before acknowledgement; the recovery worker retries it.
             console.error("payments.callback.processing_failed", { transactionId, correlationId: requestTrace.correlationId });
