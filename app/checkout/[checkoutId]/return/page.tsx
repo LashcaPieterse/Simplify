@@ -1,5 +1,4 @@
 import { CheckoutStatusPoller } from "@/components/checkout/CheckoutStatusPoller";
-import { PaymentStatusBanner } from "@/components/checkout/PaymentStatusBanner";
 
 interface CheckoutReturnPageProps {
   params: Promise<{ checkoutId: string }>;
@@ -15,8 +14,8 @@ export default async function CheckoutReturnPage({ params }: CheckoutReturnPageP
           Thanks for returning to SIM.Africa. We&apos;re confirming your payment with the configured provider.
         </p>
       </div>
-      <PaymentStatusBanner status="pending" message="Keep this page open while we verify the provider response." />
       <CheckoutStatusPoller checkoutId={checkoutId} />
+      <p className="text-xs text-brand-500">You can return to this checkout if your connection drops. Processing continues securely in the background.</p>
       <p className="text-xs text-brand-500">
         Need help? <a className="font-bold text-brand-800 underline" href="mailto:support@sim.africa">
           Contact support

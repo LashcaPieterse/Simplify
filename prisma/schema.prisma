@@ -672,6 +672,8 @@ model LifecycleJob {
   targetId String
   status String @default("pending")
   attempts Int @default(0)
+  wakeVersion Int @default(0)
+  lastAttemptAt DateTime?
   nextAttemptAt DateTime @default(now())
   leaseUntil DateTime?
   leaseToken String?
@@ -691,6 +693,7 @@ model ReceiptDelivery {
   status String @default("pending")
   payload Json?
   attempts Int @default(0)
+  wakeVersion Int @default(0)
   nextAttemptAt DateTime @default(now())
   leaseUntil DateTime?
   leaseToken String?

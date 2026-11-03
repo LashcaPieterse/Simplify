@@ -1,3 +1,4 @@
+import { providerSignal } from "../jobs/execution";
 const RESEND_API_URL = "https://api.resend.com/emails";
 
 export interface SendEmailOptions {
@@ -48,7 +49,7 @@ export async function sendEmail({
       "Content-Type": "application/json",
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
-    signal: AbortSignal.timeout(timeoutMs ?? 8000),
+    signal: providerSignal(timeoutMs ?? 8000),
     body: JSON.stringify({
       from,
       to: normalizeRecipients(to),

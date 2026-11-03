@@ -1,3 +1,4 @@
+import { providerSignal } from "../jobs/execution";
 import type { DpoMode } from "@prisma/client";
 
 export type DpoClientOptions = {
@@ -103,7 +104,7 @@ export class DpoClient {
   }
 
   private async fetchXml(input: RequestInfo | URL, init: RequestInit = {}): Promise<string> {
-    const response = await fetch(input, { ...init, signal: init.signal ?? AbortSignal.timeout(15_000) });
+    const response = await fetch(input, { ...init, signal: providerSignal(15_000, init.signal) });
 
     if (!response.ok) {
       throw new Error(`DPO request failed with HTTP ${response.status}.`);

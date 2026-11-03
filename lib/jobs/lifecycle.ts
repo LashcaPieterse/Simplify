@@ -1,19 +1,22 @@
 import { reconcileAdminOperations } from "../admin/financial";
 import { orderDisposition } from "../orders/fulfillment-disposition";
-import type { PrismaClient } from "@prisma/client";
-import { setTimeout as wait } from "node:timers/promises";
+import type { Prisma, PrismaClient } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import prisma from "../db/client";
-import { claimJob, enqueueJob, finishJob, type JobKind } from "./store";
+import { claimJob, enqueueJob, finishJob, wakeJob, jobEligibleAt, type JobKind } from "./store";
+import { processingContext, processingWait, withProcessingContext, type ProcessingTrigger } from "./execution";
 import { finaliseOrderFromCheckout, verifyPaymentTransaction } from "../payments/checkouts";
 import type { CreateOrderOptions } from "../orders/service";
 import { recoverAiraloOrders } from "../orders/recovery";
 import { ensureOrderInstallation } from "../orders/installation";
 import { resolveDpoClient, type DpoClient } from "../payments/dpo";
-import { queueOrderReceipt, deliverReceipt, deliverReceipts } from "../notifications/receipt-outbox";
+import { queueOrderReceipt, wakeOrderReceipt, deliverReceipt, deliverReceipts } from "../notifications/receipt-outbox";
 import { resolveReceiptDeliveryDetails } from "../notifications/receipts";
 
 const kinds: JobKind[] = ["verify_payment", "fulfill_checkout", "reconcile_supplier", "complete_installation", "ack_payment"];
-type LifecycleJobOptions = { dpoClient?: Pick<DpoClient, "verifyTransaction">; airaloOptions?: CreateOrderOptions };
+type LifecycleJobOptions = { dpoClient?: Pick<DpoClient, "verifyTransaction">; airaloOptions?: CreateOrderOptions; trigger?: ProcessingTrigger; correlationId?: string };
+type ProcessingOptions = LifecycleJobOptions & { receiptOptions?: Parameters<typeof deliverReceipt>[2]; budgetMs?: number };
+type Db = PrismaClient | Prisma.TransactionClient;
 
 export async function seedLifecycleWork(db: PrismaClient, limit = 25) {
   // Select only missing business keys. Repeatedly selecting the oldest unresolved
@@ -52,9 +55,11 @@ export async function seedLifecycleWork(db: PrismaClient, limit = 25) {
   for (const payment of acknowledgments) await enqueueJob(db, "ack_payment", payment.id);
 }
 
-export async function runLifecycleJob(db: PrismaClient, id: string, options: LifecycleJobOptions = {}) {
+async function runLifecycleAttempt(db: PrismaClient, id: string, options: LifecycleJobOptions) {
   const job = await claimJob(db, id);
-  if (!job) return { result: "busy" as const };
+  if (!job) return { result: "busy" as const, wakeVersion: undefined };
+  console.info("checkout.stage.started", { jobId: id, kind: job.kind, targetId: job.targetId, wakeVersion: job.wakeVersion,
+    trigger: processingContext()?.trigger, correlationId: processingContext()?.correlationId });
   try {
     let done = false;
     switch (job.kind as JobKind) {
@@ -63,12 +68,12 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: Lif
         if (["creating", "creation_rejected"].includes(payment.status)) {
           if (payment.status === "creation_rejected") done = true;
         } else {
-          const result = await verifyPaymentTransaction(job.targetId, { prisma: db, source: "reconcile", deferFulfillment: true, dpoClient: options.dpoClient });
+          const result = await verifyPaymentTransaction(job.targetId, { prisma: db, source: processingContext()?.trigger ?? "recovery", deferFulfillment: true, dpoClient: options.dpoClient });
           if (result.retryable && result.message === "Verification failed.") throw new Error("Provider unavailable.");
           done = ["approved", "declined", "expired", "cancelled"].includes(result.paymentStatus);
           if (result.paymentStatus === "verification_mismatch") {
             await finishJob(db, job, "review", "payment_discrepancy");
-            return { result: "review" as const };
+            return { result: "review" as const, wakeVersion: job.wakeVersion };
           }
         }
         // A process may have died while creating a token; do not leave "creating" forever.
@@ -85,7 +90,7 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: Lif
           if (["airalo_submitting", "airalo_outcome_unknown", "airalo_failed"].includes(existing.status)) {
             await enqueueJob(db, "reconcile_supplier", existing.id);
             await finishJob(db, job, "review", "supplier_outcome_unknown");
-            return { result: "review" as const };
+            return { result: "review" as const, wakeVersion: job.wakeVersion };
           }
         }
         const result = await finaliseOrderFromCheckout(job.targetId, { prisma: db, airaloOptions: options.airaloOptions });
@@ -98,14 +103,14 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: Lif
         const order = await db.esimOrder.findUniqueOrThrow({ where: { id: job.targetId }, include: { profiles: true, checkout: true, saleCheckout: true } });
         done = order.status === "completed" && Boolean(order.orderNumber) && ((order.saleCheckout ?? order.checkout)?.intent === "top-up" || order.profiles.length > 0);
         if (!done) {
-          const result = await recoverAiraloOrders({ prisma: db, orderId: order.id, limit: 1 });
+          const result = await recoverAiraloOrders({ prisma: db, orderId: order.id, limit: 1, airalo: options.airaloOptions?.airaloClient });
           done = result.recovered > 0;
         }
         break;
       }
       case "complete_installation": {
         const disposition = await orderDisposition(db, job.targetId);
-        if (disposition.blocked) { await finishJob(db, job, disposition.permanent ? "done" : "retry", "delivery_held_or_superseded"); return { result: disposition.permanent ? "done" as const : "retry" as const }; }
+        if (disposition.blocked) { await finishJob(db, job, disposition.permanent ? "done" : "retry", "delivery_held_or_superseded"); return { result: disposition.permanent ? "done" as const : "retry" as const, wakeVersion: job.wakeVersion }; }
         const order = await db.esimOrder.findUniqueOrThrow({ where: { id: job.targetId }, include: { installation: true, profiles: true, checkout: true, saleCheckout: true } });
         if ((order.saleCheckout ?? order.checkout)?.intent === "top-up") { done = order.status === "completed"; break; }
         if (order.orderNumber && order.profiles.length) {
@@ -114,7 +119,7 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: Lif
           let payload = null;
           try { payload = current.installation ? JSON.parse(current.installation.payload) : null; } catch { /* Retry missing installation. */ }
           done = current.status === "completed" && resolveReceiptDeliveryDetails(payload, current.profiles[0]?.activationCode).ready;
-          if (done) await queueOrderReceipt(db, order.id);
+          if (done) await wakeOrderReceipt(db, order.id);
         }
         break;
       }
@@ -128,59 +133,127 @@ export async function runLifecycleJob(db: PrismaClient, id: string, options: Lif
       }
     }
     await finishJob(db, job, done ? "done" : "retry", done ? undefined : "incomplete");
-    return { result: done ? "done" as const : "retry" as const };
+    return { result: done ? "done" as const : "retry" as const, wakeVersion: job.wakeVersion };
   } catch {
     await finishJob(db, job, "retry", "stage_unavailable");
-    return { result: "failed" as const };
+    return { result: "failed" as const, wakeVersion: job.wakeVersion };
+  }
+}
+
+export async function runLifecycleJob(db: PrismaClient, id: string, options: LifecycleJobOptions = {}): Promise<{ result: "done" | "retry" | "review" | "failed" | "busy" }> {
+  if (!processingContext()) return withProcessingContext({ trigger: options.trigger ?? "recovery", correlationId: options.correlationId ?? randomUUID(), deadline: Date.now() + 120_000 }, () => runLifecycleJob(db, id, options));
+  for (;;) {
+    const context = processingContext()!;
+    if (context.signal.aborted) return { result: "busy" };
+    const current = await db.lifecycleJob.findUnique({ where: { id } });
+    if (!current) return { result: "busy" };
+    const delay = jobEligibleAt(current) - Date.now();
+    if (current.status === "pending" && delay > 0 && delay <= 15_000) {
+      console.info("checkout.stage.cooldown", { jobId: id, waitMs: delay, trigger: context.trigger, correlationId: context.correlationId });
+      await processingWait(delay);
+    }
+    const { wakeVersion, ...outcome } = await runLifecycleAttempt(db, id, options);
+    console.info("checkout.stage.finished", { jobId: id, kind: current.kind, result: outcome.result, trigger: context.trigger, correlationId: context.correlationId });
+    if (wakeVersion === undefined || outcome.result === "review") return outcome;
+    const after = await db.lifecycleJob.findUnique({ where: { id } });
+    // The lease owner drains a fresh signal instead of overwriting it with a
+    // five-minute retry. Without new information, ordinary backoff still applies.
+    if (!after || after.status !== "pending" || after.wakeVersion <= wakeVersion || jobEligibleAt(after) > Date.now() + 15_000) return outcome;
   }
 }
 
 export async function queuePaymentVerification(paymentId: string, db: PrismaClient = prisma, expedite = false) {
   const job = await enqueueJob(db, "verify_payment", paymentId);
-  const nextAttemptAt = new Date(Math.max(Date.now(), job.updatedAt.getTime() + 15_000));
-  // New provider information may shorten a pending retry. Keep a fixed cooldown
-  // and active leases; repeated callbacks must never push an existing wakeup back.
-  if (job.status === "done" || job.status === "review" ||
-      (expedite && job.status === "pending" && job.nextAttemptAt > nextAttemptAt)) {
-    await db.lifecycleJob.updateMany({
-      where: { id: job.id, kind: "verify_payment", status: job.status, updatedAt: job.updatedAt },
-      data: { status: "pending", lastError: null, nextAttemptAt },
-    });
-  }
-  return job;
+  return expedite || ["done", "review"].includes(job.status)
+    ? wakeJob(db, "verify_payment", paymentId, { reopenDone: true, reopenReview: true }) : job;
 }
 
 export async function reconcilePayment(paymentId: string, db: PrismaClient = prisma) {
   const job = await queuePaymentVerification(paymentId, db);
   if (process.env.PURCHASE_LIFECYCLE_ENABLED !== "true") return { result: "busy" as const };
+  // Synchronous tooling never waits out the cooldown. Public return/callback
+  // handlers use the durable post-response processing path below.
+  if (jobEligibleAt(job) > Date.now()) return { result: "busy" as const };
   return runLifecycleJob(db, job.id);
 }
 
-/** Run only this callback's durable work after acknowledgement; cron retries incomplete stages. */
-export async function processPaymentCallback(paymentId: string, db: PrismaClient = prisma, options: LifecycleJobOptions & {
-  receiptOptions?: Parameters<typeof deliverReceipt>[2];
-} = {}) {
+async function queueDelivery(db: Db, orderId: string) {
+  await wakeJob(db, "reconcile_supplier", orderId);
+  await wakeJob(db, "complete_installation", orderId);
+  await wakeOrderReceipt(db, orderId);
+  const order = await db.esimOrder.findUnique({ where: { id: orderId }, select: { paymentTransactionId: true, status: true, orderNumber: true } });
+  if (order?.paymentTransactionId && order.status === "completed" && order.orderNumber) await wakeJob(db, "ack_payment", order.paymentTransactionId);
+}
+
+/** Commit the complete wakeup before the browser or provider is acknowledged. */
+export async function requestPaymentProcessing(paymentId: string, db: PrismaClient = prisma, trigger: ProcessingTrigger = "browser", correlationId = randomUUID()) {
+  await db.$transaction(async tx => {
+    const payment = await tx.paymentTransaction.findUniqueOrThrow({ where: { id: paymentId }, include: { checkout: true } });
+    if (payment.status !== "approved") {
+      const closed = ["declined", "expired", "cancelled", "verification_mismatch", "creation_rejected"].includes(payment.status);
+      if (!closed || trigger === "dpo_push") await wakeJob(tx, "verify_payment", paymentId, { reopenDone: true, reopenReview: trigger === "dpo_push" });
+    } else if (payment.checkout && !payment.checkout.fulfillmentHold) {
+      await wakeJob(tx, "fulfill_checkout", payment.checkout.id);
+      const orderId = payment.checkout.activeOrderId ?? payment.checkout.orderId;
+      if (orderId) await queueDelivery(tx, orderId);
+    }
+  });
+  console.info("checkout.processing.queued", { paymentId, trigger, correlationId, at: new Date().toISOString() });
+}
+
+export async function requestOrderProcessing(orderId: string, db: Db = prisma) { await queueDelivery(db, orderId); }
+
+async function advanceOrder(orderId: string, db: PrismaClient, options: ProcessingOptions) {
+  const disposition = await orderDisposition(db, orderId);
+  if (disposition.blocked || disposition.order?.ownershipReviewRequired) return;
+  let order = await db.esimOrder.findUnique({ where: { id: orderId }, include: { payment: true, profiles: true, installation: true } });
+  if (!order || (order.payment && order.payment.status !== "approved")) return;
+  if (order.status !== "completed" && Date.now() - order.createdAt.getTime() >= 15_000) {
+    const supplier = await enqueueJob(db, "reconcile_supplier", orderId);
+    await runLifecycleJob(db, supplier.id, options);
+    order = await db.esimOrder.findUnique({ where: { id: orderId }, include: { payment: true, profiles: true, installation: true } });
+  }
+  if (!order || order.status !== "completed" || !order.orderNumber) return;
+  const installation = await enqueueJob(db, "complete_installation", orderId);
+  const ack = order.paymentTransactionId ? await enqueueJob(db, "ack_payment", order.paymentTransactionId) : null;
+  // Email or installation failure cannot prevent the separate DPO acknowledgement.
+  await Promise.allSettled([runLifecycleJob(db, installation.id, options), ...(ack ? [runLifecycleJob(db, ack.id, options)] : [])]);
+  const ready = await db.esimOrder.findUnique({ where: { id: orderId }, include: { installation: true, profiles: true } });
+  let payload = null;
+  try { payload = ready?.installation ? JSON.parse(ready.installation.payload) : null; } catch { /* Durable retry retains missing installation. */ }
+  if (ready && resolveReceiptDeliveryDetails(payload, ready.profiles[0]?.activationCode).ready && process.env.RECEIPT_OUTBOX_ENABLED === "true") {
+    const receipt = await wakeOrderReceipt(db, orderId);
+    if (receipt) await deliverReceipt(db, receipt.id, options.receiptOptions);
+  }
+}
+
+export async function processOrderDelivery(orderId: string, db: PrismaClient = prisma, options: ProcessingOptions = {}) {
   if (process.env.PURCHASE_LIFECYCLE_ENABLED !== "true") return;
-  const verify = await enqueueJob(db, "verify_payment", paymentId);
-  const cooldown = verify.nextAttemptAt.getTime() - Date.now();
-  if (verify.status === "pending" && cooldown > 0 && cooldown <= 15_000) await wait(cooldown);
-  await runLifecycleJob(db, verify.id, options);
+  await withProcessingContext({ trigger: options.trigger ?? "supplier_webhook", correlationId: options.correlationId ?? randomUUID(), deadline: Date.now() + Math.min(options.budgetMs ?? 120_000, 120_000) }, () => advanceOrder(orderId, db, options));
+}
+
+/** Browser return, callback and recovery all execute the same leased stages. */
+export async function processPaymentWorkflow(paymentId: string, db: PrismaClient = prisma, options: ProcessingOptions = {}) {
+  if (process.env.PURCHASE_LIFECYCLE_ENABLED !== "true") return;
+  await withProcessingContext({ trigger: options.trigger ?? "browser", correlationId: options.correlationId ?? randomUUID(), deadline: Date.now() + Math.min(options.budgetMs ?? 120_000, 120_000) }, async () => {
+  const current = await db.paymentTransaction.findUnique({ where: { id: paymentId }, select: { status: true } });
+  if (current?.status !== "approved") {
+    const verify = await enqueueJob(db, "verify_payment", paymentId);
+    await runLifecycleJob(db, verify.id, options);
+  }
   const payment = await db.paymentTransaction.findUnique({ where: { id: paymentId }, select: { status: true, checkoutId: true } });
   if (payment?.status !== "approved" || !payment.checkoutId) return;
 
   const fulfill = await enqueueJob(db, "fulfill_checkout", payment.checkoutId);
   await runLifecycleJob(db, fulfill.id, options);
-  const checkout = await db.checkoutSession.findUnique({ where: { id: payment.checkoutId }, select: { orderId: true } });
-  if (!checkout?.orderId) return;
-  const order = await db.esimOrder.findUnique({ where: { id: checkout.orderId }, select: { status: true } });
-  if (order?.status !== "completed") return;
+  const checkout = await db.checkoutSession.findUnique({ where: { id: payment.checkoutId }, select: { orderId: true, activeOrderId: true } });
+  const orderId = checkout?.activeOrderId ?? checkout?.orderId;
+  if (orderId) await advanceOrder(orderId, db, options);
+  });
+}
 
-  const installation = await enqueueJob(db, "complete_installation", checkout.orderId);
-  await runLifecycleJob(db, installation.id, options);
-  if (process.env.RECEIPT_OUTBOX_ENABLED === "true") {
-    const receipt = await queueOrderReceipt(db, checkout.orderId);
-    if (receipt) await deliverReceipt(db, receipt.id, options.receiptOptions);
-  }
+export async function processPaymentCallback(paymentId: string, db: PrismaClient = prisma, options: ProcessingOptions = {}) {
+  return processPaymentWorkflow(paymentId, db, { ...options, trigger: options.trigger ?? "dpo_push" });
 }
 
 export async function runLifecycleTick(db: PrismaClient = prisma) {
@@ -194,13 +267,13 @@ export async function runLifecycleTick(db: PrismaClient = prisma) {
     const due = await db.lifecycleJob.findMany({ where: { kind, nextAttemptAt: { lte: now }, OR: [{ status: "pending" }, { status: "leased", leaseUntil: { lte: now } }] }, orderBy: { nextAttemptAt: "asc" }, take: 5 });
     for (const job of due) {
       if (Date.now() + 90_000 > deadline) break;
-      const outcome = await runLifecycleJob(db, job.id);
+      const outcome = await withProcessingContext({ trigger: "recovery", correlationId: randomUUID(), deadline: Math.min(deadline, Date.now() + 120_000) }, () => runLifecycleJob(db, job.id));
       stage.checked++;
       if (outcome.result === "done") stage.completed++; else if (outcome.result !== "busy") stage.unresolved++;
       if (outcome.result === "failed") stage.failed++;
     }
   }
-  const receipts = process.env.RECEIPT_OUTBOX_ENABLED === "true" ? await deliverReceipts(db, 5, deadline) : { checked: 0, accepted: 0, pending: 0, review: 0, failed: 0, enabled: false };
+  const receipts = process.env.RECEIPT_OUTBOX_ENABLED === "true" ? await withProcessingContext({ trigger: "recovery", correlationId: randomUUID(), deadline }, () => deliverReceipts(db, 5, deadline)) : { checked: 0, accepted: 0, pending: 0, review: 0, failed: 0, enabled: false };
   const totals = Object.values(stages);
   await db.rateBucket.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 48 * 3_600_000) } } });
   return { ok: !totals.some(stage => stage.failed) && receipts.failed === 0, checked: totals.reduce((n, stage) => n + stage.checked, 0),

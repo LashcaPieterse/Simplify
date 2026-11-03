@@ -1,3 +1,4 @@
+import { processingWait } from "../jobs/execution";
 export type AiraloThrottledEndpoint =
   | "token"
   | "packages"
@@ -83,7 +84,7 @@ function sleep(ms: number): Promise<void> {
     return Promise.resolve();
   }
 
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return processingWait(ms);
 }
 
 const globalLimiter = globalThis as typeof globalThis & {

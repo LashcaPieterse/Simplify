@@ -46,7 +46,7 @@ test("browser: recovery and top-up outcomes never imply premature completion", {
       await page.goto(`${baseUrl}/checkout/fixture/return`);
       await reconciliation;
       if (outcome === "pending") {
-        await page.waitForFunction(() => document.body.textContent?.includes("Current status: pending"));
+        await page.waitForFunction(() => document.body.textContent?.includes("Checking your payment"));
         assert.match(page.url(), /\/checkout\/fixture\/return$/);
         assert.equal(await page.evaluate(() => sessionStorage.getItem("sim-africa-purchase-fixture")), null);
       } else if (outcome === "declined") {
@@ -60,6 +60,69 @@ test("browser: recovery and top-up outcomes never imply premature completion", {
       await page.close();
     });
   }
+  await t.test("return page honours retry limits and resumes safely after connectivity loss", async () => {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.clock.install();
+    let reconciliations = 0;
+    let statuses = 0;
+    let inFlight = 0;
+    let maximumInFlight = 0;
+    const attempts: number[] = [];
+    await page.route("**/api/**", async route => {
+      const path = new URL(route.request().url()).pathname;
+      if (!path.endsWith("/reconcile") && !path.endsWith("/status")) {
+        await route.fulfill({ json: path === "/api/auth/session" ? null : { currency: "USD" } }); return;
+      }
+      inFlight++;
+      maximumInFlight = Math.max(maximumInFlight, inFlight);
+      try {
+        if (path.endsWith("/reconcile")) {
+          reconciliations++;
+          attempts.push(await page.evaluate(() => Date.now()));
+          if (reconciliations === 1) { await route.fulfill({ status: 429, headers: { "Retry-After": "30" }, json: { message: "Try later" } }); return; }
+        } else statuses++;
+        await route.fulfill({ json: { checkoutId: "resilience", status: "pending", paymentStatus: "pending", isComplete: false,
+          nextReconcileAt: new Date(0).toISOString(), verificationInProgress: false,
+          message: path.endsWith("/status") ? `Fixture status ${statuses}` : "Fixture reconcile" } });
+      } finally { inFlight--; }
+    });
+    await page.goto(`${baseUrl}/checkout/resilience/return`);
+    await page.getByText("Fixture status 1", { exact: true }).waitFor();
+    const start = await page.evaluate(() => Date.now());
+    await page.clock.pauseAt(new Date(start + 1000));
+    async function resumeAt(ms: number) {
+      const expected = statuses + 1;
+      await page.clock.setSystemTime(new Date(start + ms));
+      await page.evaluate(() => window.dispatchEvent(new Event("online")));
+      await page.getByText(`Fixture status ${expected}`, { exact: true }).waitFor();
+    }
+    await resumeAt(20_000);
+    assert.equal(reconciliations, 1, "Retry-After must prevent an early POST.");
+    await resumeAt(31_000);
+    assert.equal(reconciliations, 2);
+    assert.ok(attempts[1] - attempts[0] >= 30_000);
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+      window.dispatchEvent(new Event("offline"));
+    });
+    await page.getByText(/Connection interrupted/).waitFor();
+    const beforeOffline = reconciliations;
+    await page.clock.setSystemTime(new Date(start + 70_000));
+    await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+    assert.equal(reconciliations, beforeOffline);
+    await page.evaluate(() => Object.defineProperty(navigator, "onLine", { configurable: true, value: true }));
+    await resumeAt(71_000);
+    assert.equal(reconciliations, 3);
+    await resumeAt(121_000);
+    assert.equal(reconciliations, 3, "After two minutes POST retries slow to once per minute.");
+    await resumeAt(132_000);
+    assert.equal(reconciliations, 4);
+    assert.equal(maximumInFlight, 1, "Status and reconciliation requests must not overlap.");
+    assert.match(page.url(), /checkout\/resilience\/return$/);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem("sim-africa-purchase-resilience")), null);
+    await page.close();
+  });
+
   await t.test("email recovery reports a link request without exposing purchases", async () => {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     let emails = 0;

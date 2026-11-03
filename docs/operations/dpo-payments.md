@@ -31,6 +31,14 @@ The mode is persisted in the singleton `DpoSettings` record. All new purchases a
 
 Approved test payments retain normal fulfilment, including Airalo purchases/top-ups, receipts and any supplier charges.
 
+### Immediate processing rollout
+
+Apply the forward migration `20261103190000_immediate_checkout_wakeups` before deploying the immediate-processing application. It adds `LifecycleJob.wakeVersion`, `LifecycleJob.lastAttemptAt` and `ReceiptDelivery.wakeVersion`, preserving existing jobs, leases and business records. Use the active migration chain with `prisma migrate deploy`; do not replay the archived baseline or reset a database. Rollback can leave these additive columns in place.
+
+`PURCHASE_LIFECYCLE_ENABLED` and `RECEIPT_OUTBOX_ENABLED` retain their existing roles. Browser return, DPO notifications and supplier completion all use the same leased stages. Work is persisted before acknowledging its trigger. Vercel `after` starts it promptly with a 120-second deadline inside 180-second routes; DPO, Airalo and email requests retain their shorter timeouts and also respect that deadline. A stopped worker is recovered through the existing five-minute scheduler.
+
+New signals increment a durable wake generation without taking an active lease. The owner notices a signal received during its attempt and drains the follow-up work. Verification has a fixed 15-second cooldown measured from `lastAttemptAt`; repeated signals cannot postpone it. Ordinary background backoff remains in force without a new signal. Supplier readiness signals advance readiness retries, while email provider errors, accepted receipts and review states retain their existing policies.
+
 ### Initial rollout
 
 1. Configure both credential pairs as server-side deployment secrets. Keep the existing `DPO_SERVICE_URL` and `DPO_PAYMENT_URL`; DPO selects the merchant gateway through the credential pair.
@@ -56,9 +64,11 @@ https://<production-domain>/api/payments/dpo/push
 3. Customers are redirected to DPO's hosted page. On completion DPO redirects the browser to `/checkout/[id]/return` and may send a server-to-server Push Payments Callback to `/api/payments/dpo/push`.
 4. The Push Payments handler accepts DPO XML, records matched notifications in `PaymentTransactionEvent`, and durably queues verification before returning XML `OK`. A new callback brings an existing pending verification retry forward, preserving active leases and a fixed cooldown of up to 15 seconds. Next.js `after` starts verification after acknowledgement; the short cooldown is awaited there rather than deferred to cron. Push fields remain untrusted: only the server-side `verifyToken` result, with matching amount and currency, may approve payment. Once approved, the callback worker immediately attempts that checkout's leased fulfilment, installation and receipt stages. An already independently approved payment remains approved on replay. Provider failures, active workers, asynchronous supplier results and incomplete stages remain in durable recovery; failure to persist the callback's verification work returns HTTP 503.
 5. New-plan checkouts finalise through Airalo `/v2/orders` or `/v2/orders-async`; top-up checkouts finalise through Airalo `/v2/orders/topups` with the original eSIM ICCID.
-6. The return page polls `/api/checkouts/[id]/status` until the order is finalised, redirecting to `/orders/{orderId}` for new plans, `/orders/{originalOrderId}` for top-ups, or `/checkout/{id}/failed`.
+6. The return page requests `POST /api/checkouts/[id]/reconcile` immediately on return and when reconnecting, then reads `/status` every two seconds for the first two minutes and every ten seconds afterwards while visible and online. Eligible reconciliation requests are spaced by at least 15 seconds initially and one minute after two minutes, respecting `Retry-After` and server eligibility. GET status never calls payment or supplier providers. Completion redirects to `/orders/{orderId}` for new plans or `/orders/{originalOrderId}` for top-ups; confirmed failures redirect to `/checkout/{id}/failed`.
 7. When finalisation exposes an order ID, the status API sets scoped HTTP-only order access cookies for guest order-page and eSIM-instruction access.
-8. The branded delivery email is claimed only after personalised QR or manual activation values are available. Async Airalo webhooks hydrate missing installation data and retry delivery without allowing email failure to invalidate the supplier acknowledgement.
+8. An authenticated async Airalo webhook commits supplier data and durable delivery wakeups before acknowledgement. Post-response work immediately attempts installation hydration, separate DPO processing acknowledgement and eligible receipt delivery. The receipt outbox sends only when personalised QR or manual activation values are ready. Email acceptance is recorded once using its persisted idempotency key; email or installation failure cannot invalidate the supplier acknowledgement or block the separate DPO acknowledgement. Top-up receipt policy is unchanged.
+
+The status response retains `nextCheckAt` for durable background work and adds `verificationInProgress` and `nextReconcileAt` for the interactive path. HTTP 200 on reconciliation means the request was accepted; only `paymentStatus=approved` establishes that independent verification succeeded. A lost browser connection leaves saved work intact and never changes a payment to failed.
 
 ## Runbook
 
@@ -99,3 +109,5 @@ See DPO's [Push Payments Callback contract](https://docs.dpopay.com/dpo-pay-by-n
 ## Metrics and logging
 
 The integration emits structured logs via `payments.*` events. Instrumentation hooks into the existing order observability pipeline so alerts can be configured on payment error rates and latency using the log-based metrics.
+
+`checkout.processing.queued`, `checkout.stage.started`, `checkout.stage.cooldown`, `checkout.stage.finished` and `checkout.receipt.finished` include a server-controlled trigger (`browser`, `dpo_push`, `supplier_webhook` or `recovery`) and correlation ID. Browser reconciliation returns that ID in `X-Correlation-ID`; DPO retains its existing request/event/diagnostic correlation. Supplier work uses its persisted event ID. Trace the initiating request and individual stage timestamps separately from the five-minute recovery schedule and email-provider acceptance.
