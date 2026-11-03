@@ -9,7 +9,7 @@ import { OrderResponseSchema, SimResponseSchema } from "../airalo/schemas";
 import { processPaymentCallback, queuePaymentVerification } from "../jobs/lifecycle";
 import { claimJob, enqueueJob } from "../jobs/store";
 import { handleDpoPushRoute } from "./dpo-push-route";
-import { DPO_PUSH_OK_XML } from "./dpo-ipn";
+import { DPO_PUSH_OK_XML } from "./dpo-push";
 
 test("DPO callbacks: durable acknowledgement, immediate verification and leased fulfilment", { timeout: 120_000 }, async t => {
   const sql = await PGlite.create();
@@ -67,7 +67,7 @@ test("DPO callbacks: durable acknowledgement, immediate verification and leased 
       } },
     };
     const work: Array<() => Promise<void>> = [];
-    const push = () => handleDpoPushRoute(new Request("https://callback.example.test/api/payments/dpo/push", {
+    const push = (query = "") => handleDpoPushRoute(new Request(`https://callback.example.test/api/payments/dpo/push${query}`, {
       method: "POST", headers: { "content-type": "application/xml" },
       // A claimed paid notification must never override the independent provider result.
       body: `<API3G><Result>000</Result><TransactionToken>${payment.transactionToken}</TransactionToken><TransactionAmount>10.00</TransactionAmount><TransactionCurrency>NAD</TransactionCurrency></API3G>`,
@@ -83,7 +83,18 @@ test("DPO callbacks: durable acknowledgement, immediate verification and leased 
     assert.equal(f.counts.verifications, 0, "Provider work must start after acknowledgement.");
     const queued = await db.lifecycleJob.findUniqueOrThrow({ where: { id: f.job.id } });
     assert.ok(queued.nextAttemptAt.getTime() <= Date.now());
-    assert.equal(await db.paymentTransactionEvent.count({ where: { transactionId: f.payment.id, eventType: "dpo-push" } }), 1);
+    const event = await db.paymentTransactionEvent.findFirstOrThrow({ where: { transactionId: f.payment.id, eventType: "dpo-push" } });
+    const payload = JSON.parse(event.payload);
+    assert.equal(payload.Result, "000");
+    assert.equal(payload.TransactionToken, f.payment.transactionToken);
+    assert.deepEqual(payload.request, {
+      correlationId: response.headers.get("x-correlation-id"),
+      pathname: "/api/payments/dpo/push", method: "POST", receivedAt: payload.request.receivedAt,
+    });
+    assert.ok(Number.isFinite(Date.parse(payload.request.receivedAt)));
+    const diagnostic = await db.paymentCallbackDiagnostic.findUniqueOrThrow({ where: { correlationId: payload.request.correlationId } });
+    assert.equal(diagnostic.status, 200);
+    assert.equal(diagnostic.result, "matched_notification");
     await f.work[0]();
     const checkout = await db.checkoutSession.findUniqueOrThrow({ where: { id: f.checkout.id }, include: { order: { include: { profiles: true } } } });
     assert.equal((await db.paymentTransaction.findUniqueOrThrow({ where: { id: f.payment.id } })).status, "approved");
@@ -92,6 +103,50 @@ test("DPO callbacks: durable acknowledgement, immediate verification and leased 
     assert.ok(checkout.order.receiptSentAt);
     assert.equal((await db.lifecycleJob.findUniqueOrThrow({ where: { businessKey: `complete_installation:${checkout.orderId}` } })).status, "done");
     assert.deepEqual(f.counts, { verifications: 1, purchases: 1, receipts: 1 });
+  });
+
+  await t.test("request tracing excludes URL queries and links rejected requests without queuing payment work", async () => {
+    const f = await fixture();
+    const logs: unknown[][] = [];
+    const originalInfo = console.info;
+    console.info = (...args: unknown[]) => { logs.push(args); };
+    try {
+      const response = await f.push("?sensitive=test-query-value");
+      const event = await db.paymentTransactionEvent.findFirstOrThrow({ where: { transactionId: f.payment.id, eventType: "dpo-push" } });
+      assert.ok(!event.payload.includes("test-query-value"));
+      assert.equal(JSON.parse(event.payload).request.pathname, "/api/payments/dpo/push");
+      assert.ok(!JSON.stringify(logs).includes("test-query-value"));
+      assert.ok(!JSON.stringify(logs).includes(f.payment.transactionToken!));
+      assert.ok(logs.some(args => args[0] === "payments.dpo.push.response" &&
+        (args[1] as { correlationId: string; status: number }).correlationId === response.headers.get("x-correlation-id") &&
+        (args[1] as { status: number }).status === 200));
+
+      const eventsBefore = await db.paymentTransactionEvent.count();
+      const jobsBefore = await db.lifecycleJob.count();
+      const rejected = await handleDpoPushRoute(new Request("https://callback.example.test/api/payments/dpo/push?secret=test-rejected-query", {
+        method: "POST", headers: { "content-type": "application/xml", "x-correlation-id": "untrusted-incoming-id" },
+        body: "<API3G><Result>000</Result><TransactionToken>unknown-test-token</TransactionToken></API3G>",
+      }), { prisma: db, afterResponse: () => { assert.fail("An unmatched push must not queue payment work."); } });
+      assert.equal(rejected.status, 404);
+      assert.notEqual(rejected.headers.get("x-correlation-id"), "untrusted-incoming-id");
+      const diagnostic = await db.paymentCallbackDiagnostic.findUniqueOrThrow({ where: { correlationId: rejected.headers.get("x-correlation-id")! } });
+      assert.equal(diagnostic.status, 404);
+      assert.equal(await db.paymentTransactionEvent.count(), eventsBefore);
+      assert.equal(await db.lifecycleJob.count(), jobsBefore);
+      assert.ok(logs.some(args => args[0] === "payments.dpo.push.received" &&
+        (args[1] as { correlationId: string }).correlationId === diagnostic.correlationId));
+      assert.ok(!JSON.stringify(logs).includes("test-rejected-query"));
+      assert.ok(!JSON.stringify(logs).includes("unknown-test-token"));
+    } finally { console.info = originalInfo; }
+  });
+
+  await t.test("an oversized callback retains a response correlation ID and rejection diagnostic", async () => {
+    const response = await handleDpoPushRoute(new Request("https://callback.example.test/api/payments/dpo/push", {
+      method: "POST", body: "x".repeat(256 * 1024 + 1),
+    }), { prisma: db, afterResponse: () => { assert.fail("An oversized push must not queue payment work."); } });
+    assert.equal(response.status, 413);
+    const diagnostic = await db.paymentCallbackDiagnostic.findUniqueOrThrow({ where: { correlationId: response.headers.get("x-correlation-id")! } });
+    assert.equal(diagnostic.status, 413);
   });
 
   await t.test("concurrent and replayed callbacks share verification, purchase and receipt claims", async () => {

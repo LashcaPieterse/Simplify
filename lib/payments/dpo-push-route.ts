@@ -8,7 +8,7 @@ import prismaClient from "../db/client";
 import {
   recordPaymentEvent,
 } from "./checkouts";
-import { handleDpoPushPayment } from "./dpo-ipn";
+import { handleDpoPushPayment, type DpoPushResult } from "./dpo-push";
 
 export async function handleDpoPushRoute(request: Request, options: {
   prisma?: PrismaClient;
@@ -17,8 +17,34 @@ export async function handleDpoPushRoute(request: Request, options: {
 } = {}): Promise<Response> {
   const db = options.prisma ?? prismaClient;
   const afterResponse = options.afterResponse ?? after;
+  // Server-observed transport metadata, separate from the untrusted provider XML.
+  // Exclude URL queries, headers and customer/payment data from request logs.
+  const requestTrace = {
+    correlationId: randomUUID(),
+    pathname: new URL(request.url).pathname,
+    method: request.method,
+    receivedAt: new Date().toISOString(),
+  };
+  console.info("payments.dpo.push.received", requestTrace);
+  const respond = async (result: DpoPushResult, contentType = "application/xml; charset=utf-8") => {
+    console.info("payments.dpo.push.response", { ...requestTrace, status: result.status });
+    try {
+      await enforceRates([{ scope: "callback-diagnostics", identifier: "dpo", limit: 60, windowSeconds: 60 }], db);
+      await db.paymentCallbackDiagnostic.create({ data: {
+        correlationId: requestTrace.correlationId,
+        status: result.status,
+        result: result.status === 200 ? "matched_notification" : "rejected_unmatched_or_unavailable",
+      } });
+    } catch { /* Diagnostics must not change the gateway's callback acknowledgement. */ }
+    return new Response(result.body, {
+      status: result.status,
+      headers: { "Content-Type": contentType, "X-Correlation-ID": requestTrace.correlationId },
+    });
+  };
   let rawBody: string;
-  try { rawBody = await readBoundedText(request, 256 * 1024); } catch (error) { return new Response("Invalid callback body.", { status: error instanceof BodyError ? error.status : 400 }); }
+  try { rawBody = await readBoundedText(request, 256 * 1024); } catch (error) {
+    return respond({ body: "Invalid callback body.", status: error instanceof BodyError ? error.status : 400 }, "text/plain; charset=utf-8");
+  }
   const contentType = request.headers.get("content-type");
 
   const result = await handleDpoPushPayment({
@@ -56,7 +82,7 @@ export async function handleDpoPushRoute(request: Request, options: {
           },
         }),
       recordPaymentEvent: (transactionId, eventType, payload) =>
-        recordPaymentEvent(transactionId, eventType, payload, {
+        recordPaymentEvent(transactionId, eventType, { ...payload, request: requestTrace }, {
           prisma: db,
         }),
       verifyPaymentTransaction: async transactionId => {
@@ -66,7 +92,7 @@ export async function handleDpoPushRoute(request: Request, options: {
             await (options.processCallback ?? processPaymentCallback)(transactionId, db);
           } catch {
             // The work was persisted before acknowledgement; the recovery worker retries it.
-            console.error("payments.callback.processing_failed", { transactionId });
+            console.error("payments.callback.processing_failed", { transactionId, correlationId: requestTrace.correlationId });
           }
         });
         return { paymentStatus: "pending" };
@@ -74,16 +100,5 @@ export async function handleDpoPushRoute(request: Request, options: {
     },
   });
 
-  const correlationId = randomUUID();
-  try {
-    await enforceRates([{ scope: "callback-diagnostics", identifier: "dpo", limit: 60, windowSeconds: 60 }], db);
-    await db.paymentCallbackDiagnostic.create({ data: { correlationId, status: result.status, result: result.status === 200 ? "matched_notification" : "rejected_unmatched_or_unavailable" } });
-  } catch { /* Diagnostics must not change the gateway's callback acknowledgement. */ }
-  return new Response(result.body, {
-    status: result.status,
-    headers: {
-      "Content-Type": "application/xml; charset=utf-8",
-      "X-Correlation-ID": correlationId,
-    },
-  });
+  return respond(result);
 }

@@ -58,7 +58,7 @@ type DpoPushDeps = {
   recordPaymentEvent: (
     transactionId: string,
     eventType: string,
-    payload: unknown,
+    payload: DpoPushPayload,
   ) => Promise<void>;
   verifyPaymentTransaction: (
     transactionId: string,
@@ -254,4 +254,3 @@ export async function handleDpoPushPayment(options: {
   return xmlOk();
 }
 
-export const handleDpoIpn = handleDpoPushPayment;

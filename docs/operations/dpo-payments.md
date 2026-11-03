@@ -47,7 +47,7 @@ Configure the DPO merchant account Push Payments Callback URL to:
 https://<production-domain>/api/payments/dpo/push
 ```
 
-The legacy `/api/payments/dpo/ipn` path remains as a compatibility alias, but new DPO configuration should use `/api/payments/dpo/push`.
+`/api/payments/dpo/push` is the only DPO notification endpoint. The legacy `/api/payments/dpo/ipn` route has been removed and returns 404; it does not redirect. Have DPO confirm the registered URL for each merchant account. Use the URL without a trailing `?`.
 
 ## Checkout lifecycle
 
@@ -66,24 +66,25 @@ The legacy `/api/payments/dpo/ipn` path remains as a compatibility alias, but ne
 
 1. Verify DPO status for the affected `checkoutId` using the `PaymentTransaction` record in the database (`transactionToken`, `providerReference`).
 2. Check Cloud logs for events `payments.checkout.create`, `payments.checkout.dpo_error`, and `payments.checkout.finalized`.
-3. If the Push Payments Callback was missed, manually trigger verification via `/api/checkouts/{id}/status` to force a DPO re-query. The handler is idempotent and will finalise the order when payment is approved.
+3. If the Push Payments Callback was missed, use the checkout's authenticated or scoped-cookie-authorized `POST /api/checkouts/{id}/reconcile` to request verification, or let the five-minute recovery job retry. `GET /api/checkouts/{id}/status` only reads status and does not query DPO.
 4. If payment failed, instruct the customer to retry via `/checkout/{id}`.
 
 ### Incident: Push Payments callback failures
 
 1. Confirm the DPO merchant account callback URL is `/api/payments/dpo/push` on the public HTTPS production domain.
-2. Inspect platform logs for invalid XML, unknown transaction references, and `payments.checkout.verification_mismatch`.
-3. Accepted push callbacks are stored in `PaymentTransactionEvent` with `eventType=dpo-push`.
+2. Inspect `payments.dpo.push.received` and `payments.dpo.push.response` in platform logs. They record the server-observed pathname, method, UTC receipt time, correlation ID and response status without query strings, headers, XML or customer details. Use the correlation ID to connect receipt and response, including rejected notifications; also inspect `payments.checkout.verification_mismatch`.
+3. Matched push callbacks are stored in `PaymentTransactionEvent` with `eventType=dpo-push`. The JSON payload retains DPO's fields and adds `request: { pathname, method, receivedAt, correlationId }`. That ID also appears in the acknowledgement's `X-Correlation-ID` header and in `PaymentCallbackDiagnostic` when diagnostic rate/capacity limits allow it. A saved event can precede a failed verification enqueue, so check the response status separately. Older events lack request metadata and cannot establish which historical route was used.
 4. DPO expects the endpoint to acknowledge accepted callbacks with XML `<Response>OK</Response>`.
 5. If DPO provides source IP ranges, configure platform/network allowlisting without disabling server-side `verifyToken`.
 
-### Verify browser-independent callback delivery
+### Test whether DPO sends a notification to `/push`
 
-1. Have DPO confirm the test merchant's Push Payments Callback URL is `https://sim.africa/api/payments/dpo/push` and notifications are enabled. Shared test API credentials do not establish that merchant configuration. The `CallBackURL` field sent by the app is not listed in DPO's current `createToken` transaction fields; do not treat it as proof of callback registration.
-2. Capture the baseline payment events and request-log window. DPO can resend a genuine notification for an existing test transaction, if supported, to verify transport and duplicate handling without another purchase. A resend for an already fulfilled order does not prove initial fulfilment without a browser return.
-3. For a full test, complete one approved sandbox payment using dummy card details and block browser requests to SIM.Africa after submission. Do not open the return page or call the checkout status endpoint; both can initiate verification and invalidate this test's evidence.
-4. Observe DPO's POST in Vercel logs, a matching `dpo-push` event, server verification and a single fulfilled supplier order/profile. Match timestamps and payment identifiers. Confirm receipt separately.
-5. Do not manually fabricate a successful provider payload or label a local mock test as a genuine DPO notification. Missing callback evidence leaves the end-to-end test unverified.
+1. Have DPO confirm that notifications are enabled for the selected **live or test merchant account** and that its registered Push Payments Callback URL is exactly `https://sim.africa/api/payments/dpo/push`. Shared test credentials do not establish that merchant configuration. The `CallBackURL` field sent by the app is not listed in DPO's current `createToken` transaction fields; it does not prove callback registration.
+2. Prefer asking DPO to resend a genuine notification for an existing paid transaction, if supported. Live reference `R88113906` was already paid and fulfilled on 2 November 2026; a notification resend should use that existing transaction, with no new charge or capture. Record a UTC test-start time and the latest event/diagnostic IDs before the resend. A replay tests transport and duplicate handling; it does not prove initial fulfilment without a browser return.
+3. Observe passively using platform request logs and read-only database queries. For the selected payment, find a **new** `dpo-push` event with `request.pathname=/api/payments/dpo/push`, `request.method=POST`, a receipt time after the baseline, and the matching DPO reference/token. Match its correlation ID to the response log or diagnostic: accepted notifications receive HTTP 200 and XML `<API3G><Response>OK</Response></API3G>` (with an XML declaration). Rejected notifications appear in request logs even when no payment can be matched; best-effort diagnostics include their status.
+4. Ask DPO for the delivery attempt's timestamp, destination URL, transaction reference and HTTP response/body, plus the `X-Correlation-ID` if their logs capture it. Match this with our record to establish **DPO-originated** delivery. Our metadata proves which handler received the request; it is not a cryptographic proof of sender identity.
+5. Alternatively, complete one new payment on the confirmed merchant account. For test mode use only DPO-approved sandbox payment details. A live test requires the customer's real payment step and incurs a real charge. For browser-independent processing, block browser requests back to SIM.Africa before completing DPO's hosted payment and keep the merchant return page closed. Do not invoke `POST /reconcile` or manually run recovery while collecting evidence. Leave normal recovery enabled; a scheduled verification or completed order alone is not callback evidence. Check independent server verification, a single supplier order/profile and receipt separately from callback receipt.
+6. Do not fabricate a successful provider payload or label local mock tests as DPO delivery. Opening `/push` in a browser sends GET (405), which does not test DPO's POST notification. Missing delivery evidence leaves the DPO-originated test unverified. Sandbox delivery and live delivery must each be confirmed for their own merchant configuration.
 
 The five-minute `airalo-order-recovery` scheduler remains the fallback for unresolved work. Callback processing targets only the matched payment and checkout, respects the lifecycle and receipt feature flags, and never reopens supplier review or bypasses an existing job lease. HTTP 200 confirms that the notification and verification work were persisted; inspect payment transitions and the order separately to establish completion.
 
