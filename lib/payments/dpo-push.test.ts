@@ -5,7 +5,7 @@ import {
   DPO_PUSH_EVENT_TYPE,
   DPO_PUSH_OK_XML,
   handleDpoPushPayment,
-} from "./dpo-ipn";
+} from "./dpo-push";
 
 function pushXml(overrides: Record<string, string> = {}): string {
   const fields = {

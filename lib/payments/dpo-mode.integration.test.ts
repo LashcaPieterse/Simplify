@@ -12,7 +12,7 @@ import { PrismaClient } from "@prisma/client";
 import { createQuotedCheckout as createCheckout } from "./testing/quoted-checkout";
 import { verifyCheckoutPayment, verifyPaymentTransaction } from "./checkouts";
 import { getActiveDpoMode, saveDpoMode } from "./dpo-settings";
-import { handleDpoPushPayment } from "./dpo-ipn";
+import { handleDpoPushPayment } from "./dpo-push";
 
 test("DPO sandbox: migration, persistent mode, audit atomicity and verification across gateway switches", { timeout: 120000 }, async t => {
   // Use only an isolated database and mock provider transport, never DATABASE_URL.

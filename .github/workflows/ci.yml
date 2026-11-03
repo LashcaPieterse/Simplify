@@ -16,7 +16,6 @@ jobs:
       ORDER_ACCESS_SECRET: ci-order-access-secret
       NEXTAUTH_SECRET: ci-nextauth-secret
       METRICS_BEARER_TOKEN: ci-metrics-token
-      DPO_IPN_SECRET: ci-dpo-ipn-secret
     steps:
       - name: Checkout
         uses: actions/checkout@v4
